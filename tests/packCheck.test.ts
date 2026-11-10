@@ -1,8 +1,8 @@
-import { mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 
 import { keep, problemsOf, readyToKeep, targetsOf } from '../scripts/packCheck.mjs';
 
@@ -195,7 +195,15 @@ describe('problemsOf', () => {
 });
 
 describe('keeping the tarballs', () => {
-	const scratch = () => mkdtempSync(join(tmpdir(), 'skysa-keep-'));
+	const made: string[] = [];
+	const scratch = () => {
+		const dir = mkdtempSync(join(tmpdir(), 'skysa-keep-'));
+		made.push(dir);
+		return dir;
+	};
+	afterEach(() => {
+		made.splice(0).forEach((dir) => rmSync(dir, { recursive: true, force: true }));
+	});
 
 	it('keeps every tarball when the check found nothing', () => {
 		const [from, to] = [scratch(), join(scratch(), 'kept')];

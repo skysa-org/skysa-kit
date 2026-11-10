@@ -29,16 +29,20 @@ A source file alongside them is not a release, and neither is a change to what a
 Nothing is published from anyone's machine.
 Once the release workflow has cut a version's tag and GitHub release, it starts a run of itself from that tag, which publishes each package npm does not yet have at that version, with provenance, dependencies first.
 It publishes from the tag's own run because npm's provenance names the commit a run is of, so it names exactly the source that was published.
-That run checks the tag is a release first: on `main`, at the version it names, with a GitHub release.
+That run checks the tag is a release first: on `main`, at the version it names, with a GitHub release that is not a draft.
 Then two jobs do the work: `pack` builds every package and runs the pack check again, keeping the tarballs it passed, and `publish` sends exactly those with npm (`scripts/publish.mjs`).
 Only `publish` holds the credential to publish, and it runs nothing but npm and that script.
 It runs in the repository's `npm` environment, whose deployment rule admits only `v*` tags, so a run from a branch, with its own copy of the workflow, can publish nothing.
+The environment is made, with that rule, before publishing is switched on, since GitHub would otherwise make it on first use with no rule at all.
 None of this runs unless the repository variable `NPM_PUBLISH` is `true`, and the repository is public, which npm's provenance needs.
+
+The tag check runs from the tag's own copy of the workflow, so it stops a tag pushed by mistake, not someone who can push and changes the check at that tag as well.
+What stops them is a required reviewer on the `npm` environment, which makes every publish wait for a maintainer's approval: worth having as soon as anyone who is not an approver can push.
 
 npm takes a package from the workflow in one of two ways, and the kit uses each in turn.
 
 1. **A package's first version comes with a token**, since trusted publishing can only be set up for a package npm already has.
-   The token is a granular one, short-lived, that can read and write the `@skysa` scope's packages and bypass two-factor authentication, held as the `npm` environment's secret `NPM_TOKEN`.
+   The token is a granular one, short-lived, that can read and write the `@skysa` scope's packages and bypass two-factor authentication, held as the `npm` environment's secret `NPM_TOKEN` — never as a repository secret, which a run from any branch could read.
    Once the release is on npm, the secret is deleted and the token revoked.
 2. **Every later version comes through trusted publishing**, where GitHub vouches for the run and nothing secret is stored ([npm's documentation](https://docs.npmjs.com/trusted-publishers)).
    A maintainer sets it up for each package with `npm trust github @skysa/<name> --file release.yml --repo skysa-org/skysa-kit --env npm --allow-publish`.
@@ -47,7 +51,8 @@ npm takes a package from the workflow in one of two ways, and the kit uses each 
    One that expired is removed (`npm trust list`, `npm trust revoke`) and made again.
 
 A version npm refused, for want of a token or a trust, or because npm itself failed, is not lost: its tag and GitHub release stand, and "Run workflow" from the tag, once npm will take it, publishes it.
-That run uses the tag's own copy of the workflow and of `scripts/publish.mjs`, though, so a publish that failed because of either one fails again from that tag: the fix is merged, and goes out with the next version.
+That holds until a later version is on npm: npm will not put an earlier one under `latest` unasked, and the later one supersedes it anyway.
+A run from a tag uses that tag's own copy of the workflow and of `scripts/publish.mjs`, though, so a publish that failed because of either one fails again from that tag: the fix is merged, and goes out with the next version.
 A package added to the kit later needs its first version the same way, by token, and from January 2027 npm takes no version published directly with one: a token can then only stage a version for a maintainer to approve ([access tokens](https://docs.npmjs.com/about-access-tokens)), which this workflow does not do.
 Adding a package after that starts with finding how npm then takes a new package's first version.
 

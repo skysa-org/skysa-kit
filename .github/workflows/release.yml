@@ -33,13 +33,16 @@ on:
 # Each job asks for what it needs.
 permissions: {}
 
-# Per commit, so nothing is ever canceled. A single `release` group would
-# serialize these — which sounds right and is not: GitHub keeps one *pending*
-# run per group and cancels the previous pending one, so two version bumps
-# merged in quick succession would drop the first one's tag forever. Two runs
-# racing for one tag is the harmless failure by comparison, and the step below
-# is written to survive it. A run from a tag is grouped by its tag instead, so
-# that two never publish one version at once.
+# A run from `main` is grouped by its commit, so none is ever canceled. A
+# single `release` group would serialize these — which sounds right and is
+# not: GitHub keeps one *pending* run per group and cancels the previous
+# pending one, so two version bumps merged in quick succession would drop the
+# first one's tag forever. Two runs racing for one tag is the harmless failure
+# by comparison, and the step below is written to survive it.
+#
+# A run from a tag is grouped by its tag, so that two never publish one version
+# at once. There a pending run can be canceled by a third, which loses
+# nothing: each publishes the same version, and what npm has, it skips.
 concurrency:
     group: ${{ github.workflow }}-${{ github.ref_type == 'tag' && github.ref || github.sha }}
     cancel-in-progress: false
@@ -51,11 +54,13 @@ jobs:
         if: github.ref == 'refs/heads/main'
         runs-on: ubuntu-latest
         timeout-minutes: 10
-        # The tag, the release, and the run from the tag that publishes it.
-        # Nothing else, and no pull-request scopes.
+        # The tag and the release. Nothing else, and no pull-request scopes.
         permissions:
             contents: write
-            actions: write
+        outputs:
+            version: ${{ steps.version.outputs.value }}
+            # Whether to start the run that publishes it.
+            publish: ${{ steps.release.outputs.publish }}
         steps:
             - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
               with:
@@ -67,22 +72,8 @@ jobs:
               id: version
               run: |
                   set -eu
-                  # The seven are `fixed` in .changeset/config.json, so any of
-                  # them answers — but only while that holds, and a hand-edited
-                  # `package.json` is exactly how it would stop holding without
-                  # anyone noticing. Checked rather than assumed.
-                  version=""
-                  for manifest in packages/*/package.json; do
-                    this=$(node -p "require('./$manifest').version")
-                    if [ -z "$version" ]; then
-                      version=$this
-                      first=$manifest
-                    elif [ "$this" != "$version" ]; then
-                      echo "::error::$manifest is $this but $first is $version." \
-                           "The packages are fixed to one version; nothing is released until they agree."
-                      exit 1
-                    fi
-                  done
+                  # One version for all seven, or an error if they disagree.
+                  version=$(node scripts/version.mjs)
                   # Where the packages started, before anything was released.
                   if [ "$version" = "0.0.0" ]; then
                     echo "The packages are at 0.0.0, which is no release. Nothing to do."
@@ -109,9 +100,16 @@ jobs:
                   # the tag and then failed to create the release unrepeatable:
                   # every later run would short-circuit on the tag and the
                   # release would never appear. Every step below is safe to run
-                  # again.
-                  if gh release view "$tag" >/dev/null 2>&1; then
+                  # again. A draft is not a release.
+                  if [ "$(gh release view "$tag" --json isDraft --jq .isDraft 2>/dev/null)" = false ]; then
                     echo "$tag is already released. Nothing to do."
+                    # A re-run may repeat an attempt that released it and then
+                    # failed before the publishing run was started, so it
+                    # starts that run again; one that finds everything on npm
+                    # publishes nothing.
+                    if [ "$GITHUB_RUN_ATTEMPT" -gt 1 ]; then
+                      echo 'publish=true' >> "$GITHUB_OUTPUT"
+                    fi
                     exit 0
                   fi
 
@@ -146,18 +144,28 @@ jobs:
                   fi
 
                   gh release create "$tag" --title "$tag" --notes-file "$notes"
-                  echo 'released=true' >> "$GITHUB_OUTPUT"
+                  echo 'publish=true' >> "$GITHUB_OUTPUT"
 
-            # Publishing runs from the tag, in a run of its own, because npm's
-            # provenance names the commit a run is of: that run is of the
-            # commit the tag names, which this one need not be. A dispatch
-            # made with `GITHUB_TOKEN` does start a run, unlike its pushes.
-            - name: Start the run that publishes it, if publishing is on
-              if: steps.release.outputs.released == 'true' && vars.NPM_PUBLISH == 'true'
-              env:
-                  VERSION: ${{ steps.version.outputs.value }}
+    # Publishing runs from the tag, in a run of its own, because npm's
+    # provenance names the commit a run is of: that run is of the commit the
+    # tag names, which this one need not be. A dispatch made with
+    # `GITHUB_TOKEN` does start a run, unlike its pushes. Its own job, so that
+    # the power to start runs is not held while the repository's code runs; if
+    # it fails, "Re-run failed jobs" starts the run again.
+    start-publishing:
+        needs: tag
+        if: needs.tag.outputs.publish == 'true' && vars.NPM_PUBLISH == 'true'
+        runs-on: ubuntu-latest
+        timeout-minutes: 5
+        permissions:
+            actions: write
+        steps:
+            # The full name: a bare `v0.2.0` would be a branch's, if one had
+            # that name.
+            - env:
+                  VERSION: ${{ needs.tag.outputs.version }}
                   GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-              run: gh workflow run release.yml --repo "$GITHUB_REPOSITORY" --ref "v$VERSION"
+              run: gh workflow run release.yml --repo "$GITHUB_REPOSITORY" --ref "refs/tags/v$VERSION"
 
     # Publishing, in a run from a version's tag, and only while it is switched
     # on: the repository variable `NPM_PUBLISH` set to `true`, once the
@@ -187,26 +195,27 @@ jobs:
 
             # Only a release is published: a tag on a commit merged to `main`,
             # holding the version it names, that the `tag` job released. A tag
-            # pushed by hand onto a branch is none of those.
+            # pushed by mistake onto a branch is none of those. This runs from
+            # the tag's own copy of the workflow, though, so it stops a mistake,
+            # not someone who can push and changes this check at that tag too:
+            # what stops them is a required reviewer on the `npm` environment.
             - name: Check the tag is a release
               id: release
               env:
                   GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
               run: |
                   set -eu
-                  version=${GITHUB_REF_NAME#v}
-                  for manifest in packages/*/package.json; do
-                    this=$(node -p "require('./$manifest').version")
-                    if [ "$this" != "$version" ]; then
-                      echo "::error::$manifest is $this, so $GITHUB_REF_NAME is no release of it."
-                      exit 1
-                    fi
-                  done
+                  version=$(node scripts/version.mjs)
+                  if [ "v$version" != "$GITHUB_REF_NAME" ]; then
+                    echo "::error::The packages are at $version, so $GITHUB_REF_NAME is no release of them."
+                    exit 1
+                  fi
                   if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
                     echo "::error::$GITHUB_REF_NAME is not on main, so it was never released."
                     exit 1
                   fi
-                  if ! gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" >/dev/null; then
+                  draft=$(gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --json isDraft --jq .isDraft || true)
+                  if [ "$draft" != false ]; then
                     echo "::error::$GITHUB_REF_NAME has no GitHub release, so it was never released."
                     exit 1
                   fi
@@ -238,9 +247,12 @@ jobs:
         runs-on: ubuntu-latest
         timeout-minutes: 15
         # Where the credential is: the token, while there is one, is this
-        # environment's secret, and npm's trusted publishing names it. Its
+        # environment's secret and never the repository's, which a run from
+        # any branch could read; and npm's trusted publishing names it. Its
         # deployment rule admits only `v*` tags, so a run from a branch, with
-        # its own copy of this file, can publish nothing.
+        # its own copy of this file, can publish nothing. It is made, with that
+        # rule, before `NPM_PUBLISH` is switched on: GitHub would otherwise
+        # make it here, with no rule at all.
         environment: npm
         permissions:
             contents: read

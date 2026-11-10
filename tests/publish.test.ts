@@ -65,7 +65,11 @@ const registry = (
 	return { npm, calls, published };
 };
 
-const run = (tarballs: Tarball[], version: string, npm: ReturnType<typeof registry>['npm']) => {
+const run = (
+	tarballs: Tarball[],
+	version: string,
+	npm: Parameters<typeof publishAll>[0]['npm']
+) => {
 	const lines: string[] = [];
 	publishAll({ tarballs, version, npm, log: (line) => lines.push(line) });
 	return lines;
@@ -159,6 +163,16 @@ describe('publishAll', () => {
 			'@skysa/eslint-config@0.2.0 is on npm already.',
 			'@skysa/protocol@0.2.0 is on npm already.',
 		]);
+	});
+
+	it('says why npm could not be run, when it could not', () => {
+		const npm = (args: string[]) =>
+			args[0] === 'view'
+				? { status: 1, stdout: E404, stderr: '' }
+				: { status: null, stdout: '', stderr: 'npm could not be run: spawn npm ENOENT\n' };
+		expect(() => run([tarball('@skysa/protocol', '0.2.0')], '0.2.0', npm)).toThrow(
+			'npm did not publish @skysa/protocol@0.2.0; what it said is above.\nnpm could not be run: spawn npm ENOENT'
+		);
 	});
 
 	it('stops at a failed publish, before anything that depends on it', () => {

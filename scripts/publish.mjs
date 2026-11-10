@@ -132,7 +132,7 @@ export const publishAll = ({ tarballs, version, npm, log }) => {
 			log(`${name}@${version} is on npm already.`);
 			continue;
 		}
-		const { status } = npm(
+		const { status, stderr } = npm(
 			[
 				'publish',
 				file,
@@ -144,19 +144,27 @@ export const publishAll = ({ tarballs, version, npm, log }) => {
 			{ show: true }
 		);
 		if (status !== 0) {
-			throw new Error(`npm did not publish ${name}@${version}; what it said is above.`);
+			throw new Error(
+				`npm did not publish ${name}@${version}; what it said is above.${stderr ? `\n${stderr.trim()}` : ''}`
+			);
 		}
 		log(`${name}@${version} is published.`);
 	}
 };
 
+// npm, with what it printed; or, if it could not be run at all, why not, as
+// what it printed to stderr, so that the failure says so.
 /** @type {Npm} */
 const npm = (args, { show = false } = {}) => {
-	const { status, stdout, stderr } = spawnSync('npm', args, {
+	const { status, stdout, stderr, error } = spawnSync('npm', args, {
 		encoding: 'utf8',
 		stdio: show ? 'inherit' : 'pipe',
 	});
-	return { status, stdout: stdout ?? '', stderr: stderr ?? '' };
+	return {
+		status,
+		stdout: stdout ?? '',
+		stderr: `${stderr ?? ''}${error ? `npm could not be run: ${error.message}\n` : ''}`,
+	};
 };
 
 if (process.argv[1] && realpathSync(process.argv[1]) === fileURLToPath(import.meta.url)) {
