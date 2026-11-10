@@ -25,6 +25,10 @@ jobs:
         timeout-minutes: 15
         steps:
             - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+              with:
+                  # The changeset check below compares against the base branch,
+                  # which a shallow clone does not have.
+                  fetch-depth: 0
 
             # Before setup-node, which needs the package manager on PATH to resolve
             # its cache. The version comes from `packageManager` in package.json.
@@ -38,8 +42,33 @@ jobs:
             - run: pnpm install --frozen-lockfile
 
             # The same gate the README tells humans to run before every commit,
-            # so the two cannot drift.
+            # so the two cannot drift. It ends in the pack check: every package
+            # packed as npm would receive it, and every entry loading in Node.
             - run: pnpm verify
+
+            # A pull request that changes what ships has to say what it does
+            # to the version. `pnpm run changeset --empty` is the answer for
+            # one that changes nothing observable, and is a real answer rather
+            # than a way round this.
+            #
+            # Only on a pull request: `--since` needs something to compare to,
+            # and on `main` that would be the commit itself. It passes when no
+            # package changed, so a documentation or workflow change needs
+            # nothing.
+            - name: A changeset, for a change that ships
+              if: github.event_name == 'pull_request'
+              env:
+                  BASE: ${{ github.base_ref }}
+              run: |
+                  set -eu
+                  # The release pull request and a dependency bump cannot
+                  # answer this, and are not asked: the script says how each
+                  # is recognized, by what it changes.
+                  if node scripts/changesetExempt.mjs "origin/$BASE"; then
+                    exit 0
+                  fi
+
+                  pnpm exec changeset status --since="origin/$BASE"
 
             # The server's migrations are generated from its schema
             # (`src/db/schema.ts`) and committed, with drizzle's snapshots. A

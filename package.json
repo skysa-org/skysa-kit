@@ -10,14 +10,20 @@
 	"scripts": {
 		"test": "pnpm -r run test && vitest run",
 		"typecheck": "pnpm -r run typecheck && tsc -p tsconfig.json",
+		"build": "tsc -b tsconfig.build.json",
 		"lint": "eslint .",
 		"lint:fix": "eslint . --fix",
 		"format": "prettier --write .",
 		"format:check": "prettier --check .",
 		"knip": "knip",
-		"verify": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm knip && pnpm test"
+		"pack:check": "node scripts/packCheck.mjs",
+		"changeset": "changeset",
+		"changeset:status": "changeset status",
+		"changeset:version": "changeset version",
+		"verify": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm build && pnpm knip && pnpm test && pnpm pack:check"
 	},
 	"devDependencies": {
+		"@changesets/cli": "^3.0.3",
 		"@skysa/eslint-config": "workspace:*",
 		"@types/node": "catalog:",
 		"eslint": "^10.12.0",

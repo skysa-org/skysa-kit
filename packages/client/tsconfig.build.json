@@ -1,0 +1,20 @@
+{
+	// What is published: src, built to dist/src with its declarations by
+	// `pnpm build` (`tsc -b` over every package, in the order they import
+	// each other).
+	"extends": "./tsconfig.json",
+	"compilerOptions": {
+		"composite": true,
+		"noEmit": false,
+		"rootDir": ".",
+		"outDir": "dist",
+		// The browser's, with no ambient Node types: only the tests get those.
+		"types": []
+	},
+	"include": ["src/**/*.ts"],
+	"references": [
+		{ "path": "../protocol/tsconfig.build.json" },
+		{ "path": "../storage/tsconfig.build.json" },
+		{ "path": "../sync/tsconfig.build.json" }
+	]
+}

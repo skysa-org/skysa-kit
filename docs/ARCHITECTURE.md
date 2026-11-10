@@ -1772,8 +1772,16 @@ packages/
 docs/
   ARCHITECTURE.md          # this document
   decisions/               # the records behind it
-tests/                     # what is no one package's: that every citation of these documents leads somewhere
+.changeset/                # the changesets waiting for a release, and how one is cut
+scripts/                   # the pack check, a release's notes, and which pull requests need no changeset
+tests/                     # what is no one package's: that every citation of these documents leads somewhere, and the scripts
 ```
+
+Every package but `eslint-config` is built by `tsc -b` (`pnpm build`) into its `dist/`: `tsconfig.build.json` for its `src`, and `tsconfig.testing.json` for what `/testing` exports.
+In the workspace a package's exports lead to its TypeScript source, so nothing needs building to test it; `publishConfig` points the published package's exports at `dist/`.
+The build is where the code that runs in a browser or a Worker is held to it: `protocol`, `storage`, `sync` and `client` compile their `src` with no ambient types at all, and `server` with only the Workers runtime's.
+`@skysa/server`'s declarations name the runtime's types (`D1Database`, `DurableObjectNamespace`), which an app's Worker has from `wrangler types` or `@cloudflare/workers-types`.
+`pnpm pack:check` packs every package as npm would receive it and loads each entry it exports in plain Node, with only what that package declares beside it, and with `cloudflare:workers`, which only a Worker has, stood in for.
 
 Everything else about skysa-notes — its history, its resolved questions, what is not planned, its GitHub setup — is in sections 10, 12, 14 and 15 of [its own document](https://github.com/skysa-org/skysa-notes/blob/main/docs/ARCHITECTURE.md).
 
@@ -1785,3 +1793,5 @@ The server is where the network clause matters, and the kit has it ([skysa-notes
 A contribution needs the same CLA as skysa-notes', signed once here and checked by `.github/workflows/cla.yml`: a license grant, not an assignment, with the project's promise that every contribution stays available under AGPL-3.0 ([`CLA-individual.md`](../CLA-individual.md), and [`CLA-entity.md`](../CLA-entity.md) for an employer).
 Both are drafts that have not been reviewed by counsel; why they are shaped as they are is [skysa-notes §13](https://github.com/skysa-org/skysa-notes/blob/main/docs/ARCHITECTURE.md#s13).
 The packages are to be public on npm, from a public repository, with no operator's configuration or credentials in either (§1).
+They are released together at one version, tagged `vX.Y.Z`, from a version pull request reviewed like any other ([`.changeset/README.md`](../.changeset/README.md)).
+Only `.github/workflows/release.yml` publishes them, with provenance, and only once the repository is public and publishing is switched on; until then a release is a tag and a GitHub release.

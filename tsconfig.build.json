@@ -1,0 +1,19 @@
+{
+	// `pnpm build`: every package's published output, through `tsc -b`, which
+	// builds each after the packages it imports. Each package has a
+	// `tsconfig.build.json` for its src and, where it exports `/testing`, a
+	// `tsconfig.testing.json` for that.
+	"files": [],
+	"references": [
+		{ "path": "packages/protocol/tsconfig.build.json" },
+		{ "path": "packages/storage/tsconfig.build.json" },
+		{ "path": "packages/storage/tsconfig.testing.json" },
+		{ "path": "packages/sync/tsconfig.build.json" },
+		{ "path": "packages/sync/tsconfig.testing.json" },
+		{ "path": "packages/server/tsconfig.build.json" },
+		{ "path": "packages/client/tsconfig.build.json" },
+		{ "path": "packages/client/tsconfig.testing.json" },
+		{ "path": "packages/pwa/tsconfig.build.json" },
+		{ "path": "packages/pwa/tsconfig.testing.json" }
+	]
+}

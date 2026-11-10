@@ -1,0 +1,198 @@
+name: Release
+
+# A `vX.Y.Z` tag and a GitHub release, cut from what is already on `main`, and
+# — once it is switched on — the packages published to npm at that version.
+#
+# It does not decide anything. `pnpm run changeset:version` is run by hand and
+# merged like any other change; this only notices that the version in the tree
+# is one that has never been released, and marks the commit that carries it.
+# Re-running it, or pushing anything else to `main`, releases nothing new.
+#
+# It does not gate anything either: it runs beside `ci.yml` rather than after
+# it, so a tag says "this commit is what 0.2.0 is", not "this commit passed".
+# What keeps `main` green is the pull request's own checks, which is where a
+# failure can still be fixed without a tag already pointing at it. Publishing
+# does check, though: it runs `pnpm verify`'s pack check again on what it is
+# about to send.
+#
+# Deliberately not the Changesets "Version Packages" bot. A pull request
+# opened with `GITHUB_TOKEN` starts no workflows, so its own CI would never run
+# — and once `verify` is a required status check, a pull request whose checks
+# cannot run is one that can never be merged.
+
+on:
+    push:
+        branches: [main]
+    # "Run workflow" on `main` publishes the version there if npm does not have
+    # it yet: for the first release after publishing is switched on, or after
+    # a publish that failed and was not re-run. It tags nothing that a push
+    # would not have, and on any other branch it does nothing at all.
+    workflow_dispatch:
+
+# Each job asks for what it needs.
+permissions: {}
+
+# Per commit, so nothing is ever canceled. A single `release` group would
+# serialize these — which sounds right and is not: GitHub keeps one *pending*
+# run per group and cancels the previous pending one, so two version bumps
+# merged in quick succession would drop the first one's tag forever. Two runs
+# racing for one tag is the harmless failure by comparison, and the step below
+# is written to survive it.
+concurrency:
+    group: ${{ github.workflow }}-${{ github.sha }}
+    cancel-in-progress: false
+
+jobs:
+    tag:
+        # A push is always to `main`; this keeps "Run workflow" to it too.
+        if: github.ref == 'refs/heads/main'
+        runs-on: ubuntu-latest
+        timeout-minutes: 10
+        # The tag and the release. Nothing else, and no pull-request scopes.
+        permissions:
+            contents: write
+        outputs:
+            # Empty while the packages are at 0.0.0, which is no release.
+            version: ${{ steps.version.outputs.value }}
+            # Whether this run is the one that released it.
+            released: ${{ steps.release.outputs.released }}
+        steps:
+            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+              with:
+                  # Tags, so "has this version been tagged already?" can be
+                  # answered without asking the API.
+                  fetch-depth: 0
+
+            - name: Read the version
+              id: version
+              run: |
+                  set -eu
+                  # The seven are `fixed` in .changeset/config.json, so any of
+                  # them answers — but only while that holds, and a hand-edited
+                  # `package.json` is exactly how it would stop holding without
+                  # anyone noticing. Checked rather than assumed.
+                  version=""
+                  for manifest in packages/*/package.json; do
+                    this=$(node -p "require('./$manifest').version")
+                    if [ -z "$version" ]; then
+                      version=$this
+                      first=$manifest
+                    elif [ "$this" != "$version" ]; then
+                      echo "::error::$manifest is $this but $first is $version." \
+                           "The packages are fixed to one version; nothing is released until they agree."
+                      exit 1
+                    fi
+                  done
+                  # Where the packages started, before anything was released.
+                  if [ "$version" = "0.0.0" ]; then
+                    echo "The packages are at 0.0.0, which is no release. Nothing to do."
+                    exit 0
+                  fi
+                  printf 'value=%s\n' "$version" >> "$GITHUB_OUTPUT"
+
+            - name: Tag and release, if this version is new
+              id: release
+              if: steps.version.outputs.value != ''
+              env:
+                  # Through the environment rather than interpolated into the
+                  # script. The value comes from a file in the repository, so
+                  # it is already reviewed code — but a workflow that pastes
+                  # file contents into a shell is a habit worth not having.
+                  VERSION: ${{ steps.version.outputs.value }}
+                  GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+              run: |
+                  set -eu
+                  tag="v$VERSION"
+
+                  # The release, not the tag, is what says this version is out.
+                  # Asking about the tag instead would make a run that pushed
+                  # the tag and then failed to create the release unrepeatable:
+                  # every later run would short-circuit on the tag and the
+                  # release would never appear. Every step below is safe to run
+                  # again.
+                  if gh release view "$tag" >/dev/null 2>&1; then
+                    echo "$tag is already released. Nothing to do."
+                    exit 0
+                  fi
+
+                  if ! git rev-parse -q --verify "refs/tags/$tag" >/dev/null; then
+                    # The commit that set this version, which is the last to
+                    # change a manifest's `"version"` line: not necessarily
+                    # this run's, since a pull request merged just after the
+                    # version one, or a run that retries a failed one, has
+                    # this version too, with changes that are not in it.
+                    commit=$(git log -1 --format=%H -G'"version": ' -- 'packages/*/package.json')
+                    git -c user.name='github-actions[bot]' \
+                        -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
+                        tag -a "$tag" "$commit" -m "$tag"
+                    # Another run for another commit may have pushed the same
+                    # tag between the check above and here. That is a race this
+                    # one lost, not a failure: the tag exists, which is what it
+                    # wanted, and the release below is created against it.
+                    if ! git push origin "$tag"; then
+                      git ls-remote --exit-code --tags origin "$tag" >/dev/null
+                      echo "$tag was pushed by another run first."
+                    fi
+                  fi
+
+                  # What each package's CHANGELOG.md says of its own for this
+                  # version, each said once; the script says what it leaves out.
+                  notes="$RUNNER_TEMP/notes.md"
+                  node scripts/releaseNotes.mjs "$VERSION" > "$notes"
+                  # It always says something, so nothing means it did not run.
+                  if [ ! -s "$notes" ]; then
+                    echo "::error::scripts/releaseNotes.mjs wrote nothing for $VERSION."
+                    exit 1
+                  fi
+
+                  gh release create "$tag" --title "$tag" --notes-file "$notes"
+                  echo 'released=true' >> "$GITHUB_OUTPUT"
+
+    # Off until the `@skysa` scope is claimed on npm and a token that can
+    # publish to it is in the repository secret `NPM_TOKEN`: then set the
+    # repository variable `NPM_PUBLISH` to `true`. Provenance needs the
+    # repository to be public, so that comes first too.
+    publish:
+        needs: tag
+        if: >-
+            vars.NPM_PUBLISH == 'true' && needs.tag.outputs.version != '' &&
+            (needs.tag.outputs.released == 'true' || github.event_name == 'workflow_dispatch')
+        runs-on: ubuntu-latest
+        timeout-minutes: 15
+        permissions:
+            contents: read
+            # The OIDC token npm's provenance statement is signed with.
+            id-token: write
+        steps:
+            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+              with:
+                  # What the tag names, not this run's commit: npm can never
+                  # take a version back, so what it gets at 0.2.0 has to be
+                  # what `v0.2.0` is, however long after the release this runs.
+                  ref: v${{ needs.tag.outputs.version }}
+
+            - run: corepack enable
+
+            - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+              with:
+                  node-version-file: .nvmrc
+                  cache: pnpm
+                  # Writes the `.npmrc` that hands `NODE_AUTH_TOKEN` to the
+                  # registry.
+                  registry-url: https://registry.npmjs.org
+
+            - run: pnpm install --frozen-lockfile
+
+            # The same check `pnpm verify` runs: every tarball as npm would
+            # receive it, and every entry loading in Node.
+            - run: pnpm build
+            - run: pnpm pack:check
+
+            # Each package whose version npm does not have yet, built again by
+            # its `prepack`, with `publishConfig`'s public access and
+            # provenance. A package npm already has at this version is skipped,
+            # so a run after a partial failure finishes the job.
+            - run: pnpm -r publish --no-git-checks
+              env:
+                  NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+                  NPM_CONFIG_PROVENANCE: 'true'
