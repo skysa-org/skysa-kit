@@ -12,8 +12,8 @@ name: Release
 # it, so a tag says "this commit is what 0.2.0 is", not "this commit passed".
 # What keeps `main` green is the pull request's own checks, which is where a
 # failure can still be fixed without a tag already pointing at it. Publishing
-# does check, though: it runs `pnpm verify`'s pack check again on what it is
-# about to send.
+# does check, though: it runs `pnpm verify`'s pack check again, and sends
+# exactly the tarballs that check passed.
 #
 # Deliberately not the Changesets "Version Packages" bot. A pull request
 # opened with `GITHUB_TOKEN` starts no workflows, so its own CI would never run
@@ -23,28 +23,34 @@ name: Release
 on:
     push:
         branches: [main]
-    # "Run workflow" on `main` publishes the version there if npm does not have
-    # it yet: for the first release after publishing is switched on, or after
-    # a publish that failed and was not re-run. It tags nothing that a push
-    # would not have, and on any other branch it does nothing at all.
+    # "Run workflow" on `main` does what a push does. From a version's tag, it
+    # publishes that version if publishing is on and npm does not have it yet:
+    # the `tag` job starts that run itself, and it is how a version released
+    # while publishing was off, or whose publish npm refused, gets published.
+    # Anywhere else it does nothing at all.
     workflow_dispatch:
 
 # Each job asks for what it needs.
 permissions: {}
 
-# Per commit, so nothing is ever canceled. A single `release` group would
-# serialize these — which sounds right and is not: GitHub keeps one *pending*
-# run per group and cancels the previous pending one, so two version bumps
-# merged in quick succession would drop the first one's tag forever. Two runs
-# racing for one tag is the harmless failure by comparison, and the step below
-# is written to survive it.
+# A run from `main` is grouped by its commit, so none is ever canceled. A
+# single `release` group would serialize these — which sounds right and is
+# not: GitHub keeps one *pending* run per group and cancels the previous
+# pending one, so two version bumps merged in quick succession would drop the
+# first one's tag forever. Two runs racing for one tag is the harmless failure
+# by comparison, and the step below is written to survive it.
+#
+# A run from a tag is grouped by its tag, so that two never publish one version
+# at once. There a pending run can be canceled by a third, which loses
+# nothing: each publishes the same version, and what npm has, it skips.
 concurrency:
-    group: ${{ github.workflow }}-${{ github.sha }}
+    group: ${{ github.workflow }}-${{ github.ref_type == 'tag' && github.ref || github.sha }}
     cancel-in-progress: false
 
 jobs:
     tag:
-        # A push is always to `main`; this keeps "Run workflow" to it too.
+        # A push is always to `main`; this keeps "Run workflow" on a branch to
+        # it too. A run from a tag only publishes.
         if: github.ref == 'refs/heads/main'
         runs-on: ubuntu-latest
         timeout-minutes: 10
@@ -52,10 +58,9 @@ jobs:
         permissions:
             contents: write
         outputs:
-            # Empty while the packages are at 0.0.0, which is no release.
             version: ${{ steps.version.outputs.value }}
-            # Whether this run is the one that released it.
-            released: ${{ steps.release.outputs.released }}
+            # Whether to start the run that publishes it.
+            publish: ${{ steps.release.outputs.publish }}
         steps:
             - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
               with:
@@ -67,22 +72,8 @@ jobs:
               id: version
               run: |
                   set -eu
-                  # The seven are `fixed` in .changeset/config.json, so any of
-                  # them answers — but only while that holds, and a hand-edited
-                  # `package.json` is exactly how it would stop holding without
-                  # anyone noticing. Checked rather than assumed.
-                  version=""
-                  for manifest in packages/*/package.json; do
-                    this=$(node -p "require('./$manifest').version")
-                    if [ -z "$version" ]; then
-                      version=$this
-                      first=$manifest
-                    elif [ "$this" != "$version" ]; then
-                      echo "::error::$manifest is $this but $first is $version." \
-                           "The packages are fixed to one version; nothing is released until they agree."
-                      exit 1
-                    fi
-                  done
+                  # One version for all seven, or an error if they disagree.
+                  version=$(node scripts/version.mjs)
                   # Where the packages started, before anything was released.
                   if [ "$version" = "0.0.0" ]; then
                     echo "The packages are at 0.0.0, which is no release. Nothing to do."
@@ -109,9 +100,16 @@ jobs:
                   # the tag and then failed to create the release unrepeatable:
                   # every later run would short-circuit on the tag and the
                   # release would never appear. Every step below is safe to run
-                  # again.
-                  if gh release view "$tag" >/dev/null 2>&1; then
+                  # again. A draft is not a release.
+                  if [ "$(gh release view "$tag" --json isDraft --jq .isDraft 2>/dev/null)" = false ]; then
                     echo "$tag is already released. Nothing to do."
+                    # A re-run may repeat an attempt that released it and then
+                    # failed before the publishing run was started, so it
+                    # starts that run again; one that finds everything on npm
+                    # publishes nothing.
+                    if [ "$GITHUB_RUN_ATTEMPT" -gt 1 ]; then
+                      echo 'publish=true' >> "$GITHUB_OUTPUT"
+                    fi
                     exit 0
                   fi
 
@@ -146,53 +144,147 @@ jobs:
                   fi
 
                   gh release create "$tag" --title "$tag" --notes-file "$notes"
-                  echo 'released=true' >> "$GITHUB_OUTPUT"
+                  echo 'publish=true' >> "$GITHUB_OUTPUT"
 
-    # Off until the `@skysa` scope is claimed on npm and a token that can
-    # publish to it is in the repository secret `NPM_TOKEN`: then set the
-    # repository variable `NPM_PUBLISH` to `true`. Provenance needs the
-    # repository to be public, so that comes first too.
-    publish:
+    # Publishing runs from the tag, in a run of its own, because npm's
+    # provenance names the commit a run is of: that run is of the commit the
+    # tag names, which this one need not be. A dispatch made with
+    # `GITHUB_TOKEN` does start a run, unlike its pushes. Its own job, so that
+    # the power to start runs is not held while the repository's code runs; if
+    # it fails, "Re-run failed jobs" starts the run again.
+    start-publishing:
         needs: tag
-        if: >-
-            vars.NPM_PUBLISH == 'true' && needs.tag.outputs.version != '' &&
-            (needs.tag.outputs.released == 'true' || github.event_name == 'workflow_dispatch')
+        if: needs.tag.outputs.publish == 'true' && vars.NPM_PUBLISH == 'true'
+        runs-on: ubuntu-latest
+        timeout-minutes: 5
+        permissions:
+            actions: write
+        steps:
+            # The full name: a bare `v0.2.0` would be a branch's, if one had
+            # that name.
+            - env:
+                  VERSION: ${{ needs.tag.outputs.version }}
+                  GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+              run: gh workflow run release.yml --repo "$GITHUB_REPOSITORY" --ref "refs/tags/v$VERSION"
+
+    # Publishing, in a run from a version's tag, and only while it is switched
+    # on: the repository variable `NPM_PUBLISH` set to `true`, once the
+    # repository is public (provenance needs that) and npm will take the
+    # packages from it — through a token for a package's first version, and
+    # through trusted publishing from then on (`.changeset/README.md` says
+    # how).
+    #
+    # Two jobs, so that the credential to publish is held only where nothing
+    # but npm and the kit's own script runs. `pack` installs, builds and checks
+    # with neither the OIDC token nor the secret; `publish` gets the tarballs
+    # `pack` checked, and installs and builds nothing.
+    pack:
+        if: github.ref_type == 'tag' && vars.NPM_PUBLISH == 'true'
         runs-on: ubuntu-latest
         timeout-minutes: 15
         permissions:
             contents: read
-            # The OIDC token npm's provenance statement is signed with.
-            id-token: write
+        outputs:
+            version: ${{ steps.release.outputs.version }}
         steps:
             - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
               with:
-                  # What the tag names, not this run's commit: npm can never
-                  # take a version back, so what it gets at 0.2.0 has to be
-                  # what `v0.2.0` is, however long after the release this runs.
-                  ref: v${{ needs.tag.outputs.version }}
+                  # `main`'s history, to find the tag's commit on it.
+                  fetch-depth: 0
+                  persist-credentials: false
+
+            # Only a release is published: a tag on a commit merged to `main`,
+            # holding the version it names, that the `tag` job released. A tag
+            # pushed by mistake onto a branch is none of those. This runs from
+            # the tag's own copy of the workflow, though, so it stops a mistake,
+            # not someone who can push and changes this check at that tag too:
+            # what stops them is a required reviewer on the `npm` environment.
+            - name: Check the tag is a release
+              id: release
+              env:
+                  GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+              run: |
+                  set -eu
+                  version=$(node scripts/version.mjs)
+                  if [ "v$version" != "$GITHUB_REF_NAME" ]; then
+                    echo "::error::The packages are at $version, so $GITHUB_REF_NAME is no release of them."
+                    exit 1
+                  fi
+                  if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+                    echo "::error::$GITHUB_REF_NAME is not on main, so it was never released."
+                    exit 1
+                  fi
+                  draft=$(gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --json isDraft --jq .isDraft || true)
+                  if [ "$draft" != false ]; then
+                    echo "::error::$GITHUB_REF_NAME has no GitHub release, so it was never released."
+                    exit 1
+                  fi
+                  printf 'version=%s\n' "$version" >> "$GITHUB_OUTPUT"
 
             - run: corepack enable
+
+            # No cache, as npm advises for a release: what is published is
+            # built from what the lockfile names, fetched now, not from a store
+            # an earlier run left.
+            - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+              with:
+                  node-version-file: .nvmrc
+
+            - run: pnpm install --frozen-lockfile
+            - run: pnpm build
+
+            # The same check `pnpm verify` runs, keeping the tarballs it passed.
+            - run: node scripts/packCheck.mjs --keep "$RUNNER_TEMP/tarballs"
+
+            - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+              with:
+                  name: tarballs
+                  path: ${{ runner.temp }}/tarballs
+                  if-no-files-found: error
+
+    publish:
+        needs: pack
+        runs-on: ubuntu-latest
+        timeout-minutes: 15
+        # Where the credential is: the token, while there is one, is this
+        # environment's secret and never the repository's, which a run from
+        # any branch could read; and npm's trusted publishing names it. Its
+        # deployment rule admits only `v*` tags, so a run from a branch, with
+        # its own copy of this file, can publish nothing. It is made, with that
+        # rule, before `NPM_PUBLISH` is switched on: GitHub would otherwise
+        # make it here, with no rule at all.
+        environment: npm
+        permissions:
+            contents: read
+            # The OIDC token trusted publishing signs in with, and npm's
+            # provenance statement is signed with.
+            id-token: write
+        steps:
+            # For the script and `.nvmrc`; nothing in it is installed or built.
+            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+              with:
+                  persist-credentials: false
 
             - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
               with:
                   node-version-file: .nvmrc
-                  cache: pnpm
                   # Writes the `.npmrc` that hands `NODE_AUTH_TOKEN` to the
-                  # registry.
+                  # registry, while there is one.
                   registry-url: https://registry.npmjs.org
 
-            - run: pnpm install --frozen-lockfile
+            # Trusted publishing needs npm 11.5.1 or later, and its dist-tags
+            # 11.21.0; Node 22 comes with npm 10
+            # (https://docs.npmjs.com/trusted-publishers). Pinned, as the
+            # actions are.
+            - run: npm install --global npm@11.21.1
 
-            # The same check `pnpm verify` runs: every tarball as npm would
-            # receive it, and every entry loading in Node.
-            - run: pnpm build
-            - run: pnpm pack:check
+            - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+              with:
+                  name: tarballs
+                  path: ${{ runner.temp }}/tarballs
 
-            # Each package whose version npm does not have yet, built again by
-            # its `prepack`, with `publishConfig`'s public access and
-            # provenance. A package npm already has at this version is skipped,
-            # so a run after a partial failure finishes the job.
-            - run: pnpm -r publish --no-git-checks
+            - name: Publish what npm does not have
               env:
+                  VERSION: ${{ needs.pack.outputs.version }}
                   NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-                  NPM_CONFIG_PROVENANCE: 'true'
+              run: node scripts/publish.mjs "$RUNNER_TEMP/tarballs" "$VERSION"
