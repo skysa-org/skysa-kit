@@ -124,7 +124,7 @@ export const NOT_ABOVE = (folders, message) => ({
  * Formatting is Prettier's: `prettierConfig`, last in `skysa()`, switches off
  * every rule that would fight it.
  */
-export const typescriptRules = {
+const typescriptRules = {
 	// Mistakes JavaScript lets through.
 	eqeqeq: 'error',
 	'guard-for-in': 'error',
@@ -148,7 +148,8 @@ export const typescriptRules = {
 	complexity: ['error', 20],
 	'max-depth': ['error', 2],
 	'no-else-return': 'error',
-	'no-restricted-syntax': ['error', ...RESTRICTED_SYNTAX],
+	// `no-restricted-syntax` is set in `skysa()`, with the repo's own `syntax`:
+	// set here, a block that spread these rules would drop that list.
 
 	// Declarations, names and comments.
 	'no-var': 'error',
@@ -244,14 +245,15 @@ const SOURCE = ['**/src/**/*.ts', '**/src/**/*.tsx'];
  *
  * - `root`: the directory typescript-eslint finds each file's tsconfig from.
  * - `ignores`: what the repo generates or keeps out of lint.
- * - `react`: the files that are React code, for its rules and the browser's
- *   globals.
+ * - `react`: `{ files, version }` — the files that are React code, for its
+ *   rules and the browser's globals, and the React the repo depends on, which
+ *   eslint-plugin-react's version-gated rules read.
  * - `syntax`: the repo's own refused syntax, added wherever this sets
  *   `no-restricted-syntax`. A block of the repo's own that sets it spreads
  *   `RESTRICTED_SYNTAX` (and `CELL_SYNTAX` in source) and its own list too.
  * - `blocks`: the repo's own config blocks: its boundaries and layers.
  */
-export const skysa = ({ root, ignores = [], react: reactFiles = [], syntax = [], blocks = [] }) =>
+export const skysa = ({ root, ignores = [], react: reactCode, syntax = [], blocks = [] }) =>
 	tseslint.config(
 		{
 			ignores: [
@@ -297,11 +299,11 @@ export const skysa = ({ root, ignores = [], react: reactFiles = [], syntax = [],
 
 		// ---- React ----------------------------------------------------------
 
-		...(reactFiles.length === 0
+		...(reactCode === undefined
 			? []
 			: [
 					{
-						files: reactFiles,
+						files: reactCode.files,
 						extends: [
 							react.configs.flat.recommended,
 							react.configs.flat['jsx-runtime'], // new JSX transform — no `React` import needed
@@ -310,11 +312,11 @@ export const skysa = ({ root, ignores = [], react: reactFiles = [], syntax = [],
 						languageOptions: { globals: globals.browser },
 						plugins: { 'react-hooks': reactHooks },
 						settings: {
-							// Explicit rather than 'detect': eslint-plugin-react 7.37.5's
+							// Handed in rather than 'detect': eslint-plugin-react 7.37.5's
 							// version detection calls an API ESLint 10's flat-config rule
 							// context no longer exposes, and crashes the run instead of
-							// warning. Keep in step with the react the repo depends on.
-							react: { version: '19.3.0' },
+							// warning.
+							react: { version: reactCode.version },
 						},
 						rules: {
 							...reactHooks.configs['recommended-latest'].rules,

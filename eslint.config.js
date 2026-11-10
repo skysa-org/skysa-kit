@@ -1,4 +1,5 @@
-import { readFileSync } from 'node:fs';
+import { readFileSync, statSync } from 'node:fs';
+import { isBuiltin } from 'node:module';
 import { dirname, relative, resolve, sep } from 'node:path';
 
 import {
@@ -21,26 +22,60 @@ const packageOf = (file) => {
 	return inside.split(sep)[0];
 };
 
-/** Each package's manifest, read once. */
+/**
+ * Each package's manifest, read again whenever it changes, so an editor's
+ * long-lived lint sees a dependency the moment it is added. Undefined for a
+ * folder with none.
+ */
 const manifests = new Map();
 const manifestOf = (folder) => {
-	if (!manifests.has(folder))
-		manifests.set(
-			folder,
-			JSON.parse(readFileSync(resolve(PACKAGES, folder, 'package.json'), 'utf8'))
-		);
-	return manifests.get(folder);
+	const file = resolve(PACKAGES, folder, 'package.json');
+	const stamp = statSync(file, { throwIfNoEntry: false })?.mtimeMs;
+	if (stamp === undefined) return undefined;
+	const held = manifests.get(folder);
+	if (held?.stamp === stamp) return held.manifest;
+	const manifest = JSON.parse(readFileSync(file, 'utf8'));
+	manifests.set(folder, { stamp, manifest });
+	return manifest;
 };
 
-/** `@skysa/sync/testing` → `@skysa/sync`. */
-const packageNameOf = (specifier) => specifier.split('/').slice(0, 2).join('/');
+/** `@skysa/sync/testing` → `@skysa/sync`; `hono/csrf` → `hono`. */
+const packageNameOf = (specifier) =>
+	specifier
+		.split('/')
+		.slice(0, specifier.startsWith('@') ? 2 : 1)
+		.join('/');
+
+/** The specifier a node names, when it is written out whole. */
+const specifierOf = (node) => {
+	if (node === null || node === undefined) return undefined;
+	if (node.type === 'Literal') return node.value;
+	if (node.type === 'TSLiteralType') return specifierOf(node.literal);
+	if (node.type === 'TemplateLiteral' && node.expressions.length === 0)
+		return node.quasis[0].value.cooked;
+	return undefined;
+};
 
 /**
- * A local rule: the edges between the kit's packages are their manifests. A
- * relative import stays inside its own package, and another package is reached
- * by its name, which the importer's manifest lists: under `dependencies` or
- * `peerDependencies` for what ships, or anywhere for a test. pnpm would refuse
- * an unlisted one too, when it resolves; this says why, and says it first.
+ * Whether a file of a package ships: everything but its tests and its tools'
+ * config. A `/testing` entry is a test's, and takes what the tests take.
+ */
+const shipsFrom = (folder, file) => {
+	const inside = relative(resolve(PACKAGES, folder), file);
+	return !inside.startsWith(`tests${sep}`) && !/\.config\.[cm]?[jt]s$/.test(inside);
+};
+
+/**
+ * A local rule: the edges between packages are their manifests. A relative
+ * import stays inside its own package; any other package is reached by its
+ * name, which the importer's manifest lists — under `dependencies` or
+ * `peerDependencies` for what ships, or anywhere for a test. And code that
+ * ships never imports its own package's entry, which would reach round the
+ * layers inside it. Node's own modules, and a scheme such as
+ * `cloudflare:workers`, are judged by the blocks for where each package runs.
+ *
+ * Neither pnpm nor TypeScript refuses an unlisted package for certain: Node's
+ * resolution climbs to the root's `node_modules`, where the tools live.
  */
 const EDGES = {
 	meta: {
@@ -49,6 +84,7 @@ const EDGES = {
 			leaves: "a relative import leaves @skysa/{{from}}: reach {{target}} by its package's name.",
 			unlisted:
 				'@skysa/{{from}} does not list {{target}} under {{where}} in its package.json.',
+			self: '@skysa/{{from}} imports its own entry: inside a package, reach a module by its relative path.',
 		},
 		schema: [],
 	},
@@ -56,7 +92,8 @@ const EDGES = {
 		const from = packageOf(context.filename);
 		if (from === undefined) return {};
 		const manifest = manifestOf(from);
-		const ships = relative(resolve(PACKAGES, from), context.filename).startsWith(`src${sep}`);
+		if (manifest === undefined) return {};
+		const ships = shipsFrom(from, context.filename);
 		const listed = ships
 			? { ...manifest.dependencies, ...manifest.peerDependencies }
 			: {
@@ -78,9 +115,13 @@ const EDGES = {
 					});
 				return;
 			}
-			if (!specifier.startsWith('@skysa/')) return;
+			if (isBuiltin(specifier) || specifier.includes(':')) return;
 			const name = packageNameOf(specifier);
-			if (name === manifest.name || name in listed) return;
+			if (name === manifest.name) {
+				if (ships) context.report({ node, messageId: 'self', data: { from } });
+				return;
+			}
+			if (name in listed) return;
 			context.report({ node, messageId: 'unlisted', data: { from, target: name, where } });
 		};
 
@@ -96,7 +137,14 @@ const EDGES = {
 				check(node, node.source.value);
 			},
 			ImportExpression: (node) => {
-				if (node.source.type === 'Literal') check(node, node.source.value);
+				check(node, specifierOf(node.source));
+			},
+			// `import('…').Type`, a type that names a module.
+			TSImportType: (node) => {
+				check(node, specifierOf(node.argument));
+			},
+			TSExternalModuleReference: (node) => {
+				check(node, specifierOf(node.expression));
 			},
 		};
 	},
@@ -109,9 +157,14 @@ const NO_NODE_IN_THE_WORKER = {
 };
 
 /** What protocol, storage and sync refuse: they run in the browser, Node and Workers. */
-const NO_NODE_ANYWHERE = {
+const PORTABLE_MESSAGE =
+	'@skysa/protocol, storage and sync run in the browser, Node and Workers alike.';
+const NO_NODE_ANYWHERE = { group: NODE_BUILTINS, message: PORTABLE_MESSAGE };
+
+/** What the client refuses: it runs in the browser. */
+const NO_NODE_IN_THE_BROWSER = {
 	group: NODE_BUILTINS,
-	message: '@skysa/protocol, storage and sync run in the browser, Node and Workers alike.',
+	message: '@skysa/client runs in the browser.',
 };
 
 const NO_ENV_MESSAGE =
@@ -123,12 +176,16 @@ export default skysa({
 		// Generated by drizzle-kit from src/db/schema.ts.
 		'packages/server/migrations/**',
 	],
-	react: ['packages/client/**/*.ts', 'packages/client/**/*.tsx'],
+	react: { files: ['packages/client/**/*.ts', 'packages/client/**/*.tsx'], version: '19.3.0' },
 	blocks: [
 		// ---- Between the packages ------------------------------------------
 
 		{
-			files: ['packages/*/{src,tests}/**/*.{ts,tsx}', 'packages/*/scripts/**/*.mjs'],
+			files: [
+				'packages/*/{src,tests}/**/*.{ts,tsx}',
+				'packages/*/scripts/**/*.mjs',
+				'packages/*/*.js',
+			],
 			plugins: { kit: { rules: { edges: EDGES } } },
 			rules: { 'kit/edges': 'error' },
 		},
@@ -143,11 +200,7 @@ export default skysa({
 			rules: {
 				'no-restricted-globals': [
 					'error',
-					...BROWSER_ONLY_GLOBALS.map((name) => ({
-						name,
-						message:
-							'@skysa/protocol, storage and sync run in the browser, Node and Workers alike.',
-					})),
+					...BROWSER_ONLY_GLOBALS.map((name) => ({ name, message: PORTABLE_MESSAGE })),
 				],
 				'no-restricted-imports': ['error', { patterns: [NO_NODE_ANYWHERE] }],
 			},
@@ -229,6 +282,12 @@ export default skysa({
 			rules: { 'no-console': 'off' },
 		},
 		{
+			// The client runs in the browser. Its tsconfig has Node's types, for
+			// the tests, so typecheck would let a built-in through.
+			files: ['packages/client/src/**/*.ts'],
+			rules: { 'no-restricted-imports': ['error', { patterns: [NO_NODE_IN_THE_BROWSER] }] },
+		},
+		{
 			// The PWA's build runs in Node, inside the app's Vite config.
 			files: ['packages/pwa/src/**/*.ts'],
 			languageOptions: { globals: globals.node },
@@ -238,13 +297,15 @@ export default skysa({
 
 		{
 			// The store is the data layer: the sync layer drives it, so it does
-			// not import the sync layer.
+			// not import the sync layer. Repeats the client's block, which a rule
+			// set here replaces rather than adds to.
 			files: ['packages/client/src/store/**/*.ts'],
 			rules: {
 				'no-restricted-imports': [
 					'error',
 					{
 						patterns: [
+							NO_NODE_IN_THE_BROWSER,
 							NOT_ABOVE(
 								['sync'],
 								'the store is the data layer: it does not import the sync layer.'
