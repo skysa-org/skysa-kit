@@ -1,0 +1,15 @@
+{
+	"extends": "../../tsconfig.base.json",
+	"compilerOptions": {
+		"rootDir": ".",
+		"outDir": "dist",
+		// DOM is here for the web *standards* this relies on — Web Crypto,
+		// TextEncoder, fetch, URL — which exist in the browser, Node and Workers
+		// alike. The genuinely browser-only globals it also pulls in (document,
+		// window, localStorage, ...) are refused by lint instead, since there is
+		// no lib that draws the line where it is needed.
+		"lib": ["ES2022", "DOM"],
+		"types": ["node"]
+	},
+	"include": ["src/**/*.ts", "tests/**/*.ts", "vitest.config.ts"]
+}

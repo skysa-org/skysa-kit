@@ -1,0 +1,42 @@
+{
+	"name": "@skysa/server",
+	"version": "0.0.0",
+	"description": "The Worker as a library, one connect flow per provider, and the D1 migrations.",
+	"private": true,
+	"license": "AGPL-3.0-only",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/skysa-org/skysa-kit.git",
+		"directory": "packages/server"
+	},
+	"type": "module",
+	"sideEffects": false,
+	"exports": {
+		".": {
+			"types": "./src/index.ts",
+			"default": "./src/index.ts"
+		},
+		"./relay": {
+			"types": "./src/relay/durableObject.ts",
+			"default": "./src/relay/durableObject.ts"
+		}
+	},
+	"scripts": {
+		"typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.src.json --noEmit",
+		"test": "vitest run",
+		"db:generate": "drizzle-kit generate"
+	},
+	"dependencies": {
+		"@skysa/protocol": "workspace:*",
+		"@skysa/storage": "workspace:*",
+		"drizzle-orm": "^0.45.4",
+		"hono": "^4.13.13",
+		"zod": "catalog:"
+	},
+	"devDependencies": {
+		"@cloudflare/workers-types": "5.20261006.1",
+		"@types/node": "catalog:",
+		"drizzle-kit": "^0.31.11",
+		"vitest": "catalog:"
+	}
+}

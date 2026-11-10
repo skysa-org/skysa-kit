@@ -1,0 +1,13 @@
+packages:
+    - 'packages/*'
+
+# One version for a dependency several packages use, so they cannot drift
+# apart. A package names it as `"catalog:"`; the range is set here.
+catalog:
+    '@types/node': ^26.6.5
+    vitest: ^5.0.3
+    zod: ^4.6.5
+
+# Native/postinstall builds accepted. Everything else is blocked by default.
+onlyBuiltDependencies:
+    - esbuild

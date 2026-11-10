@@ -1,0 +1,81 @@
+name: CI
+
+on:
+    push:
+        branches: [main]
+    pull_request:
+
+# Nothing here reads a secret or writes to the repo.
+permissions:
+    contents: read
+
+# A second push to the same branch cancels the first: nothing is learned from
+# finishing a run against code that has already been replaced. Pull requests
+# only — on `main` every commit is one someone may need the result for, and a
+# merge that cancels the previous merge's run leaves it with no result at all.
+concurrency:
+    group: ${{ github.workflow }}-${{ github.ref }}
+    cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+    verify:
+        runs-on: ubuntu-latest
+        # The whole gate runs in a few minutes; this is only so a hung vitest
+        # cannot sit there for the default six hours.
+        timeout-minutes: 15
+        steps:
+            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+            # Before setup-node, which needs the package manager on PATH to resolve
+            # its cache. The version comes from `packageManager` in package.json.
+            - run: corepack enable
+
+            - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+              with:
+                  node-version-file: .nvmrc
+                  cache: pnpm
+
+            - run: pnpm install --frozen-lockfile
+
+            # The same gate the README tells humans to run before every commit,
+            # so the two cannot drift.
+            - run: pnpm verify
+
+            # The server's migrations are generated from its schema
+            # (`src/db/schema.ts`) and committed, with drizzle's snapshots. A
+            # schema change that forgot to generate fails here rather than
+            # drifting: `generate` writes a new migration, so untracked files
+            # count too.
+            - name: The migrations match the schema
+              run: |
+                  set -eu
+                  pnpm --filter @skysa/server exec drizzle-kit check
+                  pnpm --filter @skysa/server exec drizzle-kit generate
+                  if [ -n "$(git status --porcelain)" ]; then
+                    git status --porcelain
+                    git diff
+                    echo "::error::A migration is out of date with the schema. Generate it and commit the result."
+                    exit 1
+                  fi
+
+            # Advisory: a dev-only, transitive advisory would red-light every
+            # run without saying anything about what ships.
+            - run: pnpm audit --prod
+              continue-on-error: true
+
+    # `engines` in package.json promises Node 22.13, and `verify` runs on
+    # whatever 22 `.nvmrc` resolves to today. This is the other end of that
+    # range: the tests on the oldest Node the kit says it supports, so the
+    # promise is checked rather than assumed.
+    minimum-node:
+        runs-on: ubuntu-latest
+        timeout-minutes: 15
+        steps:
+            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+            - run: corepack enable
+            - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+              with:
+                  node-version: '22.13'
+                  cache: pnpm
+            - run: pnpm install --frozen-lockfile
+            - run: pnpm test

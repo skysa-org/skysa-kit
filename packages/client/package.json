@@ -1,0 +1,48 @@
+{
+	"name": "@skysa/client",
+	"version": "0.0.0",
+	"description": "The API client, the token source, the provider factory and its request deadlines, the scheduler, the relay client, the connect code a device holds, a long run's count, and the stores a screen listens to.",
+	"private": true,
+	"license": "AGPL-3.0-only",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/skysa-org/skysa-kit.git",
+		"directory": "packages/client"
+	},
+	"type": "module",
+	"sideEffects": false,
+	"exports": {
+		".": {
+			"types": "./src/index.ts",
+			"default": "./src/index.ts"
+		},
+		"./testing": {
+			"types": "./tests/testing.ts",
+			"default": "./tests/testing.ts"
+		}
+	},
+	"scripts": {
+		"typecheck": "tsc -p tsconfig.json --noEmit",
+		"test": "vitest run"
+	},
+	"dependencies": {
+		"@skysa/protocol": "workspace:*",
+		"@skysa/storage": "workspace:*",
+		"@skysa/sync": "workspace:*",
+		"zod": "catalog:"
+	},
+	"peerDependencies": {
+		"react": "^19.3.0"
+	},
+	"devDependencies": {
+		"@testing-library/dom": "^10.4.2",
+		"@testing-library/react": "^16.3.3",
+		"@types/node": "catalog:",
+		"@types/react": "^19.3.0",
+		"@types/react-dom": "^19.3.0",
+		"jsdom": "^30.1.2",
+		"react": "^19.3.0",
+		"react-dom": "^19.3.0",
+		"vitest": "catalog:"
+	}
+}
