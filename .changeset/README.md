@@ -55,7 +55,7 @@ Before 1.0, read as npm reads a `0.x` range (`^0.2.0` takes `0.2.5` and not `0.3
 
 - **patch** — a fix, a feature, anything an app can take without changing.
 - **minor** — anything an app must act on: an export removed or renamed, a port with a new member the app has to supply, an option that changes meaning or a new one with no default.
-- **major** — 1.0 itself, which is a decision of its own rather than the size of a change.
+- **major** — 1.0 itself, which is when skysa-notes runs on the kit in production ([skysa-notes' record 0018](https://github.com/skysa-org/skysa-notes/blob/main/docs/decisions/0018-the-shared-kit.md), step 3), not the size of a change.
 
 From 1.0, the usual: a fix is a patch, a feature is a minor, and anything an app must act on is a major.
 
