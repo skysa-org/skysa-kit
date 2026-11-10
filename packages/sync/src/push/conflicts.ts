@@ -373,7 +373,7 @@ export const createConflictPush = (
 		// because we have not pulled its rename yet. Resolving it would hand the
 		// note that file's `remoteId`, and two rows with one `remoteId` is the
 		// state the port calls unrecoverable — `noteByRemoteId` hands back one
-		// of them and the other is stale for ever, so the user sees one note
+		// of them and the other is stale forever, so the user sees one note
 		// twice and the next edit to the stale row pushes a third file.
 		//
 		// So the note moves aside instead, keeping its own bytes and its dirty

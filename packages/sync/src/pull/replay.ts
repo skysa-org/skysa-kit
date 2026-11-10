@@ -46,8 +46,8 @@ export const survives = (
  * and then each file that was in it. Answering from the store instead says
  * the note is still sitting where it started, and a decision built on that
  * answer names an id the store no longer holds — which fails the batch, and
- * since the cursor moves only with the batch, the same one is retried for
- * ever. The user's pull is dead.
+ * since the cursor moves only with the batch, the same one is retried
+ * forever. The user's pull is dead.
  *
  * `dirty` is carried through rather than read off the note because it
  * decides what a folder delete does — clean notes go with it, dirty ones
@@ -178,7 +178,7 @@ export const remoteNow = (note: SyncNote, decided: readonly PullChange[]): strin
 /**
  * Where a folder is once the decisions so far have been applied. Same
  * reasoning as `placement`, and the same consequence for getting it wrong: a
- * folder move that names a path nothing is at any more moves nothing, and
+ * folder move that names a path nothing is at anymore moves nothing, and
  * says nothing about having failed.
  */
 export const folderNow = (path: string, decided: readonly PullChange[]): string | undefined =>

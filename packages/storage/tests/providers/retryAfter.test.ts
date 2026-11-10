@@ -68,7 +68,7 @@ describe('parseRetryAfter', () => {
 	it('says nothing for a number no wait could be', () => {
 		expect(parseRetryAfter('Infinity', now)).toBeUndefined();
 		expect(parseRetryAfter('NaN', now)).toBeUndefined();
-		// `Number` says `Infinity` for enough digits, and a wait of for ever is
+		// `Number` says `Infinity` for enough digits, and a wait of forever is
 		// not a wait.
 		expect(parseRetryAfter('1'.repeat(400), now)).toBeUndefined();
 	});

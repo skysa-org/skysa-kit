@@ -8,12 +8,12 @@ import type { MemoryStore } from '../memoryStore.js';
  * handful that happen to think of it.
  *
  * - **No anomalies.** The store forgives a `delete-note` for a note that is not
- *   there, because a batch that rejects is a batch that is retried for ever.
+ *   there, because a batch that rejects is a batch that is retried forever.
  *   That forgiveness must never be what is holding a test up.
  * - **One note per path, one per remote id.** Two rows at one path is a note
  *   the sidebar shows twice and two queued writes racing for one file; two
  *   rows with one `remoteId` is worse — `noteByRemoteId` only ever hands back
- *   one of them, so the other is stale for ever and every edit to it conflicts.
+ *   one of them, so the other is stale forever and every edit to it conflicts.
  * - **The same two for files:** a picture shown twice, or a link the store
  *   cannot keep.
  *

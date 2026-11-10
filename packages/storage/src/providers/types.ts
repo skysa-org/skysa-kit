@@ -52,8 +52,8 @@ export type EntryRef = Pick<RemoteEntry, 'remoteId' | 'path'>;
  * So one of the two is always there, and either may be missing. A feed that
  * names items by id can be asked about a file it never placed — another
  * device's push after this device's cursor, deleted before the next pull — and
- * has no path to give. Dropping that deletion would leave the note here for
- * ever, since the cursor moves on and nothing mentions the file again.
+ * has no path to give. Dropping that deletion would leave the note here
+ * forever, since the cursor moves on and nothing mentions the file again.
  */
 export type DeletedEntry =
 	| { path: string; deleted: true; remoteId?: string }

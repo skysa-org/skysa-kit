@@ -15,7 +15,7 @@ const over = (device: ClientDevice) => ({
 
 /**
  * A client that records which credential each call is made with. There is no
- * connection id in a token request any more — the credential says which — so
+ * connection id in a token request anymore — the credential says which — so
  * "the right connection" is now a claim about what was presented.
  */
 const presenting = (token: ApiClient['token']) => {

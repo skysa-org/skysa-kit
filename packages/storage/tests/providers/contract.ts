@@ -682,7 +682,7 @@ export const describeProviderContract = (
 				// returned, and the round is the only word it gets that another
 				// device deleted it. An id feed never placed the file, so it may
 				// say so by id alone, a path feed by path alone; saying nothing
-				// leaves the note on that device for ever.
+				// leaves the note on that device forever.
 				const provider = await open();
 				const start = await drainSettled(provider);
 

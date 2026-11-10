@@ -98,7 +98,7 @@ export const createPullDeletions = (
 	 * elsewhere, which `movedNotDeleted` answers, and a folder's is too — but a
 	 * file deleted from the folder before it was renamed reads exactly the
 	 * same: its old path deleted, the folder alive under a new name. Dropped,
-	 * that note is carried along with the folder and held for ever over a file
+	 * that note is carried along with the folder and held forever over a file
 	 * nobody has; taken, a file the provider never listed again would be lost
 	 * here. So the provider is asked: a note's file by its id, and a folder by
 	 * listing where it would be once the folder above it has moved. Only "not
@@ -167,8 +167,8 @@ export const createPullDeletions = (
 		const here = found !== undefined && !batch.renaming.has(found.id) ? found : undefined;
 		if (here?.remoteId !== undefined) return { note: here };
 		// That note is found at the old name instead, which is where its file
-		// was when the rename was queued. Left alone, the note stays here for
-		// ever, and its queued rename has nothing to move. Ahead of a note here
+		// was when the rename was queued. Left alone, the note stays here
+		// forever, and its queued rename has nothing to move. Ahead of a note here
 		// that has never had a file: the user made it at the name the rename
 		// freed. But the file may have moved on since — another device renamed
 		// it, and the queue still names the old path — so the caller asks.
@@ -289,7 +289,7 @@ export const createPullDeletions = (
 		// Including one this batch has just made, which the store has never heard
 		// of: a file created and deleted inside one window is both an entry and
 		// a deletion here, and without this the deletion finds nothing, falls
-		// through to the folder branch, and the row stays for ever.
+		// through to the folder branch, and the row stays forever.
 		// Either way the batch is asked as well as the store, because a note
 		// created inside this cursor window has no row to be found by.
 		//
@@ -325,12 +325,12 @@ export const createPullDeletions = (
 			// mentioned. A note is written back by an entry about the very file
 			// this deletion names all the time — our own push echo arriving
 			// alongside the other device's delete — and reading that as settled
-			// drops the deletion for ever, since the cursor moves on and nothing
+			// drops the deletion forever, since the cursor moves on and nothing
 			// says it again. A deletion with no id names no file, so there it
 			// stays a question about the note: after a decision in this batch
 			// that wrote it back, it may be about the file the note now points
 			// at or about one before it, and the provider is asked. Kept on
-			// suspicion, a note whose file is gone stays on this device for ever,
+			// suspicion, a note whose file is gone stays on this device forever,
 			// pointing at nothing — a rename queued here adopts the version
 			// without reading a byte, and says nothing about whether the file
 			// outlived the deletion behind it.
@@ -355,7 +355,7 @@ export const createPullDeletions = (
 		// the next cursor reset.
 		// Asked of the batch, not the store, exactly as every other decision
 		// here is — and it says both which folder and where. Dropping a deletion
-		// drops it for ever, since the cursor moves on and nothing says it
+		// drops it forever, since the cursor moves on and nothing says it
 		// again, so the notebook the user deleted sits in the sidebar until
 		// something else happens to it.
 		// It answers `undefined` for a folder already taken away by this batch —
@@ -371,8 +371,8 @@ export const createPullDeletions = (
 		// for: the user removes what looks like an empty one, the `rmdir` is
 		// refused because the directory is not empty, and the row goes anyway.
 		// What the remote deletes later is then reported with an id and a path
-		// and nothing about the child, and without this the file is listed for
-		// ever at a path that no longer exists.
+		// and nothing about the child, and without this the file is listed
+		// forever at a path that no longer exists.
 		return forgetUnderGone(path, { batch, decided });
 	};
 

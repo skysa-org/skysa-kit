@@ -355,7 +355,7 @@ export const applyAll = (page: Page, items: readonly TreeItem[]): void => {
  *   reported, by id alone. It may be a file this device pushed after its
  *   cursor, which another device deleted before this device pulled again: the
  *   round says only that the id is gone, and the note here is held by the id
- *   the push returned. Dropped, the note stays on this device for ever. An id
+ *   the push returned. Dropped, the note stays on this device forever. An id
  *   nothing holds — a cold start meeting a tombstone — the engine finds nothing
  *   for.
  * - A live item that can be placed is reported where it now is.

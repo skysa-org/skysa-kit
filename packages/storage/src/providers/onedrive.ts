@@ -254,7 +254,7 @@ const treeItemOf = (item: DriveItem, root: string): TreeItem | undefined => {
 };
 
 /**
- * 410 is Graph's "this token is no good any more; start again". On a link we
+ * 410 is Graph's "this token is no good anymore; start again". On a link we
  * stored, a 400 means the same in practice — a token Graph cannot parse — and a
  * 404 is the app folder the link was for having gone. Retrying either would
  * never end. On a round from nothing they are failures like any other, since
@@ -302,7 +302,7 @@ export const createOneDriveProvider = (options: OneDriveProviderOptions): Storag
 		// says its delay is "the length of which can be specified in a
 		// Retry-After header". So the header does not tell the two apart —
 		// an outage is documented to carry one — and a 503 read as a rate limit
-		// would be retried for ever without counting against the op: never
+		// would be retried forever without counting against the op: never
 		// blocked, never surfaced, with every op behind it waiting. A 503 is
 		// the failure to retry that any other 5xx is, `Retry-After` or not.
 		// https://learn.microsoft.com/en-us/graph/throttling

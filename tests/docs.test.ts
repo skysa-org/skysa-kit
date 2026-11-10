@@ -2,6 +2,7 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import ts from 'typescript';
 import { describe, expect, it } from 'vitest';
 
 /**
@@ -47,12 +48,28 @@ const CITING = [
 	...['CLA-individual.md', 'CLA-entity.md'],
 	...CURRENT,
 ];
-const TEXTS = new Map(CITING.map((file) => [file, read(file)]));
+const SPELLED = [
+	...CITING,
+	...PACKAGES.flatMap((folder) =>
+		readdirSync(join(ROOT, folder))
+			.filter((file) => /\.(?:tsx?|m?js|md)$/u.test(file))
+			.map((file) => join(folder, file))
+	),
+	...under('tests').filter((file) => /\.tsx?$/u.test(file)),
+	'vitest.config.ts',
+	...under('.github/workflows').filter((file) => /\.ya?ml$/u.test(file)),
+].filter((file, at, all) => all.indexOf(file) === at);
+const TEXTS = new Map(SPELLED.map((file) => [file, read(file)]));
 const textOf = (file: string): string => TEXTS.get(file) ?? '';
 
 /** A comment's or a paragraph's words, with its line breaks and margins taken out. */
 const unwrapped = (text: string): string => text.replace(/\s*\n\s*(?:\*\s|\/\/\s|>\s)?\s*/gu, ' ');
-const withoutFences = (text: string): string => text.replace(/^```[\s\S]*?^```/gmu, '');
+/** A markdown text without its fenced blocks, indented or not, of backticks or tildes. */
+const withoutFences = (text: string): string =>
+	text.replace(/^[ \t]*(`{3,}|~{3,})[^\n]*\n[\s\S]*?^[ \t]*\1[ \t]*$/gmu, '');
+/** A markdown text without its code, fenced or inline, or its HTML comments. */
+const withoutCode = (text: string): string =>
+	withoutFences(text).replace(/`[^`\n]*`|<!--[\s\S]*?-->/gu, '');
 
 /** A text without its citations of skysa-notes' own document, which lead there. */
 const ours = (text: string): string =>
@@ -112,27 +129,80 @@ const bareIssues = (text: string): readonly string[] =>
 	[...text.matchAll(/(?<![\w&/'"`[-])#\d+\b(?![0-9a-f])/giu)].map(([issue]) => issue);
 
 /**
- * British spellings, which the kit's comments and documents do not use: its
- * words are American. Identifiers and strings are what they are, so only prose
- * is read, outside code, links and anchors.
+ * Spellings that are British, by the patterns they follow and by name: the
+ * kit's comments and documents are in American English. Identifiers and
+ * strings are what they are, so only prose is read.
  */
-const BRITISH =
-	/\b(?:\w*(?:colour|behaviour|honour|favour|licence|defence|judgement|artefact|recognis|authoris|practis|memois)\w*|learnt|cancell(?:ed|ing)|signall(?:ed|ing))\b/giu;
+const BRITISH = new RegExp(
+	[
+		String.raw`\w*(?:colo|behavio|hono|favo|neighbo|labo|harbo|humo|rumo|vapo|flavo|savo|armo|endeavo|odo|parlo|valo|vigo)ur\w*`,
+		String.raw`\w*(?:organ|recogn|normal|serial|initial|final|optim|minim|maxim|priorit|summar|author|synchron|custom|standard|real|categor|character|memo|material|special|sanit|token|random|stabil|visual|central|general|local|global|capital|critic|parameter|util|apolog|digit|neutral|modern|personal|rational|scrutin|symbol|trivial|virtual|familiar|item|emphas|harmon|mobil|polar|equal)is(?:e|ed|es|ing|ation|ations|er|ers|able|ably)`,
+		String.raw`\w*(?:anal|paral|catal)ys(?:e|ed|ing)`,
+		String.raw`\w*(?:cancel|label|model|travel|signal|level|fuel|total|channel|funnel|tunnel|marshal|dial|counsel|initial|equal)l(?:ed|ing|er|ers|or|ors)`,
+		String.raw`(?:cent|met|lit|fib|theat|calib|lust|somb|spect|meag)re[sd]?`,
+		String.raw`licences?|defence|offence|pretence|practis\w*|judgement|acknowledgement|ageing|artefacts?|learnt|spelt|dreamt|whilst|amongst|sceptic\w*|cheques?|tyres?|kerb|storeys?|plough\w*|mould\w*|draught\w*|enrol(?:s|ment)?|fulfil(?:s|ment)?|instalment|skilful|wilful|catalogue\w*|analogue|grey\w*|aeroplanes?|programmes?|manoeuvr\w*`,
+		String.raw`for ever|any more(?! than)|per cent`,
+	]
+		.map((part) => `\\b(?:${part})\\b`)
+		.join('|'),
+	'giu'
+);
 const LEGAL = new Set(['CLA-individual.md', 'CLA-entity.md']);
+
+/** Every comment in a module, by a parse, so that no string is read as one. */
+const comments = (file: string, text: string): string => {
+	const source = ts.createSourceFile(
+		file,
+		text,
+		ts.ScriptTarget.Latest,
+		true,
+		file.endsWith('.tsx') ? ts.ScriptKind.TSX : ts.ScriptKind.TS
+	);
+	const walk = (node: ts.Node): readonly ts.Node[] => [
+		node,
+		...node.getChildren(source).flatMap(walk),
+	];
+	const nodes = walk(source);
+	const jsxText = nodes.filter((node) => node.kind === ts.SyntaxKind.JsxText);
+	const ranges = new Map(
+		nodes
+			.flatMap((node) => [node.pos, node.end])
+			.flatMap((at) => [
+				...(ts.getLeadingCommentRanges(text, at) ?? []),
+				...(ts.getTrailingCommentRanges(text, at) ?? []),
+			])
+			.filter(
+				(range) => !jsxText.some((node) => range.pos >= node.pos && range.pos < node.end)
+			)
+			.map((range) => [range.pos, range.end])
+	);
+	return [...ranges]
+		.sort(([a], [b]) => a - b)
+		.map(([pos, end]) => text.slice(pos, end))
+		.join('\n');
+};
+
+/** A file's prose: a module's comments, a workflow's, or a document outside its code. */
 const prose = (file: string, text: string): string =>
-	(file.endsWith('.md')
-		? withoutFences(text)
-		: text
-				.split('\n')
-				.filter((line) => /^\s*(?:\*|\/\/|\/\*)/u.test(line))
-				.join('\n')
-	).replace(/`[^`\n]*`|https?:\/\/\S+|\]\([^)]*\)|<a id="[^"]*">/gu, '');
+	unwrapped(
+		(/\.md$/u.test(file)
+			? withoutCode(text)
+			: /\.ya?ml$/u.test(file)
+				? text
+						.split('\n')
+						.filter((line) => /^\s*#/u.test(line))
+						.join('\n')
+				: comments(file, text).replace(/`[^`\n]*`/gu, '')
+		)
+			.replace(/https?:\/\/\S+|\]\([^)]*\)|<a id="[^"]*">|\S*\.md#[\w-]+/gu, '')
+			.replace(/^\s*\[[^\]\n]+\]:\s*\S+/gmu, '')
+	);
 const british = (file: string, text: string): readonly string[] =>
 	LEGAL.has(file) ? [] : [...prose(file, text).matchAll(BRITISH)].map(([word]) => word);
 
 /** Each `[…](path)` in a markdown text, outside its code, that points at another file. */
 const links = (text: string): readonly string[] =>
-	[...text.replace(/```[\s\S]*?```|`[^`\n]*`/gu, '').matchAll(/\]\(([^)#\s]+)(?:#[^)]*)?\)/gu)]
+	[...withoutCode(text).matchAll(/\]\(([^)#\s]+)(?:#[^)]*)?\)/gu)]
 		.map(([, target]) => String(target))
 		.filter((target) => !/^[a-z]+:/u.test(target));
 
@@ -198,13 +268,38 @@ describe('the docs', () => {
 	});
 
 	it('reads only prose for spelling', () => {
-		expect(british('x.ts', "// a colour\nconst colour = 'a colour';\n * `colour`")).toEqual([
-			'colour',
+		expect(british('x.ts', "// a colour\nconst colour = 'a colour';")).toEqual(['colour']);
+		expect(british('x.ts', 'const a = 1; // the colour')).toEqual(['colour']);
+		expect(british('x.ts', 'const md = `\n* a colour\n// honour\n`;')).toEqual([]);
+		expect(british('x.ts', '/*\n  the colour here\n*/')).toEqual(['colour']);
+		expect(british('x.tsx', 'const a = <b>{/* colour */}</b>;')).toEqual(['colour']);
+		expect(british('x.tsx', 'const a = <b>// colour</b>;')).toEqual([]);
+		expect(british('x.ts', '// retried for\n// ever, and any more than that')).toEqual([
+			'for ever',
 		]);
-		expect(british('x.md', 'Its behaviour, [a](https://x.org/colour), cancellation.')).toEqual([
-			'behaviour',
-		]);
+		expect(
+			british('x.ts', '// see docs/ARCHITECTURE.md#the-colour-rule, https://x.org/colour')
+		).toEqual([]);
+		expect(
+			british('x.md', 'Its behaviour, [a](https://x.org/colour), cancellation, any more.')
+		).toEqual(['behaviour', 'any more']);
+		expect(
+			british(
+				'x.md',
+				'- item\n  ```\n  const colour = 1;\n  ```\n\n~~~\ncolour\n~~~\n\n[x]: ./colour.md\n<!-- colour -->\n<a id="the-colour-rule"></a>\nAt https://x.org/colour.'
+			)
+		).toEqual([]);
+		expect(british('x.yml', "# a colour\nmessage: 'a licence'")).toEqual(['colour']);
 		expect(british('CLA-individual.md', 'a licence grant')).toEqual([]);
+	});
+
+	it('knows a British spelling from an American one', () => {
+		const words =
+			'colour honours recognised normalise analysed cancelled labelling centre grey aeroplane licence';
+		expect(british('x.md', words)).toHaveLength(11);
+		const american =
+			'color honors recognized normalize analyzed analyses canceled cancellation labeling center gray airplane license four our promise otherwise exercise raise noise premise installed controlled fulfilled enrolled emphasis criticism realism';
+		expect(british('x.md', american)).toEqual([]);
 	});
 
 	it("tells what is skysa-notes' from what says whose it is", () => {
@@ -265,7 +360,7 @@ describe('the docs', () => {
 	});
 
 	it('is written in American English', () => {
-		const words = CITING.flatMap((file) =>
+		const words = SPELLED.flatMap((file) =>
 			british(file, textOf(file)).map((word) => `${file}: ${word}`)
 		);
 		expect(words).toEqual([]);

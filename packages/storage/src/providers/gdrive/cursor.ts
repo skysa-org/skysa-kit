@@ -114,7 +114,7 @@ const parseCursor = (cursor: string): DriveCursor => readTreeCursor(cursorSchema
  * A 404 or 410 is read as that, and so is a 400 that names the page token — in
  * its `location`, its reason or its message, since which of them Drive fills is
  * not documented either, and a dead token not recognized is a sync that fails
- * for ever. Any other 400 is a mistake in the request, and resetting over it
+ * forever. Any other 400 is a mistake in the request, and resetting over it
  * would rescan everything on every sync. On a round from nothing they are
  * failures like any other, since starting again would ask the same thing.
  */

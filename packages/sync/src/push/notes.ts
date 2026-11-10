@@ -100,7 +100,7 @@ export const createNotePush = (
 	 * The second can never resolve itself. No pull will move a note over a
 	 * rename the remote knows nothing about, and the ordered queue cannot reach
 	 * the `move` while the `write` in front of it is failing, so the note's
-	 * edits sit on the device for ever and every op behind them with it. The
+	 * edits sit on the device forever and every op behind them with it. The
 	 * queue is the only thing that can tell the two apart, so it is asked, and
 	 * the rename is done here rather than waited for. Addressed by `remoteId`,
 	 * which finds the file wherever the old path was left behind.
@@ -243,7 +243,7 @@ export const createNotePush = (
 			// The remote already has something at the name the user chose. No
 			// number of retries will free it, and a `move` is not a `write`, so
 			// the conflict rule has no second version to reconcile — leaving it
-			// queued blocks the drain for ever and strands every op behind it,
+			// queued blocks the drain forever and strands every op behind it,
 			// over a rename. The remote keeps the path (CLAUDE.md) and the
 			// user's rename lands beside it under a conflict name, which is
 			// visible in the sidebar rather than silently dropped.
@@ -269,7 +269,7 @@ export const createNotePush = (
 		});
 		// The file is gone from the remote, so there is nothing left to move and
 		// no number of retries will find one. Failing instead blocks the queue
-		// for ever and strands every op behind it — over a rename, which is the
+		// forever and strands every op behind it — over a rename, which is the
 		// least of what the user has queued. The note keeps its contents, and the
 		// pull that reports the deletion cuts it loose or takes it away.
 		if (entry === undefined) {

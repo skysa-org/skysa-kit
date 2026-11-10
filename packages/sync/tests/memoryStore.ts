@@ -87,7 +87,7 @@ export interface MemoryStore extends SyncStore {
 	/**
 	 * Every no-op the contract required this store to tolerate. The contract
 	 * says a `delete-note` for an id that is not here must succeed, because a
-	 * batch that rejects is a batch that is retried for ever — but an engine
+	 * batch that rejects is a batch that is retried forever — but an engine
 	 * that emits one is still wrong, so the engine tests assert this is empty
 	 * and the strictness is kept without the deadlock.
 	 */
@@ -606,7 +606,7 @@ export const createMemoryStore = (document: DocumentFormat): MemoryStore => {
 			notes.set(note.id, { ...note, path: change.path });
 			// And the note's own queued ops, as `move-folder` does. A queued
 			// `move` is the user's rename, and its target is the path the remote
-			// has just taken: left alone it conflicts for ever, and the ordered
+			// has just taken: left alone it conflicts forever, and the ordered
 			// queue strands everything behind it.
 			rebaseOps(note.id, note.path, change.path);
 			return;
@@ -625,7 +625,7 @@ export const createMemoryStore = (document: DocumentFormat): MemoryStore => {
 				return;
 			}
 			// The contract forgives a path with no folder at it — a batch the
-			// store rejects is retried for ever — but an engine that says it
+			// store rejects is retried forever — but an engine that says it
 			// twice is still wrong, so it is recorded like the other no-ops.
 			if (!folders.has(change.path)) {
 				anomalies.push(`delete-folder for unknown folder ${change.path}`);

@@ -945,7 +945,7 @@ describe('a write whose file is not where it was', () => {
 		// under the id we hold, and "wait for the next pull to rebase it" is an
 		// answer to the wrong question: no pull will rebase a rename the remote
 		// knows nothing about, and the ordered queue never reaches the move that
-		// would fix it. The user's edit would sit here for ever, with every op
+		// would fix it. The user's edit would sit here forever, with every op
 		// behind it.
 		const entry = await remoteFile('a.md', 'one\n');
 		world.store.put({
@@ -1413,7 +1413,7 @@ describe('a pull carrying our own echo of a rename we have not pushed', () => {
 		// back undoes what the user just did in front of them, and frees the
 		// path they renamed *to* — so a file arriving there in the same batch is
 		// imported rather than displaced, and the queued move then conflicts on
-		// that path for ever with the whole queue behind it.
+		// that path forever with the whole queue behind it.
 		const file = await remoteFile('a.md', 'x\n');
 		world.store.put({
 			id: 'n1',

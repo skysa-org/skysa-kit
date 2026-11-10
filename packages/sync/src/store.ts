@@ -256,7 +256,7 @@ export type PullChange =
 			 * applied*: a note moving out of the way is a change of its own, and
 			 * it can come later in the same batch. So the store must not enforce
 			 * uniqueness on `path` (a unique index would reject the batch, and a
-			 * rejected batch is retried for ever) and must not make room by
+			 * rejected batch is retried forever) and must not make room by
 			 * deleting whatever is there — that note is about to be moved, and
 			 * deleting it takes its unpushed edits with it. By the end of the
 			 * batch exactly one note is at each path; the engine sees to that.
@@ -348,7 +348,7 @@ export type PullChange =
 			 * Gone remotely, with nothing local worth keeping. An id that is not
 			 * in the store must succeed and do nothing: rejecting would fail the
 			 * whole batch, and since the cursor moves only with the batch the
-			 * same one would be retried for ever, leaving the user with a sync
+			 * same one would be retried forever, leaving the user with a sync
 			 * that never recovers on its own.
 			 *
 			 * A note that is here and dirty is refused rather than deleted: it was
@@ -377,7 +377,7 @@ export type PullChange =
 			 * Two rows at one path is a note the sidebar shows twice, two queued
 			 * writes racing for one file, and — once both have been pushed — one
 			 * `remoteId` between them, after which `noteByRemoteId` only ever
-			 * hands back one and the other is stale for ever.
+			 * hands back one and the other is stale forever.
 			 *
 			 * The store rebases the note's own queued ops in the same
 			 * transaction, exactly as `move-folder` does, and for a sharper
@@ -392,8 +392,8 @@ export type PullChange =
 			kind: 'displace-note';
 			/**
 			 * An id that is not in the store must succeed and do nothing, for the
-			 * same reason `delete-note` must: a rejected batch is retried for
-			 * ever, since the cursor moves only with the batch.
+			 * same reason `delete-note` must: a rejected batch is retried
+			 * forever, since the cursor moves only with the batch.
 			 */
 			id: string;
 			path: string;
@@ -521,8 +521,8 @@ export type PullChange =
 			 * would otherwise send.
 			 *
 			 * Tolerates an unknown id for the same reason `delete-note` does: a batch
-			 * is decided before it is applied, and a rejected batch is retried for
-			 * ever, since the cursor moves only with the batch.
+			 * is decided before it is applied, and a rejected batch is retried
+			 * forever, since the cursor moves only with the batch.
 			 */
 			kind: 'reupload-note';
 			id: string;
@@ -828,7 +828,7 @@ export type OpOutcome =
 			 *
 			 * Against the row as it stands, which the user may have changed while
 			 * the bytes were on their way. Moved since (`sentAs` is not its path
-			 * any more), a `move-file` is queued to take the file after it.
+			 * anymore), a `move-file` is queued to take the file after it.
 			 * Deleted since, a `delete-file` is queued for what was made. Either
 			 * way, every `rmdir` over where the file landed goes behind it: the
 			 * notebook was let go meanwhile, and run first, its `rmdir` would
@@ -931,7 +931,7 @@ export interface SyncStore {
 	 * Every folder that has ever been pushed. Only needed after a cursor reset,
 	 * where a full scan reports what exists and never what was removed: a
 	 * notebook deleted while the cursor was dead would otherwise sit in the
-	 * sidebar for ever with nothing behind it. Folders with no `remoteId` were
+	 * sidebar forever with nothing behind it. Folders with no `remoteId` were
 	 * never in the scan to begin with and are not candidates.
 	 */
 	readonly foldersWithRemote: () => Promise<SyncFolder[]>;

@@ -1677,7 +1677,7 @@ describe('a file the user duplicated', () => {
 		// A file moved in a way the provider reports as a delete plus a create.
 		// The id in the file is the only thing tying the two halves together, and
 		// refusing it because a row still holds it — a row this very batch is
-		// about to remove — makes the two devices disagree for ever about which
+		// about to remove — makes the two devices disagree forever about which
 		// note this is.
 		const first = await remoteFile('a.md', '---\nid: keep-me\n---\n\nbody\n');
 		await world.engine.pull();
@@ -1889,7 +1889,7 @@ describe('a file that is not UTF-8 text', () => {
 
 	it('leaves a dirty note the user renamed where they put it', async () => {
 		// Nothing is in its way at the new name. Its queued move has no file to
-		// move any more and finishes as done; the write makes the file.
+		// move anymore and finishes as done; the write makes the file.
 		const { entry, note } = await pulledNote('a.md', 'one\n');
 		world.store.put({ ...note, path: 'b.md', content: 'my edit\n', dirty: true });
 		world.store.queue({ op: 'move', noteId: note.id, path: 'a.md', targetPath: 'b.md' });
@@ -2555,7 +2555,7 @@ describe('a file that is not UTF-8 text', () => {
 				// empty here, so the user removes it: the `rmdir` is refused —
 				// the directory is not empty on the remote — and the row goes
 				// anyway. Nothing but this deletion will ever mention what was
-				// inside it, and left listed the file is named for ever at a
+				// inside it, and left listed the file is named forever at a
 				// path that no longer exists.
 				const folder = await world.provider.createFolder('Work');
 				const file = world.provider.plantBytes('Work/a.md', LATIN1);
@@ -2684,7 +2684,7 @@ describe('a file that is not UTF-8 text', () => {
 				it('and lets go of one deleted out of the folder before the rename', async () => {
 					// The same two entries less the one that says where the file
 					// is — which is the whole difference between a file carried
-					// along and a file that went. Kept, it is named for ever at
+					// along and a file that went. Kept, it is named forever at
 					// a path nothing is at.
 					const { moved } = await renamedOver();
 

@@ -101,7 +101,7 @@ export const documentNames = (extension: string): DocumentNames => {
  *
  * `conflictFilename` gives every copy the document's extension, `.md` here,
  * which is right for a note and wrong for anything else: a `photo.png` renamed `photo.png (conflict …).md`
- * is not a picture any more, and to the engine it is a note, which it then
+ * is not a picture anymore, and to the engine it is a note, which it then
  * tries to read as text. So the stamp goes before the extension, as it does
  * for a note: `photo (conflict 2026-09-15T14-32).png`.
  *

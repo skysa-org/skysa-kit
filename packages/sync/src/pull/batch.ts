@@ -105,8 +105,8 @@ export const syncedOnly = (live: LiveEntries, passesOver: (path: string) => bool
  * to `A`, moved on to `C`, deleted at `C`. Only its place at `C` says
  * where the deletion found it, and `A` is where it had been.
  *
- * Getting this wrong is not a delay: a deletion dropped here is dropped for
- * ever, because the cursor moves on and nothing mentions it again.
+ * Getting this wrong is not a delay: a deletion dropped here is dropped
+ * forever, because the cursor moves on and nothing mentions it again.
  */
 export const aliveElsewhere = (
 	live: LiveEntries,
