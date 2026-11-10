@@ -12,8 +12,8 @@ name: Release
 # it, so a tag says "this commit is what 0.2.0 is", not "this commit passed".
 # What keeps `main` green is the pull request's own checks, which is where a
 # failure can still be fixed without a tag already pointing at it. Publishing
-# does check, though: it runs `pnpm verify`'s pack check again on what it is
-# about to send.
+# does check, though: it runs `pnpm verify`'s pack check again, and sends
+# exactly the tarballs that check passed.
 #
 # Deliberately not the Changesets "Version Packages" bot. A pull request
 # opened with `GITHUB_TOKEN` starts no workflows, so its own CI would never run
@@ -23,10 +23,10 @@ name: Release
 on:
     push:
         branches: [main]
-    # "Run workflow" on `main` publishes the version there if npm does not have
-    # it yet: for the first release after publishing is switched on, or after
-    # a publish that failed and was not re-run. It tags nothing that a push
-    # would not have, and on any other branch it does nothing at all.
+    # "Run workflow" from a version's tag publishes that version if npm does not
+    # have it yet: one released while publishing was off, or one whose publish
+    # failed. On `main` it does what a push does, and on any other branch
+    # nothing at all.
     workflow_dispatch:
 
 # Each job asks for what it needs.
@@ -44,8 +44,9 @@ concurrency:
 
 jobs:
     tag:
-        # A push is always to `main`; this keeps "Run workflow" to it too.
-        if: github.ref == 'refs/heads/main'
+        # A push is always to `main`; this keeps "Run workflow" to it and to
+        # the tags.
+        if: github.ref == 'refs/heads/main' || github.ref_type == 'tag'
         runs-on: ubuntu-latest
         timeout-minutes: 10
         # The tag and the release. Nothing else, and no pull-request scopes.
@@ -56,6 +57,8 @@ jobs:
             version: ${{ steps.version.outputs.value }}
             # Whether this run is the one that released it.
             released: ${{ steps.release.outputs.released }}
+            # The commit its tag names, when this run released it.
+            commit: ${{ steps.release.outputs.commit }}
         steps:
             - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
               with:
@@ -88,11 +91,16 @@ jobs:
                     echo "The packages are at 0.0.0, which is no release. Nothing to do."
                     exit 0
                   fi
+                  # Run from a tag, the version is that tag's.
+                  if [ "$GITHUB_REF_TYPE" = tag ] && [ "$GITHUB_REF_NAME" != "v$version" ]; then
+                    echo "::error::The tag $GITHUB_REF_NAME holds version $version, so it is no release tag."
+                    exit 1
+                  fi
                   printf 'value=%s\n' "$version" >> "$GITHUB_OUTPUT"
 
             - name: Tag and release, if this version is new
               id: release
-              if: steps.version.outputs.value != ''
+              if: steps.version.outputs.value != '' && github.ref_type == 'branch'
               env:
                   # Through the environment rather than interpolated into the
                   # script. The value comes from a file in the repository, so
@@ -147,17 +155,72 @@ jobs:
 
                   gh release create "$tag" --title "$tag" --notes-file "$notes"
                   echo 'released=true' >> "$GITHUB_OUTPUT"
+                  printf 'commit=%s\n' "$(git rev-parse "$tag^{commit}")" >> "$GITHUB_OUTPUT"
 
     # Off until publishing is switched on: the repository variable
     # `NPM_PUBLISH` set to `true`, once the repository is public (provenance
     # needs that) and npm will take the packages from it — through a token in
-    # the secret `NPM_TOKEN` for the first release, and through trusted
+    # the secret `NPM_TOKEN` for a package's first version, and through trusted
     # publishing from then on (`.changeset/README.md` says how).
-    publish:
+    #
+    # Two jobs, so that the credential to publish is held only where nothing
+    # but npm and the kit's own script runs. `pack` installs, builds and checks
+    # with neither the OIDC token nor the secret; `publish` gets the tarballs
+    # `pack` checked, and installs and builds nothing.
+    pack:
         needs: tag
         if: >-
             vars.NPM_PUBLISH == 'true' && needs.tag.outputs.version != '' &&
-            (needs.tag.outputs.released == 'true' || github.event_name == 'workflow_dispatch')
+            (needs.tag.outputs.released == 'true' || github.ref_type == 'tag')
+        runs-on: ubuntu-latest
+        timeout-minutes: 15
+        permissions:
+            contents: read
+        steps:
+            # npm's provenance names the commit this run is of, so that has to
+            # be the one the tag names, or the statement would point at source
+            # that is not what was published. Run from a tag, it is; a push's
+            # run is unless it tagged an earlier commit, whose own run failed
+            # before it could.
+            - name: Check this run is of the tagged commit
+              if: github.ref_type == 'branch'
+              env:
+                  VERSION: ${{ needs.tag.outputs.version }}
+                  TAGGED: ${{ needs.tag.outputs.commit }}
+              run: |
+                  if [ "$TAGGED" != "$GITHUB_SHA" ]; then
+                    echo "::error::v$VERSION names $TAGGED, but this run is of $GITHUB_SHA." \
+                         "Run this workflow from the tag v$VERSION to publish it."
+                    exit 1
+                  fi
+
+            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+              with:
+                  persist-credentials: false
+
+            - run: corepack enable
+
+            # No cache, as npm advises for a release: what is published is
+            # built from what the lockfile names, fetched now, not from a store
+            # an earlier run left.
+            - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+              with:
+                  node-version-file: .nvmrc
+
+            - run: pnpm install --frozen-lockfile
+            - run: pnpm build
+
+            # The same check `pnpm verify` runs, keeping the tarballs it passed.
+            - run: node scripts/packCheck.mjs --keep "$RUNNER_TEMP/tarballs"
+
+            - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+              with:
+                  name: tarballs
+                  path: ${{ runner.temp }}/tarballs
+                  if-no-files-found: error
+
+    publish:
+        needs: [tag, pack]
         runs-on: ubuntu-latest
         timeout-minutes: 15
         permissions:
@@ -166,55 +229,31 @@ jobs:
             # provenance statement is signed with.
             id-token: write
         steps:
+            # For the script and `.nvmrc`; nothing in it is installed or built.
             - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
               with:
-                  # What the tag names, not this run's commit: npm can never
-                  # take a version back, so what it gets at 0.2.0 has to be
-                  # what `v0.2.0` is, however long after the release this runs.
-                  ref: v${{ needs.tag.outputs.version }}
-
-            - run: corepack enable
+                  persist-credentials: false
 
             - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
               with:
                   node-version-file: .nvmrc
-                  cache: pnpm
                   # Writes the `.npmrc` that hands `NODE_AUTH_TOKEN` to the
                   # registry, while there is one.
                   registry-url: https://registry.npmjs.org
 
-            # npm sends the packages, not pnpm: trusted publishing needs npm
-            # 11.5.1 or later, and Node 22 comes with npm 10
+            # Trusted publishing needs npm 11.5.1 or later, and its dist-tags
+            # 11.21.0; Node 22 comes with npm 10
             # (https://docs.npmjs.com/trusted-publishers). Pinned, as the
             # actions are.
             - run: npm install --global npm@11.21.1
 
-            - run: pnpm install --frozen-lockfile
+            - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+              with:
+                  name: tarballs
+                  path: ${{ runner.temp }}/tarballs
 
-            # The same check `pnpm verify` runs: every tarball as npm would
-            # receive it, and every entry loading in Node.
-            - run: pnpm build
-            - run: pnpm pack:check
-
-            # pnpm packs, since only it applies `publishConfig.exports` and
-            # replaces the `workspace:` and `catalog:` ranges; npm publishes
-            # each tarball whose version it does not have yet, so a run after
-            # a partial failure finishes the job. npm signs in through trusted
-            # publishing where a package has it, and with the token otherwise.
             - name: Publish what npm does not have
               env:
+                  VERSION: ${{ needs.tag.outputs.version }}
                   NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-              run: |
-                  set -eu
-                  tarballs="$RUNNER_TEMP/tarballs"
-                  pnpm -r pack --pack-destination "$tarballs"
-                  for tarball in "$tarballs"/*.tgz; do
-                    manifest=$(tar xzOf "$tarball" package/package.json)
-                    name=$(printf '%s' "$manifest" | node -p "JSON.parse(require('fs').readFileSync(0, 'utf8')).name")
-                    version=$(printf '%s' "$manifest" | node -p "JSON.parse(require('fs').readFileSync(0, 'utf8')).version")
-                    if npm view "$name@$version" version >/dev/null 2>&1; then
-                      echo "$name@$version is on npm already."
-                      continue
-                    fi
-                    npm publish "$tarball" --access public --provenance
-                  done
+              run: node scripts/publish.mjs "$RUNNER_TEMP/tarballs" "$VERSION"

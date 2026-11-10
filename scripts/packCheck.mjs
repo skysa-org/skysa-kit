@@ -1,4 +1,4 @@
-// What `pnpm publish` would send, checked without sending it. Every package is
+// What npm would be sent, checked without sending it. Every package is
 // packed as npm would receive it, its manifest is read back out of the
 // tarball, and every entry it exports is loaded by plain Node from the
 // unpacked copies, each with a node_modules of its own holding only what it
@@ -20,12 +20,15 @@
 //     its package does not declare
 //
 // `pnpm verify` runs it, after `pnpm build`; packing builds again, through each
-// package's `prepack`, which finds nothing to do.
+// package's `prepack`, which finds nothing to do. The release workflow runs it
+// with `--keep <dir>`, which keeps the tarballs it checked, if they passed,
+// in that directory: those bytes, and no others, are what `publish.mjs` sends.
 //
 // Plain Node, no dependencies.
 
 import { execFileSync } from 'node:child_process';
 import {
+	copyFileSync,
 	existsSync,
 	mkdirSync,
 	mkdtempSync,
@@ -40,6 +43,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join, relative } from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
+import { parseArgs } from 'node:util';
 
 const ROOT = join(import.meta.dirname, '..');
 const REPOSITORY = 'https://github.com/skysa-org/skysa-kit.git';
@@ -185,7 +189,7 @@ const LOADING = `
 	process.stdout.write(JSON.stringify(results));
 `;
 
-const check = () => {
+const check = (keep) => {
 	const scratch = mkdtempSync(join(tmpdir(), 'skysa-pack-'));
 	try {
 		const tarballs = join(scratch, 'tarballs');
@@ -268,7 +272,7 @@ const check = () => {
 		const loaded = results.filter(([, error]) => error === null).length;
 		process.stdout.write(`${loaded} of ${results.length} entries loaded in Node\n`);
 
-		return [
+		const problems = [
 			...workspace
 				.filter(({ name }) => !packed.some(({ manifest }) => manifest.name === name))
 				.map(({ name }) => `${name}: was not packed`),
@@ -280,13 +284,28 @@ const check = () => {
 				.filter(([, error]) => error !== null)
 				.map(([entry, error]) => `${entry}: does not load in Node: ${error}`),
 		];
+		if (keep !== undefined && problems.length === 0) {
+			readdirSync(tarballs).forEach((tarball) =>
+				copyFileSync(join(tarballs, tarball), join(keep, tarball))
+			);
+			process.stdout.write(`Kept in ${keep}\n`);
+		}
+		return problems;
 	} finally {
 		rmSync(scratch, { recursive: true, force: true });
 	}
 };
 
 if (process.argv[1] && realpathSync(process.argv[1]) === fileURLToPath(import.meta.url)) {
-	const problems = check();
+	const { keep } = parseArgs({ options: { keep: { type: 'string' } } }).values;
+	// Empty, so that nothing but what was checked here is ever sent from it.
+	if (keep !== undefined) {
+		mkdirSync(keep, { recursive: true });
+		if (readdirSync(keep).length > 0) {
+			throw new Error(`${keep} already holds files; --keep wants an empty directory.`);
+		}
+	}
+	const problems = check(keep);
 	if (problems.length > 0) {
 		process.stderr.write(
 			`\nNot ready to publish:\n${problems.map((problem) => `  - ${problem}`).join('\n')}\n`
