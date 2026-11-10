@@ -1,6 +1,6 @@
 /**
  * The API's answers that are not the thing asked for, as the Worker gives them
- * and the app reads them (#451). Kept here, as the relay's protocol is in
+ * and the app reads them (skysa-notes#451). Kept here, as the relay's protocol is in
  * `relay.ts`, so the two ends cannot drift: the server answers only with a
  * code on this list (`fail` in `apps/api/src/http.ts`), and the app's
  * `Refusal` is a part of it.
@@ -52,7 +52,7 @@ export type ApiErrorCode = (typeof API_ERROR_CODES)[number];
 /**
  * How the app relates to the server's sign-in, as `/api/config` says
  * (`AUTH_MODE`). Only `storage-first` boots; the other is refused at start,
- * and removing it is issue #118.
+ * and removing it is issue skysa-notes#118.
  */
 export const AUTH_MODES = ['storage-first', 'account-first'] as const;
 

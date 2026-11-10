@@ -2,16 +2,16 @@
  * What an app calls the folder it owns on a provider, and how it recognises
  * it again: handed to the adapters by the app rather than imported, so that
  * the layers bound for the shared kit name no app of their own
- * (docs/decisions/0018-the-shared-kit.md). Every value here is in the user's
+ * (skysa-notes' record 0018). Every value here is in the user's
  * storage already, so an app hands over the same values for as long as there
  * are libraries that hold them: renamed, every folder already connected is
- * one the app cannot find. This app's are `NOTES_FOLDER`, in `config.ts`.
+ * one the app cannot find. skysa-notes' are `NOTES_FOLDER`, in its `config.ts`.
  */
 export interface AppFolderSpec {
 	/**
 	 * The folder's name, where the app makes the folder by name: Google Drive.
 	 * OneDrive and Dropbox name it after the app's registration, which has to
-	 * be made under this same name (docs/ARCHITECTURE.md §12.1).
+	 * be made under this same name (skysa-notes §12.1).
 	 */
 	readonly name: string;
 	/**

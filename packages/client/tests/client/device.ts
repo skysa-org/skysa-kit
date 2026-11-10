@@ -25,7 +25,7 @@ interface DeviceDocument {
  * A device as the sync client's tests see it: the ports the client is
  * handed, and what a test does to the device around them. The client goes to
  * the shared kit and reaches the device only through its ports
- * (docs/decisions/0018-the-shared-kit.md), so its tests are suites over this,
+ * (skysa-notes' record 0018), so its tests are suites over this,
  * as core's store contract is over a store: the kit runs each over the ports
  * in memory (`memoryDevice.ts`), and an app over its own database, which this
  * app does in `tests/support/dexieDevice.ts`.

@@ -12,7 +12,7 @@ import { folderNow, removedInBatch, survives, unreadNow } from './replay.js';
 /**
  * A scan's last word: every note and folder the scan never mentioned, let go
  * of or kept (`reconcile`), reached against what the batch has already spoken
- * for (`decided.ts`). Moved out of `engine.ts` as it was (#446).
+ * for (`decided.ts`). Moved out of `engine.ts` as it was (skysa-notes#446).
  */
 
 export const createPullReconcile = (

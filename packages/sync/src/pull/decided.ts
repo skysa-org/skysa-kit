@@ -5,7 +5,7 @@ import { noteIdOf, type PullChange } from '../store.js';
  * notes and folders it writes back (`reestablished`), and every note it has
  * said anything about (`decidedNotes`, `decidedApartFromMoves`). Pure, and
  * below every part that asks, so asking pulls in nothing else. Moved out of
- * `engine.ts` as they were (#446).
+ * `engine.ts` as they were (skysa-notes#446).
  */
 
 /**

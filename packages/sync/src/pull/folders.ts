@@ -26,7 +26,7 @@ import { folderBefore, folderNow, remoteNow } from './replay.js';
  * out of it first (`clearTheWay`, `clearTheNotes`), a folder another moved
  * onto (`movedFolderOver`), and one deleted once what it holds that the batch
  * keeps is rescued (`deleteFolderAfterRescue`, `doomedFolder`). Moved out of
- * `engine.ts` as they were (#446).
+ * `engine.ts` as they were (skysa-notes#446).
  */
 
 /** One decision, as the pull reaches it: `decide` in `decide.ts`, handed in. */

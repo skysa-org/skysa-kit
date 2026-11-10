@@ -10,7 +10,7 @@ import { placements } from './replay.js';
  * end up in a folder (`notesEndingIn`) or under it (`notesUnderNow`), and the
  * names a copy or a displacement there must not take (`takenIn`). The store's
  * rows a change is asked about are read once per change (`storeReads`).
- * Moved out of `engine.ts` as they were (#446).
+ * Moved out of `engine.ts` as they were (skysa-notes#446).
  */
 
 /** A note, and where in the folder asked about it lands. */

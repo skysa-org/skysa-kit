@@ -22,7 +22,7 @@ import type { PullNotes } from './notes.js';
  * A batch decided: each entry, one at a time, sent to the part for its kind
  * (`decide`), and the whole of a page or a round decided in order against
  * what the decisions before it say (`decideAll`), last word first
- * (`deduped`). Moved out of `engine.ts` as they were (#446).
+ * (`deduped`). Moved out of `engine.ts` as they were (skysa-notes#446).
  */
 
 export const createPullDecide = (
@@ -87,7 +87,7 @@ export const createPullDecide = (
 		// the engine actually pulls.
 		//
 		// It is a row of its own (docs/ARCHITECTURE.md §7, "Files beside
-		// notes"): mirrored, never read.
+		// documents"): mirrored, never read.
 		if (!names.isDocumentName(entry.path)) {
 			return [
 				...unlisted(),

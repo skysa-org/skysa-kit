@@ -5,7 +5,7 @@ import { parseJson } from '../json.js';
 import { type FetchLike, type OAuthCredentials, OAuthError, type TokenSet } from './types.js';
 
 /**
- * What the three hand-rolled storage flows share (#450): posting a form to a
+ * What the three hand-rolled storage flows share (skysa-notes#450): posting a form to a
  * token endpoint, reading an OpenID Connect ID token that came back from one,
  * and withdrawing a grant. What differs stays in each provider's module:
  * Microsoft sends `scope` in the form, Google reads `scope` back, and Dropbox
@@ -29,7 +29,7 @@ const text = z
 
 /**
  * A token endpoint's answer, as far as anything here reads it, checked a field
- * at a time (#450): one field of the wrong kind is dropped, not the answer. A
+ * at a time (skysa-notes#450): one field of the wrong kind is dropped, not the answer. A
  * lifetime sent as a string of digits is read as the number, as the cast this
  * replaced came to by arithmetic; one at or below zero is taken as none.
  */

@@ -8,7 +8,7 @@ import { syncWorld } from '../kit/world.js';
 
 /**
  * An app's merge, asked before the conflict rule (docs/ARCHITECTURE.md §7,
- * "Merge before the copy"). This app passes none, and every other engine test
+ * "Merge before the copy"). skysa-notes passes none, and every other engine test
  * runs without one; memoriam's merges a passage practised on two devices.
  * These run with a merge of their own, so the hook is held to what the kit
  * promises whichever app hands one in.

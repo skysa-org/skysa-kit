@@ -32,7 +32,7 @@ const providerList = z
 
 /**
  * Each OAuth provider's settings, by name: the one place they are spelled out
- * (#450). Keyed by the flows in `oauth/providers.ts`, so a provider with a
+ * (skysa-notes#450). Keyed by the flows in `oauth/providers.ts`, so a provider with a
  * flow and no settings here, or settings and no flow, does not compile; the
  * schema, the check that an enabled provider has its settings, and the
  * credentials `createApp` is handed all read it.
@@ -96,7 +96,7 @@ const rawEnvSchema = z.object({
 	 * Deprecated, and does nothing: it was for a WebDAV proxy that is not built
 	 * (docs/ARCHITECTURE.md §5.4). Still read, and warned of at boot
 	 * (`envWarnings`), so a deployment that sets it keeps booting; it goes in
-	 * #118's breaking change. Any value boots: one this would once have refused
+	 * skysa-notes#118's breaking change. Any value boots: one this would once have refused
 	 * reads as false, since nothing reads it either way.
 	 */
 	WEBDAV_ALLOW_PRIVATE: booleanish.default(false).catch(false),
@@ -224,8 +224,8 @@ export const parseEnv = (raw: unknown): AppConfig => {
 
 /**
  * Settings that are accepted and do nothing, each said in a line for the
- * Worker's log at boot (#450). Refusing them would break anyone who has them
- * set, so they warn until #118's breaking change removes them.
+ * Worker's log at boot (skysa-notes#450). Refusing them would break anyone who has them
+ * set, so they warn until skysa-notes#118's breaking change removes them.
  */
 export const envWarnings = (raw: unknown): string[] => {
 	const record = recordOf(raw);

@@ -39,7 +39,7 @@ describe('parseEnv', () => {
 	});
 
 	/**
-	 * Decided 2026-10-25 (#450): `webdav` still boots, since refusing it would
+	 * Decided 2026-10-25 (skysa-notes#450): `webdav` still boots, since refusing it would
 	 * break a deployment that lists it, but its connect answers 404, so the app
 	 * is not told it can connect one.
 	 */
@@ -91,7 +91,7 @@ describe('parseEnv', () => {
 		// Since 2026-09-18 the refusal is permanent rather than an interim: there
 		// is no sign-in layer coming (docs/ARCHITECTURE.md §6). The variable outlives the
 		// decision only because removing it is breaking for anyone who has it
-		// set, which is a change of its own (issue #118).
+		// set, which is a change of its own (issue skysa-notes#118).
 		for (const extra of [
 			{},
 			{ MICROSOFT_CLIENT_ID: 'm', MICROSOFT_CLIENT_SECRET: 'ms' },

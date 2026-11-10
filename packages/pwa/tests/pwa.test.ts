@@ -32,8 +32,8 @@ const pngSize = (file: string): { width: number; height: number } => {
 
 /**
  * An app with a second route and a share target of its own: the build is held
- * to what an app hands it (`PwaApp`), and this app's are checked against its
- * own in `pwa.app.test.ts`.
+ * to what an app hands it (`PwaApp`), and skysa-notes' are checked against its
+ * own in its `pwa.app.test.ts`.
  */
 const TEST_APP: PwaApp = {
 	routes: [/^\/(?:\?|$)/, /^\/board(?:\?|$)/],

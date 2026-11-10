@@ -854,7 +854,7 @@ export const describeFailures = (
 		it('makes one note of edits here and elsewhere when it is handed a merge', async () => {
 			const device = await bound();
 			const note = await device.create('c1', 'Plan', 'one\n');
-			// The remote's text, then the last line written here. This app passes
+			// The remote's text, then the last line written here. skysa-notes passes
 			// no merge (`SyncSchedulerOptions.merge`); memoriam's does.
 			const merge = ({ local, remote }: MergeInput) =>
 				`${remote}${local.trimEnd().split('\n').at(-1) ?? ''}\n`;

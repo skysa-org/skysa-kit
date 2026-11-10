@@ -18,7 +18,7 @@ import type { NotePush } from './notes.js';
  * cannot be read (`setAside`, `setAsideForOp`), or reconciled with the file's
  * newer version by the conflict rule (`resolvePushConflict`), or made one with
  * it where the app's merge can (`pushMerged`). Moved out of `engine.ts` as they
- * were (#446).
+ * were (skysa-notes#446).
  */
 
 /**

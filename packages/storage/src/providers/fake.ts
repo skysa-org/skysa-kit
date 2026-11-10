@@ -75,7 +75,7 @@ export type FakeFault = (call: FakeCall) => Error | undefined;
 /**
  * The folder the fake stands in for when a test names none: an app's that is
  * not this one's, so that whatever the engine and the apps do with the fake
- * shows they assume no app folder of their own (docs/decisions/0018-the-shared-kit.md).
+ * shows they assume no app folder of their own (skysa-notes' record 0018).
  */
 export const TEST_FOLDER: AppFolderSpec = {
 	name: 'test-app',

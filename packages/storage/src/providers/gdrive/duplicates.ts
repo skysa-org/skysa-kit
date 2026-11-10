@@ -17,7 +17,7 @@ import { byAge, type DriveClient, type DriveFile, isFolder, treeItemOf } from '.
  * the copy can go to the trash without anything of the user's going with it.
  * Two devices uploading the same picture beside a note while offline is the
  * ordinary way to get here — an attachment's name is stamped with its content
- * (issue #187) — and renaming the second would leave a file nobody links to
+ * (issue skysa-notes#187) — and renaming the second would leave a file nobody links to
  * beside the one every note does.
  *
  * Never a note. Two notes with the same bytes are still two rows on whichever

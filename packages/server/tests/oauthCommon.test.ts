@@ -65,7 +65,7 @@ describe('postTokenForm', () => {
 });
 
 describe("postTokenForm's reading of the answer", () => {
-	// Each field is checked, not cast (#450).
+	// Each field is checked, not cast (skysa-notes#450).
 	it('reads a lifetime sent as a string of digits as the number it is', async () => {
 		const { tokens } = await postTokenForm(
 			answering(200, { access_token: 'a', expires_in: '60' }),

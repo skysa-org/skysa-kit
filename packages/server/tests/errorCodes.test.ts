@@ -7,7 +7,7 @@ import { describe, expect, it } from 'vitest';
 
 /**
  * Every refusal goes out through `fail` (`src/http.ts`), which takes only a
- * code from core's list, so the app and the server read one list (#451). A
+ * code from core's list, so the app and the server read one list (skysa-notes#451). A
  * `c.json({ …, error: … })` written by hand would get past that, and so would
  * a literal typed as a plain string; this reads the source for both.
  */

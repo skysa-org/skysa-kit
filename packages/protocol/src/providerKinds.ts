@@ -5,7 +5,7 @@
  * What the server, the client and a deployment all speak, so not this app's
  * own: a kind is written into the marker, into each device's rows and into
  * `storage_connections.provider`, and is only ever added, never renamed
- * (docs/decisions/0018-the-shared-kit.md).
+ * (skysa-notes' record 0018).
  */
 export const PROVIDER_KINDS = ['gdrive', 'onedrive', 'dropbox', 'webdav'] as const;
 

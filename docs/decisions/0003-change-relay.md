@@ -7,8 +7,8 @@ Where the operator turns the relay on, it finds them within a second or two, or 
 It is off by default, and with it off none of this exists — `/api/config` says nothing about it and the app polls exactly as before.
 
 - **It carries that something changed, and nothing else.**
-  A device sends `{"t":"pushed"}` after a round that pushed something, and after it has sent a change to the clipboard (§7, "The clipboard"); the connection's other devices receive `{"t":"changed"}` and run an ordinary round.
-  They look again 3 and 10 seconds after the last notice (`AFTER_NOTICE_MS` in `sync/scheduler.ts`, 2026-10-06), from a tab still in front: the notice comes as soon as the write is answered, and on Google Drive the round it starts at once asks the feed before the write is in it (§5.1).
+  A device sends `{"t":"pushed"}` after a round that pushed something, and after it has sent a change to the clipboard (skysa-notes §7, "The clipboard"); the connection's other devices receive `{"t":"changed"}` and run an ordinary round.
+  They look again 3 and 10 seconds after the last notice (`AFTER_NOTICE_MS` in `packages/client/src/sync/scheduler.ts`, 2026-10-06), from a tab still in front: the notice comes as soon as the write is answered, and on Google Drive the round it starts at once asks the feed before the write is in it (§5.1).
   Without looking again, that round found nothing and the change waited for the poll a minute on.
   No path, no id, no version, no content.
   The note is still read from the provider, under the same version checks and conflict rule, so the relay can be wrong, late or absent and cost nothing but time.
@@ -22,8 +22,8 @@ It is off by default, and with it off none of this exists — `/api/config` says
 - **A seam, wired by the default entry.**
   `createApp({ relay })` takes a `RelayHub`: `connect(request, member)` is handed an upgrade the routes have already authorized, and `revoke(connectionId, grantIds?)` closes sockets.
   Routes see only that.
-  The hub that ships is a Durable Object per connection (`ConnectionRelay`, `apps/api/src/relay/`), on the WebSocket Hibernation API so an open, idle socket costs no duration, and `src/worker.ts` passes it when `RELAY=true`.
-  The binding and its migration are declared in `wrangler.toml` whether or not it is used: an object nobody addresses costs nothing, and it makes turning the relay on one variable rather than an edit to a tracked file.
+  The hub that ships is a Durable Object per connection (`ConnectionRelay`, `packages/server/src/relay/`, exported as `@skysa/server/relay`), on the WebSocket Hibernation API so an open, idle socket costs no duration, and the app's Worker entry passes it when `RELAY=true` (skysa-notes' `apps/api/src/worker.ts`).
+  skysa-notes declares the binding and its migration in its `wrangler.toml` whether or not it is used: an object nobody addresses costs nothing, and it makes turning the relay on one variable rather than an edit to a tracked file.
   `RELAY=true` with the binding removed refuses to boot.
   A deployment that wants its fan-out elsewhere passes its own hub.
 - **The credential reaches a socket without entering a URL.**
@@ -46,8 +46,8 @@ It is off by default, and with it off none of this exists — `/api/config` says
 - **Cost (Cloudflare's published prices, 2026-10-05).**
   Two devices brought to the front twenty times a day each open about 40 sockets, each a ticket request, a Worker request and a Durable Object request; a few hundred `pushed` messages are billed at 20:1.
   Roughly 2,400 Worker requests, 1,900 Durable Object requests and a few GB-s per active user a month — about $0.0007 per user per month on Workers Paid.
-  On Workers Free the cost is the daily cap instead: some 80 requests per user per day against 100k, shared with token refresh, whose failure at the cap stops sync for everyone (§13).
-  That is why it is off by default, and why `docs/self-hosting.md` recommends Paid before turning it on.
+  On Workers Free the cost is the daily cap instead: some 80 requests per user per day against 100k, shared with token refresh, whose failure at the cap stops sync for everyone (skysa-notes §13).
+  That is why it is off by default, and why [skysa-notes' `docs/self-hosting.md`](https://github.com/skysa-org/skysa-notes/blob/main/docs/self-hosting.md) recommends Paid before turning it on.
 - **Considered instead.**
   Provider push straight to the browser exists only on Dropbox (`list_folder/longpoll`, §5.3, still a possible later addition for that provider alone); Graph's socket.io endpoint asks for more than `Files.ReadWrite.AppFolder`, and Drive's `changes.watch` needs a public webhook.
   WebRTC between devices, signalled through files in the app folder, was designed and set aside: setting up a connection takes three trips through a poll, a phone on a carrier network often cannot be reached without a TURN relay — a server after all — and the signalling files would churn every device's change feed and sync down to the user's desktop.

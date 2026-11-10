@@ -22,7 +22,7 @@ const PROVIDER_ORIGINS =
 type ShareTarget = NonNullable<ManifestOptions['share_target']>;
 
 /**
- * What an app hands the build of its own (docs/decisions/0018-the-shared-kit.md):
+ * What an app hands the build of its own (skysa-notes' record 0018):
  * the navigations its shell answers, and its share target if it has one.
  *
  * Workbox writes a runtime rule's functions into `sw.js` as their source

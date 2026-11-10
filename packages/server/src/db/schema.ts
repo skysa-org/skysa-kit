@@ -14,7 +14,7 @@ import { index, integer, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqli
  * two were kept for `account-first`, which was **dropped** on 2026-09-18 —
  * identity and storage are coupled deliberately (docs/ARCHITECTURE.md §6, "No sign-in
  * separate from storage"). So they are now dead rather than early, and issue
- * #118 tracks dropping them: a hand-written migration, `identities` before `users`
+ * skysa-notes#118 tracks dropping them: a hand-written migration, `identities` before `users`
  * because of the foreign key.
  *
  * Nothing in `src/` reads either one. Do not start.

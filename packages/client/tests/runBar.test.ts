@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { runBar } from '../src/sync/progress.js';
 
 /**
- * How full a run's bar is, for every bar that draws one (#455): the status
+ * How full a run's bar is, for every bar that draws one (skysa-notes#455): the status
  * line's, a run's details' and a first import's.
  */
 

@@ -8,7 +8,7 @@ import { type Database, schema } from './client.js';
 
 /**
  * The writes to `connections` and `grants` that have a race to get right, kept
- * here with the reasoning about it (#450). A route says when one happens and
+ * here with the reasoning about it (skysa-notes#450). A route says when one happens and
  * why; this says how it stays right with another request in between. Writes
  * with nothing to race stay where they are: a credential's use (`touch`, in
  * `credentials.ts`) and Disconnect's delete of the whole row.

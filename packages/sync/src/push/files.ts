@@ -20,7 +20,7 @@ import type { FolderPush } from './folders.js';
  * row is (`runUpload`), moved after the user (`runMoveFile`) and deleted
  * (`runDeleteFile`), each going beside whatever it meets at the name unless
  * that is this same file already. Moved out of `engine.ts` as they were
- * (#446).
+ * (skysa-notes#446).
  */
 
 /**

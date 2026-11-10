@@ -18,7 +18,7 @@ import type { ProviderKind } from '@skysa/protocol';
  * Nothing here is ever logged, put in a URL, or rendered. The device list in
  * `components/account/Devices.tsx` shows the server's view of the grants, which carries no hashes.
  *
- * It goes to the shared kit (docs/decisions/0018-the-shared-kit.md), so it
+ * It goes to the shared kit (skysa-notes' record 0018), so it
  * reaches the table through a port (`CredentialTable`) rather than the app's
  * database, which fits the port as it is.
  */
@@ -46,7 +46,7 @@ export const PENDING_CREDENTIAL_ID = 'pending';
  * Where the credentials are kept, by `id`: the app's is a Dexie table.
  *
  * Exported for an app without one, which writes its own: the port the shared
- * kit names (docs/decisions/0018-the-shared-kit.md).
+ * kit names (skysa-notes' record 0018).
  *
  * @public
  */

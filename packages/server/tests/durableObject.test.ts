@@ -9,7 +9,7 @@ import type { RelayMember } from '../src/relay/hub.js';
  * `WebSocketPair`, no hibernatable sockets and no `101`. What these pin is the
  * object's half — what it accepts, what it tags and attaches, and how it maps
  * the runtime's sockets onto the room. Whether the runtime behaves as stood in
- * for here is the live check's question (docs/self-hosting.md).
+ * for here is the live check's question (skysa-notes' docs/self-hosting.md).
  */
 
 interface FakeSocket {

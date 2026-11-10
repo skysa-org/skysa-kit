@@ -1568,7 +1568,7 @@ export const describeSyncStoreContract = (
 
 		describe('a merge', () => {
 			// Both sides changed the note, and the app's merge made the two one
-			// file (docs/ARCHITECTURE.md §7, "Merge before the copy"). This app
+			// file (docs/ARCHITECTURE.md §7, "Merge before the copy"). skysa-notes
 			// passes none, but the kit's stores take one all the same.
 			const merge = (over: Partial<{ path: string; clean: boolean; base: string }> = {}) =>
 				({

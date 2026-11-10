@@ -348,7 +348,7 @@ export const describeScheduling = (
 		describe('what the app syncs beside its documents', () => {
 			// The scheduler knows none of an app's folders, and builds none of what it
 			// syncs beside the documents: the app hands it a watch and attaches each
-			// (this app's `sync/notesSync.ts`). Every other test here runs it as the
+			// (skysa-notes' `sync/notesSync.ts`). Every other test here runs it as the
 			// app does (`ClientDevice.schedule`).
 			const bare = (device: ClientDevice, watch?: Watch) => {
 				const env = fakeEnvironment();

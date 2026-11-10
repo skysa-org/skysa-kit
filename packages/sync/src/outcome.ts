@@ -42,10 +42,10 @@ export interface SyncOutcome {
 	waitingUploads?: number;
 	/**
 	 * The names of the engine's `watch` that something the pull met passed, in
-	 * the watch's order: in this app, `clipboard` for the clipboard's folder,
-	 * which whoever shows the clipboard then reads again (docs/ARCHITECTURE.md
-	 * §7, "The clipboard"), and `encryption` for the key file, which another
-	 * device may have set up or replaced (§7, "Secrets in a note"). A deletion
+	 * the watch's order: in skysa-notes, `clipboard` for the clipboard's folder,
+	 * which whoever shows the clipboard then reads again (skysa-notes §7, "The
+	 * clipboard"), and `encryption` for the key file, which another device may
+	 * have set up or replaced (skysa-notes §7, "Secrets in a note"). A deletion
 	 * by id alone may have been any of them, so it meets every name. Absent
 	 * when it met none.
 	 */
@@ -98,7 +98,7 @@ export const transient = (error: unknown): SyncOutcome => ({
 
 /**
  * Named tests of a path whose passing a pull reports (`SyncEngineOptions.watch`):
- * this app's are `NOTES_WATCH` in `appFolder.ts`.
+ * skysa-notes' are `NOTES_WATCH` in its `appFolder.ts`.
  */
 export type Watch = Readonly<Record<string, (path: string) => boolean>>;
 

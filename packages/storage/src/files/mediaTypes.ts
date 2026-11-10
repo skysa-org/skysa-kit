@@ -2,7 +2,7 @@ import { extensionOf } from '../names/extension.js';
 
 /**
  * Every extension the app knows something about, and everything it knows: one
- * row each, from which what used to be six hand-kept tables are read (#449).
+ * row each, from which what used to be six hand-kept tables are read (skysa-notes#449).
  * By name, because the name is all a note and a listing carry.
  */
 

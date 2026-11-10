@@ -57,7 +57,7 @@ export interface SyncEngineOptions {
 	store: SyncStore;
 	/**
 	 * What the app's documents are: their extension, the id one claims, a
-	 * conflict copy's contents (docs/decisions/0018-the-shared-kit.md).
+	 * conflict copy's contents (skysa-notes' record 0018).
 	 */
 	document: DocumentFormat;
 	/**
@@ -72,17 +72,17 @@ export interface SyncEngineOptions {
 	/**
 	 * The hidden paths the app syncs all the same. A path under a dot-prefixed
 	 * segment (`isHidden`) is passed over — the marker file, the app's own
-	 * bookkeeping, another tool's — unless this says otherwise: this app's
+	 * bookkeeping, another tool's — unless this says otherwise: skysa-notes'
 	 * scratchpad and vault are dot-named to stay out of other tools' lists of
-	 * folders, and are notes (`syncsHidden` in `appFolder.ts`). Absent, no
+	 * folders, and are notes (`syncsHidden` in its `appFolder.ts`). Absent, no
 	 * hidden path syncs.
 	 */
 	syncsHidden?: (path: string) => boolean;
 	/**
 	 * Named tests of a path. A pull says by name which ones an entry it met
 	 * passed (`SyncOutcome.met`), and decides nothing more about it for that:
-	 * this app reads its clipboard and its key file again (`NOTES_WATCH` in
-	 * `appFolder.ts`). Absent, a pull says it met nothing.
+	 * skysa-notes reads its clipboard and its key file again (`NOTES_WATCH` in
+	 * its `appFolder.ts`). Absent, a pull says it met nothing.
 	 */
 	watch?: Watch;
 	/**

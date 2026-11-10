@@ -17,7 +17,7 @@ import type { FolderPush } from './folders.js';
  * The notes, as a push sends them: written (`runWrite`), following a rename
  * the remote has not heard of yet; renamed (`runMove`), beside the name
  * wanted where the remote keeps it; and deleted (`runDelete`). Moved out of
- * `engine.ts` as they were (#446).
+ * `engine.ts` as they were (skysa-notes#446).
  */
 
 /** Conflict names a rename is moved to before the remote's last refusal fails it. */

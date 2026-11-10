@@ -33,7 +33,7 @@ import { z } from 'zod';
  * again here because its URL becomes a link on this page, and a link is the
  * one place a value from the server turns into something the browser follows.
  * `https:` only — never `javascript:` or `data:`, which would be script in the
- * page `script-src 'self'` protects (CLAUDE.md; issue #89 asks the same of the
+ * page `script-src 'self'` protects (CLAUDE.md; issue skysa-notes#89 asks the same of the
  * connect flow's URL).
  *
  * Its own schema, not the server's: the server refuses a gate that is wrong,

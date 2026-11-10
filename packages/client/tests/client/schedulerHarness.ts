@@ -1,6 +1,6 @@
 /**
  * A scheduler under test: a remote, a server minting tokens, and a fake clock,
- * for the scheduler's suites over a device (`device.ts`) and for this app's
+ * for the scheduler's suites over a device (`device.ts`) and for skysa-notes'
  * own scheduler tests.
  */
 import { AuthError, type StorageProvider } from '@skysa/storage';

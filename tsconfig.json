@@ -1,0 +1,9 @@
+{
+	"extends": "@skysa/eslint-config/tsconfig.base.json",
+	"compilerOptions": {
+		"types": ["node"],
+		"noEmit": true
+	},
+	// The repository's own tests, of what is no one package's: its documents.
+	"include": ["tests/**/*.ts", "vitest.config.ts"]
+}

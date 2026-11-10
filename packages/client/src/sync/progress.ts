@@ -19,7 +19,7 @@ export const isLongRun = (progress: SyncProgress | undefined): progress is SyncP
 	(progress.stage === 'scanning' ? progress.found : progress.total) >= PROGRESS_FROM;
 
 /**
- * A run's count, as every view of it reads one (#455): a scan or a round still
+ * A run's count, as every view of it reads one (skysa-notes#455): a scan or a round still
  * listing, which knows how many so far and not of how many, or one sending or
  * receiving, which knows both. A scan past its listing receives what it found.
  */

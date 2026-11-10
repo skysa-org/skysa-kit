@@ -67,8 +67,8 @@ const conflictName = (
  * What names say about the documents `extension` names (`DocumentFormat`):
  * whether a name is one's, and where a copy of one goes. Made once for a
  * format, so the engine and the providers are handed the extension rather
- * than importing one (docs/decisions/0018-the-shared-kit.md). This app's are
- * in `notes.ts`.
+ * than importing one (docs/decisions/0018-the-shared-kit.md). skysa-notes'
+ * are in its `notes.ts`.
  */
 export interface DocumentNames {
 	/** Whether a name or path is a document's (`hasExtension`). */

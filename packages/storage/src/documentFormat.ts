@@ -1,10 +1,10 @@
 /**
  * What an app's synced files are: handed to the sync engine and the adapters
  * by the app rather than imported, so that the layers bound for the shared kit
- * know no file format of their own (docs/decisions/0018-the-shared-kit.md).
+ * know no file format of their own (skysa-notes' record 0018).
  * The engine moves a document's text whole and never its parts; these are the
- * only questions it asks of what is inside. This app's is `NOTE_FORMAT`, in
- * `markdown/format.ts`.
+ * only questions it asks of what is inside. skysa-notes' is `NOTE_FORMAT`, in
+ * its `markdown/format.ts`.
  */
 export interface DocumentFormat {
 	/**
