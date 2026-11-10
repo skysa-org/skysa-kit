@@ -1,6 +1,6 @@
 {
 	"name": "@skysa/eslint-config",
-	"version": "0.0.0",
+	"version": "0.1.0",
 	"description": "The lint rules the Skysa apps share, their base tsconfig, and Prettier's settings.",
 	"license": "AGPL-3.0-only",
 	"repository": {
