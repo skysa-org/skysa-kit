@@ -1,6 +1,10 @@
+import { mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
 import { describe, expect, it } from 'vitest';
 
-import { problemsOf, targetsOf } from '../scripts/packCheck.mjs';
+import { keep, problemsOf, readyToKeep, targetsOf } from '../scripts/packCheck.mjs';
 
 interface Manifest {
 	name: string;
@@ -187,5 +191,32 @@ describe('problemsOf', () => {
 				files: ['LICENSE', 'package.json', 'index.js', 'scripts/budget.mjs'],
 			})
 		).toEqual([]);
+	});
+});
+
+describe('keeping the tarballs', () => {
+	const scratch = () => mkdtempSync(join(tmpdir(), 'skysa-keep-'));
+
+	it('keeps every tarball when the check found nothing', () => {
+		const [from, to] = [scratch(), join(scratch(), 'kept')];
+		writeFileSync(join(from, 'skysa-sync-0.2.0.tgz'), 'sync');
+		writeFileSync(join(from, 'skysa-storage-0.2.0.tgz'), 'storage');
+		readyToKeep(to);
+		expect(keep({ from, to, problems: [] })).toBe(true);
+		expect(readdirSync(to).sort()).toEqual(['skysa-storage-0.2.0.tgz', 'skysa-sync-0.2.0.tgz']);
+		expect(readFileSync(join(to, 'skysa-sync-0.2.0.tgz'), 'utf8')).toBe('sync');
+	});
+
+	it('keeps none of them when it found anything', () => {
+		const [from, to] = [scratch(), scratch()];
+		writeFileSync(join(from, 'skysa-sync-0.2.0.tgz'), 'sync');
+		expect(keep({ from, to, problems: ['@skysa/sync: has no LICENSE'] })).toBe(false);
+		expect(readdirSync(to)).toEqual([]);
+	});
+
+	it('refuses a directory that already holds something', () => {
+		const to = scratch();
+		writeFileSync(join(to, 'skysa-sync-0.1.0.tgz'), 'stale');
+		expect(() => readyToKeep(to)).toThrow(`${to} already holds files`);
 	});
 });

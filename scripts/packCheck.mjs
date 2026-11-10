@@ -138,6 +138,31 @@ export const problemsOf = ({ manifest, dir, files, byPath = [] }) => {
 	];
 };
 
+/**
+ * Makes a directory ready to keep tarballs in: there, and empty, so that
+ * nothing but what this check passed is ever sent from it.
+ * @param {string} dir
+ */
+export const readyToKeep = (dir) => {
+	mkdirSync(dir, { recursive: true });
+	if (readdirSync(dir).length > 0) {
+		throw new Error(`${dir} already holds files; --keep wants an empty directory.`);
+	}
+};
+
+/**
+ * Copies the packed tarballs to where they are kept, if the check found no
+ * problem: one tarball with a problem keeps the others back too, since the
+ * kit is released whole.
+ * @param {{ from: string, to: string, problems: string[] }} tarballs
+ * @returns {boolean} whether they were kept
+ */
+export const keep = ({ from, to, problems }) => {
+	if (problems.length > 0) return false;
+	readdirSync(from).forEach((tarball) => copyFileSync(join(from, tarball), join(to, tarball)));
+	return true;
+};
+
 const readJson = (path) => JSON.parse(readFileSync(path, 'utf8'));
 
 const filesUnder = (dir) =>
@@ -189,7 +214,7 @@ const LOADING = `
 	process.stdout.write(JSON.stringify(results));
 `;
 
-const check = (keep) => {
+const check = (keepIn) => {
 	const scratch = mkdtempSync(join(tmpdir(), 'skysa-pack-'));
 	try {
 		const tarballs = join(scratch, 'tarballs');
@@ -284,11 +309,8 @@ const check = (keep) => {
 				.filter(([, error]) => error !== null)
 				.map(([entry, error]) => `${entry}: does not load in Node: ${error}`),
 		];
-		if (keep !== undefined && problems.length === 0) {
-			readdirSync(tarballs).forEach((tarball) =>
-				copyFileSync(join(tarballs, tarball), join(keep, tarball))
-			);
-			process.stdout.write(`Kept in ${keep}\n`);
+		if (keepIn !== undefined && keep({ from: tarballs, to: keepIn, problems })) {
+			process.stdout.write(`Kept in ${keepIn}\n`);
 		}
 		return problems;
 	} finally {
@@ -297,15 +319,9 @@ const check = (keep) => {
 };
 
 if (process.argv[1] && realpathSync(process.argv[1]) === fileURLToPath(import.meta.url)) {
-	const { keep } = parseArgs({ options: { keep: { type: 'string' } } }).values;
-	// Empty, so that nothing but what was checked here is ever sent from it.
-	if (keep !== undefined) {
-		mkdirSync(keep, { recursive: true });
-		if (readdirSync(keep).length > 0) {
-			throw new Error(`${keep} already holds files; --keep wants an empty directory.`);
-		}
-	}
-	const problems = check(keep);
+	const keepIn = parseArgs({ options: { keep: { type: 'string' } } }).values.keep;
+	if (keepIn !== undefined) readyToKeep(keepIn);
+	const problems = check(keepIn);
 	if (problems.length > 0) {
 		process.stderr.write(
 			`\nNot ready to publish:\n${problems.map((problem) => `  - ${problem}`).join('\n')}\n`

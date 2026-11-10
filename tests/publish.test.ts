@@ -72,11 +72,13 @@ const run = (tarballs: Tarball[], version: string, npm: ReturnType<typeof regist
 };
 
 describe('tagOf', () => {
-	it('leaves a release to npm, and puts a prerelease under its own name', () => {
+	it('leaves a release to npm, and puts every prerelease under next', () => {
 		expect(tagOf('0.2.0')).toBeNull();
 		expect(tagOf('1.0.0+build.5')).toBeNull();
 		expect(tagOf('0.3.0-next.0')).toBe('next');
-		expect(tagOf('1.0.0-rc.2')).toBe('rc');
+		expect(tagOf('1.0.0-rc.2')).toBe('next');
+		expect(tagOf('1.0.0-latest.0')).toBe('next');
+		expect(tagOf('1.0.0-x')).toBe('next');
 		expect(tagOf('1.0.0-0')).toBe('next');
 	});
 });
@@ -171,12 +173,12 @@ describe('publishAll', () => {
 		]);
 	});
 
-	it('stops when it cannot tell whether npm has one', () => {
+	it('publishes nothing when it cannot tell whether npm has one of them', () => {
 		const { npm, published } = registry([], {
-			viewing: { '@skysa/protocol@0.2.0': 'npm error code E503' },
+			viewing: { '@skysa/client@0.2.0': 'npm error code E503' },
 		});
 		expect(() => run(kit('0.2.0'), '0.2.0', npm)).toThrow('Could not tell');
-		expect(published()).toEqual(['/t/skysa-eslint-config-0.2.0.tgz']);
+		expect(published()).toEqual([]);
 	});
 
 	it('puts a prerelease under its tag', () => {
@@ -191,6 +193,17 @@ describe('publishAll', () => {
 			'--tag',
 			'next',
 		]);
+	});
+
+	it('refuses a set that leaves out a package of its scope that one depends on', () => {
+		const { npm, calls } = registry([]);
+		const withoutStorage = kit('0.2.0').filter(
+			({ manifest }) => manifest.name !== '@skysa/storage'
+		);
+		expect(() => run(withoutStorage, '0.2.0', npm)).toThrow(
+			'Not among the tarballs: @skysa/sync depends on @skysa/storage.'
+		);
+		expect(calls).toEqual([]);
 	});
 
 	it('refuses tarballs at another version, or none at all, before asking npm anything', () => {

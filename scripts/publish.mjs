@@ -10,9 +10,9 @@
 // npm signs in through trusted publishing where a package has it, and with
 // the token in `NODE_AUTH_TOKEN` otherwise.
 //
-// It stops at the first package it cannot publish, or cannot tell whether npm
-// has, so a package is never on npm before what it depends on. Running it
-// again finishes the job: what npm has is skipped.
+// It asks npm about every package before it publishes any, and stops at the
+// first one it cannot publish, so a package is never on npm before what it
+// depends on. Running it again finishes the job: what npm has is skipped.
 //
 // Plain Node, no dependencies.
 
@@ -28,17 +28,22 @@ import { fileURLToPath } from 'node:url';
 
 /**
  * The dist-tag a version goes out under, when it is not npm's own `latest`:
- * a prerelease's first identifier (`next` for `0.3.0-next.0`), which npm will
- * not put under `latest` unasked. A release gets none, so npm refuses one lower
- * than a version it already has rather than moving `latest` back to it.
+ * `next`, for any prerelease, which npm will not put under `latest` unasked.
+ * One name rather than the prerelease's own (`beta` in `1.0.0-beta.2`), which
+ * could be `latest` itself or a name npm refuses as a version range (`x`).
+ * A release gets none, so npm refuses one lower than a version it already has
+ * rather than moving `latest` back to it.
  * @param {string} version
  * @returns {string | null}
  */
-export const tagOf = (version) => {
-	const pre = /^\d+\.\d+\.\d+-([0-9A-Za-z-]+)/u.exec(version)?.[1];
-	if (pre === undefined) return null;
-	return /^\d+$/u.test(pre) ? 'next' : pre;
-};
+export const tagOf = (version) => (/^\d+\.\d+\.\d+-/u.test(version) ? 'next' : null);
+
+const dependenciesOf = (/** @type {Manifest} */ manifest) =>
+	Object.keys({
+		...manifest.dependencies,
+		...manifest.peerDependencies,
+		...manifest.optionalDependencies,
+	});
 
 /**
  * The tarballs in an order npm can take them: each after every other one it
@@ -49,11 +54,7 @@ export const tagOf = (version) => {
 export const inOrder = (tarballs) => {
 	const names = new Set(tarballs.map(({ manifest }) => manifest.name));
 	const needs = ({ manifest }) =>
-		Object.keys({
-			...manifest.dependencies,
-			...manifest.peerDependencies,
-			...manifest.optionalDependencies,
-		}).filter((dep) => names.has(dep) && dep !== manifest.name);
+		dependenciesOf(manifest).filter((dep) => names.has(dep) && dep !== manifest.name);
 	const left = [...tarballs].sort((a, b) => a.manifest.name.localeCompare(b.manifest.name));
 	const sent = new Set();
 	const ordered = [];
@@ -95,7 +96,10 @@ export const onNpm = (npm, name, version) => {
 };
 
 /**
- * Publishes every tarball npm does not have yet, in `inOrder`'s order.
+ * Publishes every tarball npm does not have yet, in `inOrder`'s order. It
+ * refuses tarballs at another version than the release's, and any set that
+ * leaves out a package of the same scope that one of them depends on: the kit
+ * is released whole, so that one would be published without what it needs.
  * @param {{ tarballs: Tarball[], version: string, npm: Npm, log: (line: string) => void }} run
  *   the tarballs, the version they were released at, how npm is run, and
  *   where each step is told
@@ -107,10 +111,24 @@ export const publishAll = ({ tarballs, version, npm, log }) => {
 		const which = astray.map(({ manifest }) => `${manifest.name}@${manifest.version}`);
 		throw new Error(`Released at ${version}, but these are not: ${which.join(', ')}.`);
 	}
+	const names = new Set(tarballs.map(({ manifest }) => manifest.name));
+	const missing = tarballs.flatMap(({ manifest }) => {
+		const scope = manifest.name.startsWith('@') ? `${manifest.name.split('/')[0]}/` : null;
+		return dependenciesOf(manifest)
+			.filter((dep) => scope !== null && dep.startsWith(scope) && !names.has(dep))
+			.map((dep) => `${manifest.name} depends on ${dep}`);
+	});
+	if (missing.length > 0) {
+		throw new Error(`Not among the tarballs: ${missing.join(', ')}.`);
+	}
 	const tag = tagOf(version);
-	for (const { file, manifest } of inOrder(tarballs)) {
+	const ordered = inOrder(tarballs).map((tarball) => ({
+		...tarball,
+		has: onNpm(npm, tarball.manifest.name, version),
+	}));
+	for (const { file, manifest, has } of ordered) {
 		const { name } = manifest;
-		if (onNpm(npm, name, version)) {
+		if (has) {
 			log(`${name}@${version} is on npm already.`);
 			continue;
 		}
