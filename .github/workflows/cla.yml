@@ -75,7 +75,7 @@ jobs:
                   # in this repository.
                   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
               with:
-                  path-to-document: https://github.com/skysa-org/skysa-notes/blob/main/CLA-individual.md
+                  path-to-document: https://github.com/skysa-org/skysa-kit/blob/main/CLA-individual.md
                   path-to-signatures: signatures/version1/cla.json
                   branch: cla-signatures
                   # `custom-pr-sign-comment` is deliberately not set. Setting
@@ -94,9 +94,9 @@ jobs:
                   # wrapped line into a newline, which GitHub renders as a hard
                   # break. One line per paragraph is what reads as paragraphs.
                   custom-notsigned-prcomment: |-
-                      Thanks for the pull request. Before it can be merged, this project asks every contributor to sign its [Contributor License Agreement](https://github.com/skysa-org/skysa-notes/blob/main/CLA-individual.md) once — not once per pull request.
+                      Thanks for the pull request. Before it can be merged, this project asks every contributor to sign its [Contributor License Agreement](https://github.com/skysa-org/skysa-kit/blob/main/CLA-individual.md) once — not once per pull request.
 
-                      **It is a licence grant, not an assignment.** You keep ownership of everything you write and every right to use it elsewhere; in exchange the project is bound to keep your contribution available under AGPL-3.0 or a licence one-way compatible with it. [CONTRIBUTING.md](https://github.com/skysa-org/skysa-notes/blob/main/CONTRIBUTING.md#the-cla) explains why.
+                      **It is a licence grant, not an assignment.** You keep ownership of everything you write and every right to use it elsewhere; in exchange the project is bound to keep your contribution available under AGPL-3.0 or a licence one-way compatible with it. [CONTRIBUTING.md](https://github.com/skysa-org/skysa-kit/blob/main/CONTRIBUTING.md#the-cla) explains why.
 
                       To sign, post exactly this as a new comment:
                   custom-allsigned-prcomment: |-
