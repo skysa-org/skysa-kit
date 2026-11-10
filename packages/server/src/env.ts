@@ -158,7 +158,7 @@ const missingCredentialIssues = (raw: Record<string, unknown>): string[] => {
  * cannot be misread.
  *
  * The whole variable goes in a change of its own — removing it is breaking for
- * anyone with it in a `wrangler.toml` (issue #118 lists every site).
+ * anyone with it in a `wrangler.toml` (issue skysa-notes#118 lists every site).
  * Until then this refusal is what keeps the setting from meaning anything.
  */
 const unbuiltAuthModeIssues = (raw: Record<string, unknown>): string[] =>

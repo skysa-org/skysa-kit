@@ -1,9 +1,9 @@
 import type { RemoteEntry } from '@skysa/storage';
 
 /**
- * The local store, as the sync engine needs it. `packages/core` cannot import
- * Dexie — it has to run in Node and in a Worker — so the engine talks to this
- * port and `apps/web` implements it over IndexedDB.
+ * The local store, as the sync engine needs it. `@skysa/sync` cannot import
+ * an app's database — it has to run in Node and in a Worker — so the engine talks
+ * to this port and the app implements it over IndexedDB.
  *
  * Two things shape the shape of it:
  *

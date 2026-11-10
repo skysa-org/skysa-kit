@@ -27,7 +27,7 @@ import { createTokenSource, type TokenSource, type TokenStates } from './tokens.
 
 /**
  * When to sync, and what the last attempt came to. The engine decides nothing
- * about time (`packages/core/src/sync/engine.ts`); this is the part that does,
+ * about time (`packages/sync/src/engine.ts`); this is the part that does,
  * with the triggers docs/ARCHITECTURE.md §7 lists: app open, the tab regaining focus or
  * becoming visible, `online`, every minute while visible, and shortly after a
  * local edit. Background Sync is not here: it needs the service worker to reach

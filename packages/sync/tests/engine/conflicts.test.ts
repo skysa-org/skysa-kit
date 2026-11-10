@@ -666,7 +666,7 @@ describe('a push that cannot be resolved by the conflict rule', () => {
 		expect(seen).toEqual(['moved-by-pull.md']);
 	});
 
-	it('stops rather than dropping an op it could not read (#447)', async () => {
+	it('stops rather than dropping an op it could not read (skysa-notes#447)', async () => {
 		// A row that is none of the kinds — a move that lost its target, a kind
 		// a later version queued — is a store that lost a column, not an op with
 		// nothing to do. Completing it would discard the user's rename with

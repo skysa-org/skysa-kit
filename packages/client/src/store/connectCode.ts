@@ -6,7 +6,7 @@ import { createEmitter } from './emitter.js';
 /**
  * A code the operator's policy accepted at the connect gate
  * (`ConnectGate.connectCode` and `EntitlementProvider.checkCode` in
- * `@skysa/core`), held for as long as the policy said it is good, and no
+ * `@skysa/protocol`), held for as long as the policy said it is good, and no
  * longer.
  *
  * It has to outlive the page. Connecting leaves the app for the provider's

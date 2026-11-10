@@ -1986,7 +1986,7 @@ export const describeSyncStoreContract = (
 			it('takes a resolution for an op withdrawn while it was at the network', async () => {
 				// The user can delete the note while its write is out, and a
 				// tombstone owes the remote its delete and nothing else, so the
-				// write's queue row goes (`apps/web/src/store/queue.ts`). The
+				// write's queue row goes (skysa-notes' `apps/web/src/store/queue.ts`). The
 				// conflict the write met still has to land — refusing it would
 				// fail the op and retry a write the queue no longer holds — and
 				// `completeOp` and `failOp` already allow the same.

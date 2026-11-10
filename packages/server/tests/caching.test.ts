@@ -7,7 +7,7 @@ import { buildApp, newCredential } from './harness.js';
  *
  * Two answers make it matter. `POST /api/token` hands back a provider access
  * token, and `GET /api/connection` is the answer the device binds *and
- * unbinds* itself on (`apps/web/src/sync/account.ts`): a reply kept and
+ * unbinds* itself on (skysa-notes' `apps/web/src/sync/account.ts`): a reply kept and
  * replayed after the world moved would hand out a token the user has revoked,
  * or unbind a connection that is alive on the server.
  *

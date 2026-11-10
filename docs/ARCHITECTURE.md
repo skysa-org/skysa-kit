@@ -4,7 +4,7 @@ The layers of a local-first app that do not care what its files hold: the storag
 An app built on them keeps its documents as files in an app-owned folder on the user's own cloud storage (Google Drive, OneDrive, Dropbox), and works offline against a store on the device.
 
 They were written for [skysa-notes](https://github.com/skysa-org/skysa-notes), and moved here, with their history, so that its sister apps stop forking them ([its record 0018](https://github.com/skysa-org/skysa-notes/blob/main/docs/decisions/0018-the-shared-kit.md)).
-This document is the source of truth for their architecture, and with the records in [`decisions/`](https://github.com/skysa-org/skysa-notes/blob/main/docs/decisions/README.md), for the decisions behind it.
+This document is the source of truth for their architecture, and with the records in [`decisions/`](decisions/README.md), for the decisions behind it.
 Update it when a decision changes.
 It is not a to-do list: open work lives in GitHub issues.
 
@@ -219,7 +219,7 @@ Semantics the signatures do not carry:
   And the path may be missing where the id is not: an id feed asked about a file its tree never placed — one this device pushed after its cursor, deleted by another device before this one pulled again — has no path to give, and dropping the deletion leaves the note on this device for ever.
 - `list` is one level.
   `changes` covers the whole tree at every depth.
-  Neither filters hidden paths: `.notesapp.json` has to reach the engine, and the UI filters with `isPassedOver`.
+  Neither filters hidden paths: the marker has to reach the engine, and an app's screens filter for themselves (skysa-notes' `isPassedOver`).
 - `rootId` is opaque, non-empty and stable.
   A provider whose root has no id of its own — a Dropbox app folder, where the root simply *is* `/` — returns a synthetic constant.
 - Content is UTF-8 text, and `read` says when it is not.
@@ -285,7 +285,7 @@ Its `pageSize`, `folderChanges` and `setFault` options are what let the engine's
 - Scope: `https://www.googleapis.com/auth/drive.file` plus `openid email` for identity.
   Non-restricted; standard OAuth verification only.
 - Root: a folder `APP_FOLDER_NAME` (mimeType `application/vnd.google-apps.folder`) at the top of My Drive, tagged `appProperties: { notesapp: "root" }` and found by that tag, never by name, so a user who renames or moves it keeps their notes, whatever it is called.
-  The key is the app's (`AppFolderSpec`'s `driveTag`, §3), and this app's is `notesapp`.
+  The key is the app's (`AppFolderSpec`'s `driveTag`, §3), and skysa-notes' is `notesapp`.
   **Only `ensureRoot` and a round from nothing make one**: a pull on a stored cursor, and every read and write, only look (a search that misses the folder for a moment is an error to retry, never a second folder).
   Where one is made, the search is asked again, and every tagged folder but the earliest is folded into it — what is inside moved across (the marker trashed instead where the earliest has one), and a folder put in the trash only when a fold finds it already empty, since a device whose last pull was against it may still be writing into it; that device's next pull resets and folds again.
   That settles two devices connecting at once, and a folder restored from the trash beside the one made while it was gone, with nothing written to either left unread; names that meet in the move are separated by the scan that follows.
@@ -565,7 +565,7 @@ Keep it boring.
   Request validation with `zod`.
   (`@hono/zod-validator` was declared up front and never used — the routes validate with `zod` directly — so it was removed.
   Re-add it when a route actually wants the middleware; the removal is not a decision against it.)
-- **Entitlement seam:** every route that mints a token or proxies WebDAV calls `entitlements.check({ connectionId, provider, accountId, displayName })` from an `EntitlementProvider` interface in `core`.
+- **Entitlement seam:** every route that mints a token or proxies WebDAV calls `entitlements.check({ connectionId, provider, accountId, displayName })` from an `EntitlementProvider` interface in `@skysa/protocol`.
   The repo ships `AlwaysAllowed`.
   Operators of a shared instance can substitute their own (an allowlist of accounts, for example) through `createApp`; no such policy logic lives in the repo.
   *Revised in Phase 7:* it took a `userId` until connections stopped aggregating under a user, and an account is what an operator's rule can actually be written about.
@@ -579,7 +579,7 @@ Keep it boring.
   A refusal met only after the provider's consent screen, worded the same whatever the reason and offering nothing to do next, was the whole of what a restricted instance could say.
   Two additions change that, and both come through the entitlement seam.
   - **Codes.**
-    `EntitlementDecision` gains an optional `code` from a fixed list, `ENTITLEMENT_CODES` in `core`: `not_allowed`, `lapsed` and `limit_reached`.
+    `EntitlementDecision` gains an optional `code` from a fixed list, `ENTITLEMENT_CODES` in `@skysa/protocol`: `not_allowed`, `lapsed` and `limit_reached`.
     The callback carries it as `?connect=refused&code=…`, and `/token` returns it beside `reason`.
     A code outside the list is dropped on the way out (`knownCode`), and the refusal then reads as one with no code.
     A value from a closed set says nothing a link-maker can choose, which is what kept `reason` out of the URL.
@@ -610,7 +610,7 @@ Keep it boring.
   Before a connect the server knows nothing about who is connecting, and after it the server knows only the account.
   - **The seam.**
     `ConnectGate` gains an optional `connectCode: { label, required? }`, checked with the rest of the gate (a label of 1 to 40 characters).
-    Whatever is typed goes with `/start` as `connectCode`: trimmed, at most `MAX_CONNECT_CODE` (64, in `core`; 256 since the held value below) characters, and printable.
+    Whatever is typed goes with `/start` as `connectCode`: trimmed, at most `MAX_CONNECT_CODE` (64, in `@skysa/protocol`; 256 since the held value below) characters, and printable.
     A blank one counts as none, and anything else is `invalid_request`.
     The code rides to the callback in the signed flow cookie beside the verifier, and the policy is handed it as a second argument: `check(subject, { connectCode })`.
   - **Checked as it is used (2026-09-29, skysa-notes#146).**
@@ -688,7 +688,7 @@ Keep it boring.
   A person with Dropbox and Google Drive connected has two silos, and the server cannot tell they are one person — which is the property, not a limitation to be fixed later.
 
   What this closes, so it is not re-opened by accident: no `identities` table, no `IdentityProvider` adapters, no Google/Microsoft sign-in, no merge-by-verified-email, no account linking, no magic link, and no `arctic` dependency — whose deprecation (July 2026) had been an open question since 2026-09-14 and is now moot rather than decided.
-  §14 keeps the reasoning and what it would have cost.
+  skysa-notes §14 keeps the reasoning and what it would have cost.
 
   The gain is that a whole class of question stops needing an answer here: which of two identities a grant belongs to, what a verified email is worth, what happens when a linked provider is unlinked, and who may see a connection someone else made.
   A shared instance is still possible — that is what the entitlement seam is for — it just gates on the storage account rather than on a user the server invented.
@@ -739,7 +739,7 @@ Dropbox is the first storage flow and the shape the others follow.
   One key, two algorithms, is how key-separation bugs start.
 - **`token_access_type=offline`**, and a grant that comes back without a refresh token is a 502 rather than a stored connection that would stop working in four hours with no way to recover.
 - **A unique index on `connections(user_id, provider)`** (migration `0001_connection_per_provider`) turns reconnecting into an `ON CONFLICT DO UPDATE` instead of a read-then-write race between two tabs.
-  It also makes §12.3 a constraint rather than a UI convention.
+  It also makes skysa-notes §12.3 a constraint rather than a UI convention.
   Reconnecting clears `root_id`: a new grant can point at a different account.
 - **`SECRETS_KEY` must decode to exactly 32 bytes**, checked at boot.
   It was `.min(1)`, which meant an operator mistake surfaced the first time somebody tried to connect an account.
@@ -751,7 +751,7 @@ Dropbox is the first storage flow and the shape the others follow.
 - **Disconnecting revokes best-effort and deletes regardless.**
   A user who asked to disconnect must not be left connected because the provider was down.
   `revoked: false` says only that the grant may still be live — the revoke failed, or the provider (Microsoft) has none.
-- **One provider per user (§12.3), enforced once a second provider exists (Phase 3).**
+- **One provider per user (skysa-notes §12.3), enforced once a second provider exists (Phase 3).**
   A signed-in user whose storage is connected at one provider is sent back with `connect=occupied` when they start or finish connecting another, and has to disconnect first.
   In storage-first any connected account signs in as its user, so a Dropbox and a OneDrive connection side by side would make whoever holds the OneDrive account able to mint the Dropbox tokens.
   Reconnecting at the same provider replaces, as before.
@@ -1137,15 +1137,15 @@ The two-device suite (`overProviders.test.ts`) does the same at rest, and checks
    Exponential backoff per op; give up after N attempts and surface.
 3. Triggers: app open, tab regains focus, `online` event, 60s interval while visible, Background Sync API when available (best effort), immediately after a local edit (debounced 2s), and — where the deployment runs the change relay (§6) — a notice that another device of the connection has pushed, and 3 and 10 s after the last such notice.
    The relay is one more trigger, never a replacement for the others: it hears nothing of edits made in the folder by other tools.
-   **When a push goes** (`sync/scheduler.ts`, record 0018):
-   - An edit's ops go 2 s after the last one queued (`debounceMs`), and every op this app queues is an edit's.
+   **When a push goes** (`packages/client/src/sync/scheduler.ts`, skysa-notes' record 0018):
+   - An edit's ops go 2 s after the last one queued (`debounceMs`), and every op skysa-notes queues is an edit's.
    - Hiding the page sends whatever is waiting, at once (`sendWaiting`).
      A phone may not run the page again for hours, and the next device opened should find the edit.
      Until 2026-11-09 an edit made in the 2 s before the app went out of sight waited out its 2 s, in a page the phone could have frozen by then.
    - An app whose changes come every few seconds queues their writes lazily (`queueWrite`'s `timing`) and passes `lazyMs`: memoriam, which records a pass of practice every few.
      A lazy write goes with the next sync — the poll while the page is in sight, or as it is hidden — and `lazyMs` after the first at the latest; a later one joins that wait rather than putting it off.
      An edit that finds only a lazy write queued for its note replaces it, at the back of the queue, and a write that lands after another lazy change is owed again as lazily as it was queued.
-     This app passes no `lazyMs` and queues nothing lazily, and without `lazyMs` the scheduler does not read the queue to tell.
+     skysa-notes passes no `lazyMs` and queues nothing lazily, and without `lazyMs` the scheduler does not read the queue to tell.
 
 <a id="folder-renames-moves"></a>
 ### Folder renames/moves
@@ -1601,7 +1601,7 @@ They live in `packages/sync/src/engine.ts` and, for the push, in `packages/sync/
   So a `CursorResetError` carrying `uploadDifferences` starts a rescan that **infers no deletion from absence**.
   Each note the scan did not return forgets its `remoteId`, `remoteVersion` and `syncedHash`, is marked dirty and is owed a `write`; each notebook the store had bound to a remote folder forgets its `remoteId` and is owed a `mkdir`, outermost first and ahead of the writes this rescan queues.
   Not ahead of every write: a *dirty* note's write was queued when the user typed, so it has a lower `seq` than anything here and still makes its own parent through `runWrite`'s not-found recovery, which this does not make unreachable.
-  This is the one place a pull marks a note dirty, against §3's rule that only a user's editing transaction does: the row genuinely is ahead of the remote now, and the unsynced dot the sidebar paints on it is true until the push drains.
+  This is the one place a pull marks a note dirty, against the rule that only a user's edit does ([`CLAUDE.md`](../CLAUDE.md)): the row genuinely is ahead of the remote now, and the unsynced dot the sidebar paints on it is true until the push drains.
   A deletion the scan *proves* still stands — a file it listed that is gone by the time the engine reads it is a positive answer, not an absence, and is still forgotten.
   A note the user deleted here is left alone entirely: its tombstone is reported clean, so the scan names it for reupload, and the store declines — it owes the remote its delete and nothing else, and forgetting the `remoteId` would leave that delete addressed at nothing and the file back on the next pull.
   A notebook the store holds with **no** `remoteId` is not named either: the reconcile asks only about folders bound to a remote one.
@@ -1638,7 +1638,7 @@ What follows is the kit's part of skysa-notes' §8; the rest — its fill window
   A refusal — battery saver — is taken as the answer until the page is shown again or another run starts.
   A browser without the API syncs as before.
   Pressing the power button still stops the run; the next one picks up from what was kept.
-- Tokens: keep provider access tokens in memory (React state) with a copy in IndexedDB `syncState` so a reload doesn't force a backend round-trip.
+- Tokens: keep provider access tokens in memory with a copy in the app's IndexedDB (`TokenStates`, §7) so a reload doesn't force a backend round-trip.
   Never in localStorage.
 - Installability is a checklist the browser applies silently — a missing 192px icon or a bad `start_url` and the install option simply never appears, with nothing in the build to say why.
   The manifest and Workbox options live in `packages/pwa/src/pwa.ts` rather than inline in an app's `vite.config.ts` so that checklist can be a test (`packages/pwa/tests/pwa.test.ts`), down to reading each icon's real dimensions out of its PNG header.
@@ -1774,4 +1774,13 @@ docs/
 tests/                     # what is no one package's: that every citation of these documents leads somewhere
 ```
 
-Everything else about skysa-notes — its history, its distribution and licensing, what is not planned — is in [its own document](https://github.com/skysa-org/skysa-notes/blob/main/docs/ARCHITECTURE.md), §10 and §12–§15.
+Everything else about skysa-notes — its history, its resolved questions, what is not planned, its GitHub setup — is in sections 10, 12, 14 and 15 of [its own document](https://github.com/skysa-org/skysa-notes/blob/main/docs/ARCHITECTURE.md).
+
+<a id="distribution-and-licensing"></a><a id="s13"></a>
+## 13. Distribution and licensing
+
+The kit is AGPL-3.0, version 3 only (SPDX `AGPL-3.0-only`), as skysa-notes is: `NOTICE` carries the grant, and every package's `package.json` says the same.
+The server is where the network clause matters, and the kit has it ([skysa-notes' record 0018](https://github.com/skysa-org/skysa-notes/blob/main/docs/decisions/0018-the-shared-kit.md)).
+A contribution needs the same CLA as skysa-notes', signed once here and checked by `.github/workflows/cla.yml`: a license grant, not an assignment, with the project's promise that every contribution stays available under AGPL-3.0 ([`CLA-individual.md`](../CLA-individual.md), and [`CLA-entity.md`](../CLA-entity.md) for an employer).
+Both are drafts that have not been reviewed by counsel; why they are shaped as they are is [skysa-notes §13](https://github.com/skysa-org/skysa-notes/blob/main/docs/ARCHITECTURE.md#s13).
+The packages are to be public on npm, from a public repository, with no operator's configuration or credentials in either (§1).

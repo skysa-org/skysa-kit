@@ -9,7 +9,7 @@
 	},
 	"scripts": {
 		"test": "pnpm -r run test && vitest run",
-		"typecheck": "pnpm -r run typecheck && tsc -p tsconfig.json --noEmit",
+		"typecheck": "pnpm -r run typecheck && tsc -p tsconfig.json",
 		"lint": "eslint .",
 		"lint:fix": "eslint . --fix",
 		"format": "prettier --write .",

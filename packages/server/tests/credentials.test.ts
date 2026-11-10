@@ -89,7 +89,7 @@ describe('bearerFrom', () => {
 
 describe('isIdle', () => {
 	// The one cutoff the device list and the orphan check share with every
-	// lookup (#450): a grant last used exactly at it is idle.
+	// lookup (skysa-notes#450): a grant last used exactly at it is idle.
 	it('is idle from the cutoff on, and live until it', () => {
 		const now = 1_000_000_000_000;
 		const cutoff = now - GRANT_IDLE_DAYS * 24 * 60 * 60 * 1000;

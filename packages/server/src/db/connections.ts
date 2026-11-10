@@ -200,7 +200,7 @@ const store = async (db: Database, input: CommitInput): Promise<Attempt> => {
  * re-claimable: whoever holds the credential this row was for — which is
  * exactly the thief the user is revoking — could start a fresh flow with
  * it, consent with storage of their own, and be handed a working grant.
- * The row stays so the hash stays spent (see apps/api/src/db/schema.ts).
+ * The row stays so the hash stays spent (see packages/server/src/db/schema.ts).
  *
  * One batch, which D1 runs as one transaction. As two statements, a request
  * cut off between them — a tab closed on signing out — nulls the last grant

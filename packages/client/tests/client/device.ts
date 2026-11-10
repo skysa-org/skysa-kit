@@ -27,8 +27,8 @@ interface DeviceDocument {
  * the shared kit and reaches the device only through its ports
  * (skysa-notes' record 0018), so its tests are suites over this,
  * as core's store contract is over a store: the kit runs each over the ports
- * in memory (`memoryDevice.ts`), and an app over its own database, which this
- * app does in `tests/support/dexieDevice.ts`.
+ * in memory (`memoryDevice.ts`), and an app over its own database, which
+ * skysa-notes does in its `tests/support/dexieDevice.ts`.
  *
  * It grows as the suites over it do.
  */

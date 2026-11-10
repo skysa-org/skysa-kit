@@ -1,4 +1,5 @@
-skysa-notes — a local-first markdown notes PWA that syncs to your own storage.
+skysa-kit — the shared layers of the Skysa apps: storage adapters, sync, the server
+that connects storage, and the PWA build.
 
 Copyright (C) 2026 Skysa
 

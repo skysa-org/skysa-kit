@@ -14,15 +14,24 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const read = (path: string): string => readFileSync(join(ROOT, path), 'utf8');
 
 const under = (path: string): readonly string[] =>
-	readdirSync(join(ROOT, path), { recursive: true, encoding: 'utf8' })
-		.filter((file) => !file.split('/').includes('node_modules'))
-		.map((file) => join(path, file));
+	readdirSync(join(ROOT, path), { recursive: true, encoding: 'utf8' }).map((file) =>
+		join(path, file)
+	);
 
-const PACKAGES = readdirSync(join(ROOT, 'packages')).map((name) => join('packages', name));
+const PACKAGES = readdirSync(join(ROOT, 'packages'), { withFileTypes: true })
+	.filter(
+		(entry) =>
+			entry.isDirectory() && existsSync(join(ROOT, 'packages', entry.name, 'package.json'))
+	)
+	.map((entry) => join('packages', entry.name));
 
+const RECORDS = readdirSync(join(ROOT, 'docs/decisions')).filter(
+	(file) => file.endsWith('.md') && file !== 'README.md'
+);
 const CURRENT = [
 	'docs/ARCHITECTURE.md',
-	...under('docs/decisions').filter((file) => file.endsWith('.md')),
+	'docs/decisions/README.md',
+	...RECORDS.map((file) => join('docs/decisions', file)),
 ];
 const CITING = [
 	...PACKAGES.flatMap((folder) =>
@@ -34,9 +43,12 @@ const CITING = [
 		.filter((file) => /\.(?:tsx?|m?js)$/u.test(file)),
 	'packages/eslint-config/index.js',
 	'eslint.config.js',
-	...['CLAUDE.md', 'CONTRIBUTING.md', 'README.md', 'SECURITY.md'],
+	...['CLAUDE.md', 'CONTRIBUTING.md', 'README.md', 'SECURITY.md', 'CODE_OF_CONDUCT.md'],
+	...['CLA-individual.md', 'CLA-entity.md'],
 	...CURRENT,
 ];
+const TEXTS = new Map(CITING.map((file) => [file, read(file)]));
+const textOf = (file: string): string => TEXTS.get(file) ?? '';
 
 /** A comment's or a paragraph's words, with its line breaks and margins taken out. */
 const unwrapped = (text: string): string => text.replace(/\s*\n\s*(?:\*\s|\/\/\s|>\s)?\s*/gu, ' ');
@@ -45,7 +57,7 @@ const withoutFences = (text: string): string => text.replace(/^```[\s\S]*?^```/g
 /** A text without its citations of skysa-notes' own document, which lead there. */
 const ours = (text: string): string =>
 	unwrapped(text).replace(
-		/skysa-notes'? (?:docs\/)?(?:ARCHITECTURE\.md,? )?§[\d.]+(?:,? ["“][^"”]+["”])?/gu,
+		/skysa-notes'? `?(?:docs\/)?(?:ARCHITECTURE\.md`?,? )?§[\d.]+(?:,? ["“][^"”]{3,80}["”])?/gu,
 		''
 	);
 
@@ -70,17 +82,34 @@ const citations = (text: string): readonly string[] =>
 		String(name).replace(/[.,]$/u, '')
 	);
 
-/** The anchors `ARCHITECTURE.md` has, and each section of it that a text names by number. */
+/**
+ * The anchors `ARCHITECTURE.md` has, and the anchor of each section a text
+ * names by number (`§5.1` is `s5-1`), other than a standard's (`RFC 9110 §10.2.3`,
+ * `OIDC Core §3.1.3.7`).
+ */
 const architecture = read('docs/ARCHITECTURE.md');
 const anchors = [...architecture.matchAll(/<a id="([^"]+)"><\/a>/gu)].map(([, id]) => String(id));
 const citedNumbers = (text: string): readonly string[] =>
-	[...ours(text).matchAll(/ARCHITECTURE\.md,? §(\d+)/gu)].map(
-		([, number]) => `s${String(number)}`
+	[...ours(text).matchAll(/(?<!(?:RFC \d+|Core) )§(\d+(?:\.\d+)*)/gu)].map(
+		([, number]) => `s${String(number).replaceAll('.', '-')}`
 	);
 const citedAnchors = (text: string): readonly string[] =>
 	[...text.matchAll(/(?<!skysa-notes\/blob\/main\/docs\/)ARCHITECTURE\.md#([a-z0-9-]+)/gu)].map(
 		([, id]) => String(id)
 	);
+
+/**
+ * What is skysa-notes' own, which a text here names only with whose it is: its
+ * apps' paths and its core's, its documents and records, and its issues.
+ */
+const NOTES_ONLY =
+	/apps\/(?:api|web)\/|packages\/core\b|@skysa\/core\b|docs\/(?:history|self-hosting|google-oauth)\.md|(?:docs\/decisions\/|record )(?!0003)\d{4}/u;
+const unattributed = (text: string): readonly string[] =>
+	unwrapped(text)
+		.split(/(?<=[.;:!?])\s+|\s+-\s+/u)
+		.filter((sentence) => NOTES_ONLY.test(sentence) && !sentence.includes('skysa-notes'));
+const bareIssues = (text: string): readonly string[] =>
+	[...text.matchAll(/(?<![\w&/'"`[-])#\d+\b(?![0-9a-f])/giu)].map(([issue]) => issue);
 
 /** Each `[…](path)` in a markdown text, outside its code, that points at another file. */
 const links = (text: string): readonly string[] =>
@@ -123,7 +152,7 @@ const layoutPaths = (text: string): readonly string[] => {
 
 describe('the docs', () => {
 	it('finds what it is meant to look at', () => {
-		expect(CITING.flatMap((file) => citations(read(file))).length).toBeGreaterThan(50);
+		expect(CITING.flatMap((file) => citations(textOf(file))).length).toBeGreaterThan(50);
 		expect(layoutPaths(architecture)).toContain('packages/sync/src/engine.ts');
 	});
 
@@ -139,11 +168,28 @@ describe('the docs', () => {
 			'Sync loop',
 		]);
 		expect(citedNumbers("skysa-notes' docs/ARCHITECTURE.md §12.1")).toEqual([]);
+		expect(citedNumbers("skysa-notes' `docs/ARCHITECTURE.md` §12.1")).toEqual([]);
+		expect(citedNumbers('skysa-notes §7, "The clipboard says. Then §13')).toEqual(['s13']);
+	});
+
+	it('reads a number however it is written', () => {
+		expect(citedNumbers('`docs/ARCHITECTURE.md` §13, and §5.4.')).toEqual(['s13', 's5-4']);
+		expect(citedNumbers('RFC 9110 §10.2.3, which says')).toEqual([]);
+		expect(citedNumbers('OpenID Connect Core §3.1.3.7 lets')).toEqual([]);
+	});
+
+	it("tells what is skysa-notes' from what says whose it is", () => {
+		expect(unattributed('See `apps/web/src/sync/account.ts`. And more.')).toHaveLength(1);
+		expect(unattributed("See skysa-notes' `apps/web/src/sync/account.ts`.")).toEqual([]);
+		expect(unattributed('The relay (record 0003) and the kit (record 0018).')).toHaveLength(1);
+		expect(bareIssues('(#187), skysa-notes#118, `#4B5563`, `#000000`, [#12]')).toEqual([
+			'#187',
+		]);
 	});
 
 	it('has every citation by name lead to a section', () => {
 		const lost = CITING.flatMap((file) =>
-			citations(read(file))
+			citations(textOf(file))
 				.filter((name) => !isSection(name))
 				.map((name) => `${file}: ${name}`)
 		);
@@ -152,7 +198,7 @@ describe('the docs', () => {
 
 	it('cites a phase where the phases are', () => {
 		const stale = CITING.filter((file) =>
-			/ARCHITECTURE\.md,? (?:the )?Phase \d/u.test(unwrapped(read(file)))
+			/ARCHITECTURE\.md,? (?:the )?Phase \d/u.test(unwrapped(textOf(file)))
 		);
 		expect(stale).toEqual([]);
 	});
@@ -168,7 +214,7 @@ describe('the docs', () => {
 
 	it('has every citation by anchor or number lead to one', () => {
 		const lost = CITING.flatMap((file) =>
-			[...citedAnchors(read(file)), ...citedNumbers(read(file))]
+			[...citedAnchors(textOf(file)), ...citedNumbers(textOf(file))]
 				.filter((id) => !anchors.includes(id))
 				.map((id) => `${file}: ${id}`)
 		);
@@ -177,7 +223,7 @@ describe('the docs', () => {
 
 	it('links only to files that are there', () => {
 		const dead = CITING.filter((file) => file.endsWith('.md')).flatMap((file) =>
-			links(read(file))
+			links(textOf(file))
 				.filter((target) => !existsSync(join(ROOT, dirname(file), target)))
 				.map((target) => `${file}: ${target}`)
 		);
@@ -185,11 +231,17 @@ describe('the docs', () => {
 	});
 
 	it('lists every decision record', () => {
-		const index = read('docs/decisions/README.md');
-		const unlisted = readdirSync(join(ROOT, 'docs/decisions')).filter(
-			(file) => file !== 'README.md' && !index.includes(`(${file})`)
+		const index = textOf('docs/decisions/README.md');
+		expect(RECORDS.filter((file) => !index.includes(`(${file})`))).toEqual([]);
+	});
+
+	it("says whose it is where it names something of skysa-notes'", () => {
+		const unnamed = CITING.flatMap((file) =>
+			[...unattributed(textOf(file)), ...bareIssues(textOf(file))].map(
+				(found) => `${file}: ${found}`
+			)
 		);
-		expect(unlisted).toEqual([]);
+		expect(unnamed).toEqual([]);
 	});
 
 	describe('§11, the repo layout', () => {

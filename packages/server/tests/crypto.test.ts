@@ -71,7 +71,7 @@ describe('seal / open', () => {
 		expect(await openOAuthSecret(k, sealed)).toEqual({ refreshToken: 'r' });
 	});
 
-	// Checked, not cast (#450): a row that opens but holds something else is
+	// Checked, not cast (skysa-notes#450): a row that opens but holds something else is
 	// refused, as one a key cannot open is, and its callers ask for a reconnect.
 	it('refuses a sealed value that is not an OAuth secret', async () => {
 		const k = await key();

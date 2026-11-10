@@ -22,7 +22,7 @@ const named = sources.flatMap(({ text }) =>
 	[...text.matchAll(/(?:\bfail\(c, |\berror: )'([a-z_]+)'/g)].map((match) => match[1])
 );
 
-describe('the error codes the API answers with (#451)', () => {
+describe('the error codes the API answers with (skysa-notes#451)', () => {
 	it('answers every refusal through fail, and fail is the only answer with an error', () => {
 		expect(
 			sources

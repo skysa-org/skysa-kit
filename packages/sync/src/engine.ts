@@ -87,7 +87,7 @@ export interface SyncEngineOptions {
 	watch?: Watch;
 	/**
 	 * Mint a fresh access token. Called once on an `AuthError`, after which the
-	 * failing operation is retried exactly once. `packages/core` cannot know how
+	 * failing operation is retried exactly once. The engine cannot know how
 	 * a token is obtained, so the caller supplies it.
 	 */
 	reauthorize?: () => Promise<void>;

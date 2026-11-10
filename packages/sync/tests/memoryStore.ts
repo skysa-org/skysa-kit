@@ -391,7 +391,7 @@ export const createMemoryStore = (document: DocumentFormat): MemoryStore => {
 
 	/**
 	 * Point a queued rename's origin at where the pull says the note's file is.
-	 * See `originIsNow` in `apps/web/src/sync/store.ts`: the origin is what a
+	 * See `originIsNow` in skysa-notes' `apps/web/src/sync/store.ts`: the origin is what a
 	 * folder deletion reads as "where the file is", and a pull that carries the
 	 * remote's own path for the note has just said it is somewhere else. The
 	 * target is the name the user chose, and is left alone.

@@ -42,7 +42,6 @@ What is expected of a change:
   History and reasoning go in `docs/ARCHITECTURE.md`, a record in `docs/decisions/` or the pull request, and the comment links them by anchor (`docs/ARCHITECTURE.md#merge-before-the-copy`).
   Older comments run longer; shorten one when you are changing what it describes.
 - **Docs are one sentence per line**, so a diff shows the sentence that changed.
-  Comments and docs are in American English.
 - **No `let`, no loops, no mutation** outside tests; the lint rules say so.
   The few loops kept (a byte scan where recursion would go too deep) sit behind a disable comment that says why.
   Each workaround has one helper: a value that changes is a `cell()` from `@skysa/storage` (`packages/storage/src/cell.ts`), and a set of listeners is `createEmitter` or `createStore` (`packages/client/src/store/emitter.ts`).

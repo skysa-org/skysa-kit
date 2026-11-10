@@ -37,7 +37,7 @@ import {
  *
  * Written as closures over `Map`s: `functional/no-let` rules out mutable
  * bindings, and one-entry maps stand in for the scalars — the same shape
- * `apps/api/src/worker.ts` uses for its isolate cache.
+ * skysa-notes' `apps/api/src/worker.ts` uses for its isolate cache.
  */
 
 interface FakeNode {

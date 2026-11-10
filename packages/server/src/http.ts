@@ -29,7 +29,7 @@ const sameOrigin = (c: Context<AppEnv>, appOrigin: string): boolean =>
 
 /**
  * An answer that is not the thing asked for: `{ error }` with one of the codes
- * the app reads (`API_ERROR_CODES` in `@skysa/core`), and whatever goes beside
+ * the app reads (`API_ERROR_CODES` in `@skysa/protocol`), and whatever goes beside
  * it. The only way a route says no, so a code the app has never heard of
  * does not compile.
  */

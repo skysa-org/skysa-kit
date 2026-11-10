@@ -88,7 +88,7 @@ export interface FlowState {
 	credentialHash: string;
 	/**
 	 * What the device typed into the gate's code field, for the entitlement
-	 * check at the callback (`EntitlementContext` in `@skysa/core`). Here rather
+	 * check at the callback (`EntitlementContext` in `@skysa/protocol`). Here rather
 	 * than asked for again at the callback, which is a navigation from the
 	 * provider and carries nothing of the app's; signed with the rest, so it is
 	 * the code the flow was started with.
@@ -115,7 +115,7 @@ export interface FlowState {
  * can ask for it twice. Chrome's Safe Browsing check runs beside the request,
  * not before it, so its warning page can cover a callback the server has
  * already answered, and going on past the warning asks again (2026-09-30,
- * issue #149). A reload, or the back button onto the callback, does the same.
+ * issue skysa-notes#149). A reload, or the back button onto the callback, does the same.
  * The second asking finds no flow, and was told `flow_expired` in raw JSON
  * over a connection the first had already stored.
  *
@@ -167,7 +167,7 @@ const flowAnswerSchema = z.object({
  * replayed one, so the payload carries its own expiry rather than trusting the
  * browser to have dropped it. The signature says this server wrote it; the
  * schema says it is the shape this code reads, which a cast never checked
- * (#450).
+ * (skysa-notes#450).
  */
 const readSigned = async <T extends { expiresAt: number }>(
 	c: Context,
