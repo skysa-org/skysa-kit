@@ -25,12 +25,17 @@ That pull request needs no changeset of its own, and could not have one: `change
 CI recognizes it by that shape and does not ask: nothing changed in a package but its `CHANGELOG.md` and, in its `package.json`, the version and the dependency ranges (`scripts/changesetExempt.mjs`).
 A source file alongside them is not a release, and neither is a change to what a manifest ships — its exports, its files, its `publishConfig` — so each is asked like anything else.
 
-**Publishing is the workflow's, and it is off.**
+**Publishing is the workflow's.**
 Nothing is published from anyone's machine.
 The release workflow's `publish` job publishes each package npm does not yet have at the released version, with provenance, from the commit the version's tag names, after building it and running the pack check again (`pnpm pack:check`).
-It runs only once three things are true, in this order: the repository is public, which npm's provenance needs; the `@skysa` scope is claimed on npm, with a token that can publish to it in the repository secret `NPM_TOKEN`; and the repository variable `NPM_PUBLISH` is `true`.
-After that, "Run workflow" on `main` publishes a version that was released before publishing was switched on.
-Until then a release is a tag and a GitHub release, and none of the packages is on npm.
+pnpm packs each package, since only pnpm applies `publishConfig.exports` and replaces the workspace's ranges, and npm publishes the tarball, since trusted publishing needs npm's own client.
+The job runs only while the repository variable `NPM_PUBLISH` is `true`, and the repository is public, which npm's provenance needs.
+
+npm takes a package from the workflow in one of two ways, and the kit uses each in turn.
+A package's first version comes with a token: a granular one, short-lived, that can publish to the `@skysa` scope and bypass two-factor authentication, held in the repository secret `NPM_TOKEN`.
+Every later one comes through trusted publishing, where GitHub vouches for the run and nothing secret is stored: once a package is on npm, `npm trust github @skysa/<name> --file release.yml --repo skysa-org/skysa-kit --allow-publish` lets this workflow publish it ([npm's documentation](https://docs.npmjs.com/trusted-publishers)), and the token is deleted and revoked once every package has it.
+npm stops taking packages published directly with a token in January 2027, so the token is only ever the first version's.
+"Run workflow" on `main` publishes a version that was released while publishing was off.
 
 ## When to write one
 

@@ -148,10 +148,11 @@ jobs:
                   gh release create "$tag" --title "$tag" --notes-file "$notes"
                   echo 'released=true' >> "$GITHUB_OUTPUT"
 
-    # Off until the `@skysa` scope is claimed on npm and a token that can
-    # publish to it is in the repository secret `NPM_TOKEN`: then set the
-    # repository variable `NPM_PUBLISH` to `true`. Provenance needs the
-    # repository to be public, so that comes first too.
+    # Off until publishing is switched on: the repository variable
+    # `NPM_PUBLISH` set to `true`, once the repository is public (provenance
+    # needs that) and npm will take the packages from it — through a token in
+    # the secret `NPM_TOKEN` for the first release, and through trusted
+    # publishing from then on (`.changeset/README.md` says how).
     publish:
         needs: tag
         if: >-
@@ -161,7 +162,8 @@ jobs:
         timeout-minutes: 15
         permissions:
             contents: read
-            # The OIDC token npm's provenance statement is signed with.
+            # The OIDC token trusted publishing signs in with, and npm's
+            # provenance statement is signed with.
             id-token: write
         steps:
             - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -178,8 +180,14 @@ jobs:
                   node-version-file: .nvmrc
                   cache: pnpm
                   # Writes the `.npmrc` that hands `NODE_AUTH_TOKEN` to the
-                  # registry.
+                  # registry, while there is one.
                   registry-url: https://registry.npmjs.org
+
+            # npm sends the packages, not pnpm: trusted publishing needs npm
+            # 11.5.1 or later, and Node 22 comes with npm 10
+            # (https://docs.npmjs.com/trusted-publishers). Pinned, as the
+            # actions are.
+            - run: npm install --global npm@11.21.1
 
             - run: pnpm install --frozen-lockfile
 
@@ -188,11 +196,25 @@ jobs:
             - run: pnpm build
             - run: pnpm pack:check
 
-            # Each package whose version npm does not have yet, built again by
-            # its `prepack`, with `publishConfig`'s public access and
-            # provenance. A package npm already has at this version is skipped,
-            # so a run after a partial failure finishes the job.
-            - run: pnpm -r publish --no-git-checks
+            # pnpm packs, since only it applies `publishConfig.exports` and
+            # replaces the `workspace:` and `catalog:` ranges; npm publishes
+            # each tarball whose version it does not have yet, so a run after
+            # a partial failure finishes the job. npm signs in through trusted
+            # publishing where a package has it, and with the token otherwise.
+            - name: Publish what npm does not have
               env:
                   NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-                  NPM_CONFIG_PROVENANCE: 'true'
+              run: |
+                  set -eu
+                  tarballs="$RUNNER_TEMP/tarballs"
+                  pnpm -r pack --pack-destination "$tarballs"
+                  for tarball in "$tarballs"/*.tgz; do
+                    manifest=$(tar xzOf "$tarball" package/package.json)
+                    name=$(printf '%s' "$manifest" | node -p "JSON.parse(require('fs').readFileSync(0, 'utf8')).name")
+                    version=$(printf '%s' "$manifest" | node -p "JSON.parse(require('fs').readFileSync(0, 'utf8')).version")
+                    if npm view "$name@$version" version >/dev/null 2>&1; then
+                      echo "$name@$version is on npm already."
+                      continue
+                    fi
+                    npm publish "$tarball" --access public --provenance
+                  done
