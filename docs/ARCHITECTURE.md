@@ -1773,15 +1773,15 @@ docs/
   ARCHITECTURE.md          # this document
   decisions/               # the records behind it
 .changeset/                # the changesets waiting for a release, and how one is cut
-scripts/                   # the pack check, and a release's notes
-tests/                     # what is no one package's: that every citation of these documents leads somewhere, and the release notes
+scripts/                   # the pack check, a release's notes, and which pull requests need no changeset
+tests/                     # what is no one package's: that every citation of these documents leads somewhere, and the scripts
 ```
 
 Every package but `eslint-config` is built by `tsc -b` (`pnpm build`) into its `dist/`: `tsconfig.build.json` for its `src`, and `tsconfig.testing.json` for what `/testing` exports.
 In the workspace a package's exports lead to its TypeScript source, so nothing needs building to test it; `publishConfig` points the published package's exports at `dist/`.
 The build is where the code that runs in a browser or a Worker is held to it: `protocol`, `storage`, `sync` and `client` compile their `src` with no ambient types at all, and `server` with only the Workers runtime's.
 `@skysa/server`'s declarations name the runtime's types (`D1Database`, `DurableObjectNamespace`), which an app's Worker has from `wrangler types` or `@cloudflare/workers-types`.
-`pnpm pack:check` packs every package as npm would receive it and loads each entry it exports in plain Node, but for `@skysa/server/relay`, which only a Worker can load.
+`pnpm pack:check` packs every package as npm would receive it and loads each entry it exports in plain Node, with only what that package declares beside it, and with `cloudflare:workers`, which only a Worker has, stood in for.
 
 Everything else about skysa-notes — its history, its resolved questions, what is not planned, its GitHub setup — is in sections 10, 12, 14 and 15 of [its own document](https://github.com/skysa-org/skysa-notes/blob/main/docs/ARCHITECTURE.md).
 

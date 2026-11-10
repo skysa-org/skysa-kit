@@ -14,7 +14,7 @@
 //
 // Plain Node, no dependencies.
 
-import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, realpathSync } from 'node:fs';
 import { join } from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
@@ -26,7 +26,7 @@ const DEPENDENCY_BUMP = /^- (?:@skysa\/[a-z-]+@\S+|Updated dependencies(?: \[[^\
 // is Changesets', and only one that starts with a digit is another version.
 const sectionOf = (version, text) => {
 	const lines = text.split('\n');
-	const start = lines.findIndex((line) => line.trim() === `## ${version}`);
+	const start = lines.findIndex((line) => line.trimEnd() === `## ${version}`);
 	if (start === -1) return [];
 	const rest = lines.slice(start + 1);
 	const end = rest.findIndex((line) => /^## \d/u.test(line));
@@ -87,7 +87,7 @@ export const releaseNotes = (version, changelogs) => {
 		.join('\n');
 };
 
-if (process.argv[1] === fileURLToPath(import.meta.url)) {
+if (process.argv[1] && realpathSync(process.argv[1]) === fileURLToPath(import.meta.url)) {
 	const [version] = process.argv.slice(2);
 	if (!version) throw new Error('usage: node scripts/releaseNotes.mjs <version>');
 	const packages = join(import.meta.dirname, '..', 'packages');

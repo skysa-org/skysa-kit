@@ -58,6 +58,9 @@ const SPELLED = [
 			.map((file) => join(folder, file))
 	),
 	...under('tests').filter((file) => /\.tsx?$/u.test(file)),
+	// What `changeset version` writes into each package's CHANGELOG.md, spelled
+	// here rather than found in the release pull request.
+	...under('.changeset').filter((file) => file.endsWith('.md')),
 	'vitest.config.ts',
 	...under('.github/workflows').filter((file) => /\.ya?ml$/u.test(file)),
 ].filter((file, at, all) => all.indexOf(file) === at);

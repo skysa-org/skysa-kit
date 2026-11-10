@@ -22,12 +22,12 @@ Pushing it to `main` is what makes `.github/workflows/release.yml` cut the tag a
 The Changesets "Version Packages" bot is deliberately not used: a pull request opened with `GITHUB_TOKEN` starts no workflows, so its own CI would never run, and once `verify` is a required check such a pull request could never merge.
 
 That pull request needs no changeset of its own, and could not have one: `changeset version` **deletes** every changeset it consumes, so its diff is seven bumped packages and nothing explaining them — the exact shape the CI check rejects.
-CI recognizes it by that shape (nothing changed in a package but its `package.json` and its `CHANGELOG.md`) and does not ask.
-A source file alongside them is not a release, and is asked like anything else.
+CI recognizes it by that shape and does not ask: nothing changed in a package but its `CHANGELOG.md` and, in its `package.json`, the version and the dependency ranges (`scripts/changesetExempt.mjs`).
+A source file alongside them is not a release, and neither is a change to what a manifest ships — its exports, its files, its `publishConfig` — so each is asked like anything else.
 
 **Publishing is the workflow's, and it is off.**
 Nothing is published from anyone's machine.
-The release workflow's `publish` job publishes each package npm does not yet have at the released version, with provenance, after building and running the pack check again (`pnpm pack:check`).
+The release workflow's `publish` job publishes each package npm does not yet have at the released version, with provenance, from the commit the version's tag names, after building it and running the pack check again (`pnpm pack:check`).
 It runs only once three things are true, in this order: the repository is public, which npm's provenance needs; the `@skysa` scope is claimed on npm, with a token that can publish to it in the repository secret `NPM_TOKEN`; and the repository variable `NPM_PUBLISH` is `true`.
 After that, "Run workflow" on `main` publishes a version that was released before publishing was switched on.
 Until then a release is a tag and a GitHub release, and none of the packages is on npm.

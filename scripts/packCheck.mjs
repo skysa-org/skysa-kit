@@ -1,8 +1,9 @@
 // What `pnpm publish` would send, checked without sending it. Every package is
-// packed as npm would receive it; its manifest is read back out of the
-// tarball; and every entry it exports is loaded by plain Node from the
-// unpacked copies, side by side in a node_modules of their own, the way an app
-// would install them. Nothing here talks to a registry.
+// packed as npm would receive it, its manifest is read back out of the
+// tarball, and every entry it exports is loaded by plain Node from the
+// unpacked copies, each with a node_modules of its own holding only what it
+// declares, as pnpm would install them for an app. Nothing here talks to a
+// registry.
 //
 // It fails on:
 //   - a manifest that is not ready to publish: still `private`, without
@@ -13,8 +14,10 @@
 //   - an export that leads to a file the tarball does not hold, or to
 //     TypeScript source, as the workspace's own exports do; or a built one
 //     without its `types`
-//   - a build's leftovers or a test in the tarball
-//   - an entry plain Node cannot load, other than those `NOT_IN_NODE` names
+//   - a file an app reads by its path missing, or a build's leftovers or a
+//     test in the tarball
+//   - an entry plain Node cannot load, or can load only through a dependency
+//     its package does not declare
 //
 // `pnpm verify` runs it, after `pnpm build`; packing builds again, through each
 // package's `prepack`, which finds nothing to do.
@@ -36,6 +39,7 @@ import {
 import { tmpdir } from 'node:os';
 import { dirname, join, relative } from 'node:path';
 import process from 'node:process';
+import { fileURLToPath } from 'node:url';
 
 const ROOT = join(import.meta.dirname, '..');
 const REPOSITORY = 'https://github.com/skysa-org/skysa-kit.git';
@@ -46,14 +50,89 @@ const DEPENDENCY_FIELDS = [
 	'devDependencies',
 ];
 
-// Entries plain Node cannot load, and why. Each is still checked for its files;
-// one that starts loading is reported, so this cannot go stale.
-const NOT_IN_NODE = new Map([
-	[
-		'@skysa/server/relay',
-		'its Durable Object extends `cloudflare:workers`, which only a Worker has',
-	],
-]);
+// What only a Worker's runtime has, stood in for so that the rest of an entry
+// still loads in Node: the server's relay extends `DurableObject`.
+const WORKER_MODULES = { 'cloudflare:workers': 'export class DurableObject {}' };
+
+// Files an app reads from a package by their path rather than through an
+// export: the server's D1 migrations, which the app's wrangler.toml names as
+// its `migrations_dir`.
+const BY_PATH = new Map([['@skysa/server', /^migrations\/[^/]+\.sql$/u]]);
+
+/**
+ * Every file an `exports` map leads to, with the subpath and condition that
+ * names it.
+ * @param {unknown} exports
+ * @returns {{ subpath: string, condition: string, target: string }[]}
+ */
+export const targetsOf = (exports, subpath = '.', condition = 'default') =>
+	typeof exports === 'string'
+		? [{ subpath, condition, target: exports }]
+		: Object.entries(exports ?? {}).flatMap(([key, value]) =>
+				key.startsWith('.') ? targetsOf(value, key) : targetsOf(value, subpath, key)
+			);
+
+/**
+ * What stops one packed package from being published as it is.
+ * @param {{ manifest: Record<string, any>, dir: string, files: string[], byPath?: string[] }} packed
+ *   its manifest as the tarball holds it, its folder under packages/, the
+ *   files in the tarball, and those it must hold that no export names
+ * @returns {string[]}
+ */
+export const problemsOf = ({ manifest, dir, files, byPath = [] }) => {
+	const { version, publishConfig, repository } = manifest;
+	const shipped = new Set(files);
+	const targets = targetsOf(manifest.exports);
+	const typed = new Set(
+		targets.filter(({ condition }) => condition === 'types').map(({ subpath }) => subpath)
+	);
+	return [
+		...(manifest.private ? ['is private, so it cannot be published'] : []),
+		...(publishConfig?.access === 'public' ? [] : ['needs publishConfig.access "public"']),
+		...(publishConfig?.provenance === true ? [] : ['needs publishConfig.provenance']),
+		...(repository?.url === REPOSITORY && repository?.directory === `packages/${dir}`
+			? []
+			: [`needs repository ${REPOSITORY}, directory packages/${dir}: provenance checks it`]),
+		...DEPENDENCY_FIELDS.flatMap((field) => Object.entries(manifest[field] ?? {})).flatMap(
+			([dep, range]) => [
+				...(/^(?:workspace|catalog):/u.test(range)
+					? [`${dep} is still "${range}" in the tarball`]
+					: []),
+				...(dep.startsWith('@skysa/') && range !== version
+					? [`${dep} is ${range}, but the kit is released at one version, ${version}`]
+					: []),
+			]
+		),
+		...(shipped.has('LICENSE') ? [] : ['has no LICENSE']),
+		...byPath
+			.filter((file) => !shipped.has(file))
+			.map((file) => `does not ship ${file}, which an app reads by its path`),
+		...files
+			.filter(
+				(file) =>
+					/\.tsbuildinfo$|\.test\.[cm]?[jt]sx?$/u.test(file) || file.startsWith('tests/')
+			)
+			.map((file) => `should not publish ${file}`),
+		...targets
+			.filter(({ target }) => !shipped.has(target.replace(/^\.\//u, '')))
+			.map(
+				({ subpath, condition, target }) =>
+					`exports ${subpath} (${condition}) leads to ${target}, which is not in the tarball`
+			),
+		...targets
+			.filter(({ target }) => /(?<!\.d)\.tsx?$/u.test(target))
+			.map(
+				({ subpath, condition, target }) =>
+					`exports ${subpath} (${condition}) leads to ${target}, TypeScript source: publishConfig.exports leads to dist/`
+			),
+		...targets
+			.filter(
+				({ condition, target }) => condition === 'default' && target.startsWith('./dist/')
+			)
+			.filter(({ subpath }) => !typed.has(subpath))
+			.map(({ subpath }) => `exports ${subpath} has no types`),
+	];
+};
 
 const readJson = (path) => JSON.parse(readFileSync(path, 'utf8'));
 
@@ -62,178 +141,156 @@ const filesUnder = (dir) =>
 		.filter((entry) => entry.isFile())
 		.map((entry) => relative(dir, join(entry.parentPath, entry.name)));
 
-// Every file an `exports` map leads to, with the subpath and condition that
-// names it.
-const targetsOf = (exports, subpath = '.', condition = 'default') =>
-	typeof exports === 'string'
-		? [{ subpath, condition, target: exports }]
-		: Object.entries(exports).flatMap(([key, value]) =>
-				key.startsWith('.') ? targetsOf(value, key) : targetsOf(value, subpath, key)
-			);
+// A command's output is kept, and shown only if it fails: a `prepack` build's
+// type error is the reason a pack fails.
+const run = (command, args, options) => {
+	try {
+		return execFileSync(command, args, { encoding: 'utf8', stdio: 'pipe', ...options });
+	} catch (error) {
+		process.stderr.write(`${error.stdout ?? ''}${error.stderr ?? ''}`);
+		throw error;
+	}
+};
 
-const workspace = readdirSync(join(ROOT, 'packages'))
-	.filter((dir) => existsSync(join(ROOT, 'packages', dir, 'package.json')))
-	.map((dir) => ({ dir, manifest: readJson(join(ROOT, 'packages', dir, 'package.json')) }));
+const link = (target, path) => {
+	mkdirSync(dirname(path), { recursive: true });
+	symlinkSync(target, path, 'dir');
+};
 
-const scratch = mkdtempSync(join(tmpdir(), 'skysa-pack-'));
-const problems = [];
-const problem = (name, text) => problems.push(`${name}: ${text}`);
+// The hooks a child Node loads first, so that what `WORKER_MODULES` names
+// resolves to its stand-in and everything else as Node would resolve it.
+const HOOKS = `data:text/javascript,${encodeURIComponent(`
+	const STOOD_IN = ${JSON.stringify(WORKER_MODULES)};
+	export const resolve = (specifier, context, next) =>
+		Object.hasOwn(STOOD_IN, specifier)
+			? { url: 'data:text/javascript,' + encodeURIComponent(STOOD_IN[specifier]), shortCircuit: true }
+			: next(specifier, context);
+`)}`;
 
-try {
-	const tarballs = join(scratch, 'tarballs');
-	const modules = join(scratch, 'node_modules');
-	execFileSync('pnpm', ['-r', 'pack', '--pack-destination', tarballs], {
-		cwd: ROOT,
-		stdio: 'ignore',
-	});
-
-	const packed = readdirSync(tarballs).map((tarball) => {
-		const unpacked = join(scratch, 'unpacked', tarball);
-		mkdirSync(unpacked, { recursive: true });
-		execFileSync('tar', [
-			'xzf',
-			join(tarballs, tarball),
-			'-C',
-			unpacked,
-			'--strip-components=1',
-		]);
-		const manifest = readJson(join(unpacked, 'package.json'));
-		const home = join(modules, manifest.name);
-		mkdirSync(dirname(home), { recursive: true });
-		renameSync(unpacked, home);
-		return { home, manifest, files: filesUnder(home) };
-	});
-
-	workspace
-		.filter(({ manifest }) => !packed.some((p) => p.manifest.name === manifest.name))
-		.forEach(({ manifest }) => problem(manifest.name, 'was not packed'));
-
-	packed.forEach(({ manifest, files }) => {
-		const { name, version } = manifest;
-		const { dir } = workspace.find((w) => w.manifest.name === name);
-		if (manifest.private) problem(name, 'is private, so it cannot be published');
-		if (manifest.publishConfig?.access !== 'public')
-			problem(name, 'needs publishConfig.access "public"');
-		if (manifest.publishConfig?.provenance !== true)
-			problem(name, 'needs publishConfig.provenance');
-		if (
-			manifest.repository?.url !== REPOSITORY ||
-			manifest.repository?.directory !== `packages/${dir}`
-		) {
-			problem(
-				name,
-				`needs repository ${REPOSITORY}, directory packages/${dir}: provenance checks it`
-			);
+// Imports every entry, in a child Node whose working directory is the app's,
+// and says for each the first line of what it threw, or null.
+const LOADING = `
+	import { register } from 'node:module';
+	const [entries, hooks] = [JSON.parse(process.argv[1]), process.argv[2]];
+	register(hooks);
+	const results = [];
+	for (const entry of entries) {
+		try {
+			await import(entry);
+			results.push([entry, null]);
+		} catch (error) {
+			results.push([entry, String(error?.message ?? error).split('\\n')[0] || 'it threw, with no message']);
 		}
-		DEPENDENCY_FIELDS.flatMap((field) => Object.entries(manifest[field] ?? {})).forEach(
-			([dep, range]) => {
-				if (/^(workspace|catalog):/u.test(range))
-					problem(name, `${dep} is still "${range}" in the tarball`);
-				if (dep.startsWith('@skysa/') && range !== version) {
-					problem(
-						name,
-						`${dep} is ${range}, but the kit is released at one version, ${version}`
-					);
+	}
+	process.stdout.write(JSON.stringify(results));
+`;
+
+const check = () => {
+	const scratch = mkdtempSync(join(tmpdir(), 'skysa-pack-'));
+	try {
+		const tarballs = join(scratch, 'tarballs');
+		// Each package, unpacked where its own node_modules can sit beside it.
+		const store = join(scratch, 'store');
+		// What an app's node_modules would hold: the kit's packages, and nothing
+		// else of theirs.
+		const app = join(scratch, 'app');
+		run('pnpm', ['-r', 'pack', '--pack-destination', tarballs], { cwd: ROOT });
+
+		const workspace = readdirSync(join(ROOT, 'packages'))
+			.filter((dir) => existsSync(join(ROOT, 'packages', dir, 'package.json')))
+			.map((dir) => ({
+				dir,
+				name: readJson(join(ROOT, 'packages', dir, 'package.json')).name,
+			}));
+
+		const packed = readdirSync(tarballs).map((tarball) => {
+			const unpacked = join(scratch, 'unpacked', tarball);
+			mkdirSync(unpacked, { recursive: true });
+			run('tar', ['xzf', join(tarballs, tarball), '-C', unpacked, '--strip-components=1']);
+			const manifest = readJson(join(unpacked, 'package.json'));
+			const home = join(store, manifest.name);
+			mkdirSync(dirname(home), { recursive: true });
+			renameSync(unpacked, home);
+			const { dir } = workspace.find(({ name }) => name === manifest.name);
+			const pattern = BY_PATH.get(manifest.name);
+			const byPath = pattern
+				? filesUnder(join(ROOT, 'packages', dir)).filter((file) => pattern.test(file))
+				: [];
+			return { home, dir, manifest, files: filesUnder(home), byPath };
+		});
+
+		// Each package's dependencies and peers, and only those, linked into its
+		// own node_modules: a kit package to its unpacked copy, anything else to
+		// what the workspace installed for that package. An optional peer the
+		// workspace does not have is left out, as an app without it would.
+		const unlinked = packed.flatMap(({ home, dir, manifest }) => {
+			const optional = manifest.peerDependenciesMeta ?? {};
+			return Object.keys({ ...manifest.dependencies, ...manifest.peerDependencies }).flatMap(
+				(dep) => {
+					const installed = join(ROOT, 'packages', dir, 'node_modules', dep);
+					if (dep.startsWith('@skysa/')) {
+						link(join(store, dep), join(home, 'node_modules', dep));
+						return [];
+					}
+					if (existsSync(installed)) {
+						link(realpathSync(installed), join(home, 'node_modules', dep));
+						return [];
+					}
+					return optional[dep]?.optional
+						? []
+						: [`${manifest.name}: ${dep} is not installed in the workspace`];
 				}
-			}
+			);
+		});
+		packed.forEach(({ home, manifest }) =>
+			link(home, join(app, 'node_modules', manifest.name))
 		);
-		if (!files.includes('LICENSE')) problem(name, 'has no LICENSE');
-		files
-			.filter(
-				(file) =>
-					/\.tsbuildinfo$|\.test\.[cm]?[jt]sx?$/u.test(file) || file.startsWith('tests/')
-			)
-			.forEach((file) => problem(name, `should not publish ${file}`));
-		const targets = targetsOf(manifest.exports ?? {});
-		targets
-			.filter(({ target }) => !files.includes(target.replace(/^\.\//u, '')))
-			.forEach(({ subpath, condition, target }) =>
-				problem(
-					name,
-					`exports ${subpath} (${condition}) leads to ${target}, which is not in the tarball`
+
+		const entries = packed.flatMap(({ manifest }) =>
+			targetsOf(manifest.exports)
+				.filter(
+					({ condition, target }) => condition === 'default' && /\.m?js$/u.test(target)
 				)
-			);
-		targets
-			.filter(
-				({ condition, target }) => condition === 'default' && target.startsWith('./dist/')
+				.map(({ subpath }) => manifest.name + subpath.slice(1))
+		);
+		/** @type {[string, string | null][]} */
+		const results = JSON.parse(
+			run(
+				process.execPath,
+				['--input-type=module', '-e', LOADING, JSON.stringify(entries), HOOKS],
+				{ cwd: app }
 			)
-			.filter(
-				({ subpath }) =>
-					!targets.some((t) => t.subpath === subpath && t.condition === 'types')
-			)
-			.forEach(({ subpath }) => problem(name, `exports ${subpath} has no types`));
-		targets
-			.filter(({ target }) => /(?<!\.d)\.tsx?$/u.test(target))
-			.forEach(({ subpath, condition, target }) =>
-				problem(
-					name,
-					`exports ${subpath} (${condition}) leads to ${target}, TypeScript source: publishConfig.exports leads to dist/`
-				)
-			);
-	});
+		);
 
-	// What the tarballs depend on, from the workspace's own install: the unpacked
-	// copies find them as an app's would, by walking up to this node_modules.
-	packed.forEach(({ manifest }) => {
-		const { dir } = workspace.find((w) => w.manifest.name === manifest.name);
-		Object.keys({ ...manifest.dependencies, ...manifest.peerDependencies })
-			.filter((dep) => !dep.startsWith('@skysa/') && !existsSync(join(modules, dep)))
-			.forEach((dep) => {
-				const installed = join(ROOT, 'packages', dir, 'node_modules', dep);
-				if (!existsSync(installed))
-					return problem(manifest.name, `${dep} is not installed in the workspace`);
-				mkdirSync(dirname(join(modules, dep)), { recursive: true });
-				symlinkSync(realpathSync(installed), join(modules, dep), 'dir');
-			});
-	});
+		packed.forEach(({ manifest, files }) =>
+			process.stdout.write(`${manifest.name}@${manifest.version}: ${files.length} files\n`)
+		);
+		const loaded = results.filter(([, error]) => error === null).length;
+		process.stdout.write(`${loaded} of ${results.length} entries loaded in Node\n`);
 
-	const entries = packed.flatMap(({ manifest }) =>
-		targetsOf(manifest.exports ?? {})
-			.filter(({ condition, target }) => condition === 'default' && /\.m?js$/u.test(target))
-			.map(({ subpath }) => manifest.name + subpath.slice(1))
-	);
-	const loading = `
-		const results = [];
-		for (const entry of JSON.parse(process.argv[1])) {
-			try {
-				await import(entry);
-				results.push([entry, null]);
-			} catch (error) {
-				results.push([entry, String(error?.message ?? error).split('\\n')[0]]);
-			}
-		}
-		process.stdout.write(JSON.stringify(results));
-	`;
-	const results = JSON.parse(
-		execFileSync(
-			process.execPath,
-			['--input-type=module', '-e', loading, JSON.stringify(entries)],
-			{
-				cwd: scratch,
-				encoding: 'utf8',
-			}
-		)
-	);
-	results.forEach(([entry, error]) => {
-		const why = NOT_IN_NODE.get(entry);
-		if (error && !why) problem(entry, `does not load in Node: ${error}`);
-		if (!error && why)
-			problem(entry, `loads in Node now; take it out of NOT_IN_NODE ("${why}")`);
-	});
+		return [
+			...workspace
+				.filter(({ name }) => !packed.some(({ manifest }) => manifest.name === name))
+				.map(({ name }) => `${name}: was not packed`),
+			...packed.flatMap((one) =>
+				problemsOf(one).map((problem) => `${one.manifest.name}: ${problem}`)
+			),
+			...unlinked,
+			...results
+				.filter(([, error]) => error !== null)
+				.map(([entry, error]) => `${entry}: does not load in Node: ${error}`),
+		];
+	} finally {
+		rmSync(scratch, { recursive: true, force: true });
+	}
+};
 
-	packed.forEach(({ manifest, files }) =>
-		process.stdout.write(`${manifest.name}@${manifest.version}: ${files.length} files\n`)
-	);
-	process.stdout.write(
-		`${results.length - NOT_IN_NODE.size} entries load in Node; ${NOT_IN_NODE.size} only in a Worker\n`
-	);
-} finally {
-	rmSync(scratch, { recursive: true, force: true });
-}
-
-if (problems.length > 0) {
-	process.stderr.write(
-		`\nNot ready to publish:\n${problems.map((p) => `  - ${p}`).join('\n')}\n`
-	);
-	process.exitCode = 1;
+if (process.argv[1] && realpathSync(process.argv[1]) === fileURLToPath(import.meta.url)) {
+	const problems = check();
+	if (problems.length > 0) {
+		process.stderr.write(
+			`\nNot ready to publish:\n${problems.map((problem) => `  - ${problem}`).join('\n')}\n`
+		);
+		process.exitCode = 1;
+	}
 }

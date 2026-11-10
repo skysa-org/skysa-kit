@@ -26,7 +26,7 @@ on:
     # "Run workflow" on `main` publishes the version there if npm does not have
     # it yet: for the first release after publishing is switched on, or after
     # a publish that failed and was not re-run. It tags nothing that a push
-    # would not have.
+    # would not have, and on any other branch it does nothing at all.
     workflow_dispatch:
 
 # Each job asks for what it needs.
@@ -44,6 +44,8 @@ concurrency:
 
 jobs:
     tag:
+        # A push is always to `main`; this keeps "Run workflow" to it too.
+        if: github.ref == 'refs/heads/main'
         runs-on: ubuntu-latest
         timeout-minutes: 10
         # The tag and the release. Nothing else, and no pull-request scopes.
@@ -114,9 +116,15 @@ jobs:
                   fi
 
                   if ! git rev-parse -q --verify "refs/tags/$tag" >/dev/null; then
+                    # The commit that set this version, which is the last to
+                    # change a manifest's `"version"` line: not necessarily
+                    # this run's, since a pull request merged just after the
+                    # version one, or a run that retries a failed one, has
+                    # this version too, with changes that are not in it.
+                    commit=$(git log -1 --format=%H -G'"version": ' -- 'packages/*/package.json')
                     git -c user.name='github-actions[bot]' \
                         -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
-                        tag -a "$tag" -m "$tag"
+                        tag -a "$tag" "$commit" -m "$tag"
                     # Another run for another commit may have pushed the same
                     # tag between the check above and here. That is a race this
                     # one lost, not a failure: the tag exists, which is what it
@@ -131,6 +139,11 @@ jobs:
                   # version, each said once; the script says what it leaves out.
                   notes="$RUNNER_TEMP/notes.md"
                   node scripts/releaseNotes.mjs "$VERSION" > "$notes"
+                  # It always says something, so nothing means it did not run.
+                  if [ ! -s "$notes" ]; then
+                    echo "::error::scripts/releaseNotes.mjs wrote nothing for $VERSION."
+                    exit 1
+                  fi
 
                   gh release create "$tag" --title "$tag" --notes-file "$notes"
                   echo 'released=true' >> "$GITHUB_OUTPUT"
@@ -142,8 +155,7 @@ jobs:
     publish:
         needs: tag
         if: >-
-            vars.NPM_PUBLISH == 'true' && github.ref == 'refs/heads/main' &&
-            needs.tag.outputs.version != '' &&
+            vars.NPM_PUBLISH == 'true' && needs.tag.outputs.version != '' &&
             (needs.tag.outputs.released == 'true' || github.event_name == 'workflow_dispatch')
         runs-on: ubuntu-latest
         timeout-minutes: 15
@@ -153,6 +165,11 @@ jobs:
             id-token: write
         steps:
             - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+              with:
+                  # What the tag names, not this run's commit: npm can never
+                  # take a version back, so what it gets at 0.2.0 has to be
+                  # what `v0.2.0` is, however long after the release this runs.
+                  ref: v${{ needs.tag.outputs.version }}
 
             - run: corepack enable
 

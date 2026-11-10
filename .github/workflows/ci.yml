@@ -61,30 +61,10 @@ jobs:
                   BASE: ${{ github.base_ref }}
               run: |
                   set -eu
-                  changed=$(git diff --name-only "origin/$BASE...HEAD" -- packages)
-
-                  # The release pull request is the one shape that cannot
-                  # satisfy this and must not be asked to. `changeset version`
-                  # bumps every `package.json`, writes the changelogs and
-                  # **deletes** every changeset it consumed — so the diff is
-                  # seven changed packages and no changesets, which is exactly
-                  # what this step exists to reject. Left in, no release could
-                  # ever be merged once `verify` is required.
-                  #
-                  # Recognized by shape rather than by branch name, which anyone
-                  # could adopt: a version pull request touches nothing in a
-                  # package but its `package.json` and its `CHANGELOG.md`. A
-                  # source file alongside them is not a release and is asked for
-                  # a changeset like anything else.
-                  #
-                  # A dependency bump — Dependabot's, or one by hand — has the
-                  # same shape and is let through for a reason of its own: the
-                  # bot cannot write a changeset, and a rule that turns every
-                  # dependency pull request red is one people learn to ignore.
-                  # Where a bump is worth a line in the changelog, add one.
-                  rest=$(printf '%s\n' "$changed" | grep -vE '(^|/)(package\.json|CHANGELOG\.md)$' || true)
-                  if [ -n "$changed" ] && [ -z "$rest" ]; then
-                    echo "Only versions, changelogs and dependency ranges changed. No changeset needed."
+                  # The release pull request and a dependency bump cannot
+                  # answer this, and are not asked: the script says how each
+                  # is recognized, by what it changes.
+                  if node scripts/changesetExempt.mjs "origin/$BASE"; then
                     exit 0
                   fi
 

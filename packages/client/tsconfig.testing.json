@@ -16,6 +16,7 @@
 	"references": [
 		{ "path": "./tsconfig.build.json" },
 		{ "path": "../storage/tsconfig.testing.json" },
-		{ "path": "../sync/tsconfig.build.json" }
+		{ "path": "../sync/tsconfig.build.json" },
+		{ "path": "../sync/tsconfig.testing.json" }
 	]
 }

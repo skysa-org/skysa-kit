@@ -218,6 +218,19 @@ describe('releaseNotes', () => {
 		);
 	});
 
+	it('takes a version heading only where Changesets writes one, not indented in a summary', () => {
+		const quoting = SYNC.replace(
+			'- 5e6f7a8: A fix in the engine alone.',
+			'- 5e6f7a8: A fix in the engine alone.\n\n  ## 0.1.0\n\n  - a line of the summary'
+		);
+		expect(releaseNotes('0.1.0', [{ name: '@skysa/sync', text: quoting }])).toBe(
+			'## Every package\n\n### Minor Changes\n\n- 2024160: The first release.\n'
+		);
+		expect(releaseNotes('0.1.1', [{ name: '@skysa/sync', text: quoting }])).toContain(
+			'  - a line of the summary'
+		);
+	});
+
 	it('says so when there is nothing to say', () => {
 		expect(releaseNotes('9.9.9', ALL)).toBe('No changelog entries for this version.\n');
 		expect(releaseNotes('0.1.0', [{ name: '@skysa/sync', text: '' }])).toBe(
