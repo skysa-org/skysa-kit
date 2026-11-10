@@ -1,34 +1,18 @@
 /**
  * A scheduler under test: a remote, a server minting tokens, and a fake clock,
- * for the `scheduler.*.test.ts` files.
+ * for the scheduler's suites over a device (`device.ts`) and for this app's
+ * own scheduler tests.
  */
-import {
-	AuthError,
-	CLIPBOARD_FOLDER,
-	NOTE_FORMAT,
-	type StorageProvider,
-	syncsHidden,
-} from '@skysa/core';
+import { AuthError, type StorageProvider } from '@skysa/core';
 import { createFakeProvider, type FakeProvider } from '@skysa/core/testing';
 import { expect, vi } from 'vitest';
 
 import type { ApiClient } from '../../src/api/client.js';
-import { bindConnection } from '../../src/store/connection.js';
-import type { NotesDatabase } from '../../src/store/db.js';
-import { SYNC_LOCK } from '../../src/sync/lock.js';
-import {
-	createNotesSync,
-	type NotesSync,
-	type NotesSyncOptions,
-} from '../../src/sync/notesSync.js';
 import type { ProviderFactory, SyncPhase, SyncScheduler } from '../../src/sync/scheduler.js';
-import { holdCredential } from './connection.js';
-import { watchedDatabase } from './db.js';
-import { fakeEnvironment } from './fakes/environment.js';
+import { fakeEnvironment } from '../support/fakes/environment.js';
+import type { ClientDevice, ScheduleOptions } from './device.js';
 
 export const HOUR = 60 * 60 * 1000;
-
-export const ACCOUNT = { connectionId: 'c1', provider: 'dropbox', accountId: 'acct' } as const;
 
 export const DEBOUNCE = 2000;
 
@@ -77,7 +61,7 @@ export const presenting = (token: ApiClient['token']) => {
 
 type Gated = 'changes' | 'read';
 
-interface Remote {
+export interface Remote {
 	fake: FakeProvider;
 	/** Every token a request was made with, in order. */
 	tokensUsed: string[];
@@ -174,32 +158,20 @@ export const remote = (): Remote => {
 	};
 };
 
-export const bound = async (connectionId = 'c1') => {
-	const db = watchedDatabase();
-	await bindConnection(db, { ...ACCOUNT, connectionId });
-	await holdCredential(db, connectionId);
-	return db;
-};
-
 export interface Harness {
-	db: NotesDatabase;
-	scheduler: NotesSync;
+	device: ClientDevice;
+	scheduler: SyncScheduler;
 	env: FakeEnvironment;
 	server: ReturnType<typeof tokenServer>;
 	remote: Remote;
 }
 
-export const started = (db: NotesDatabase, overrides: Partial<NotesSyncOptions> = {}): Harness => {
+/** What `started` hands a scheduler unless a test says otherwise. */
+export const schedulerDefaults = () => {
 	const env = fakeEnvironment();
 	const server = tokenServer();
 	const theRemote = remote();
-	// As the app makes it (`sync/runtime.ts`): with the clipboard, the key file
-	// and the files beside notes attached.
-	const scheduler = createNotesSync({
-		lockName: SYNC_LOCK,
-		document: NOTE_FORMAT,
-		syncsHidden,
-		db,
+	const options = {
 		client: server,
 		createProvider: theRemote.factory,
 		environment: env.environment,
@@ -207,13 +179,22 @@ export const started = (db: NotesDatabase, overrides: Partial<NotesSyncOptions> 
 		intervalMs: INTERVAL,
 		backoffMs: BACKOFF,
 		maxBackoffMs: 4 * BACKOFF,
-		...overrides,
-	});
+	} satisfies ScheduleOptions;
+	return { env, server, remote: theRemote, options };
+};
+
+/** The device's scheduler, made as its app makes it, started. */
+export const started = (
+	device: ClientDevice,
+	overrides: Partial<ScheduleOptions> = {}
+): Harness => {
+	const { env, server, remote: theRemote, options } = schedulerDefaults();
+	const scheduler = device.schedule({ ...options, ...overrides });
 	cleanups.unshift(() => {
 		scheduler.stop();
 	});
 	scheduler.start();
-	return { db, scheduler, env, server, remote: theRemote };
+	return { device, scheduler, env, server, remote: theRemote };
 };
 
 export const reaches = async (scheduler: SyncScheduler, phase: SyncPhase) => {
@@ -223,7 +204,7 @@ export const reaches = async (scheduler: SyncScheduler, phase: SyncPhase) => {
 };
 
 /** A sync the user did not ask for, which leaves blocked ops blocked. */
-export const focused = async (h: Harness) => {
+export const focused = async (h: Pick<Harness, 'env' | 'scheduler'>) => {
 	h.env.fire('focus');
 	await vi.waitFor(() => {
 		expect(h.scheduler.status().phase).not.toBe('syncing');
@@ -231,7 +212,7 @@ export const focused = async (h: Harness) => {
 };
 
 /** Whatever the scheduler is waiting on — a backoff, the interval, an edit — comes due. */
-export const nextTimer = async (h: Harness) => {
+export const nextTimer = async (h: Pick<Harness, 'env' | 'scheduler'>) => {
 	// Let an edit's debounce be armed first, rather than come due in the next round.
 	await quiet();
 	h.env.advance(Math.min(...h.env.pending()));
@@ -253,16 +234,3 @@ export const deferred = () => {
 	});
 	return { promise, resolve: () => box.get('resolve')?.() };
 };
-
-/** Another device's paste, straight into the folder. */
-export const pastedElsewhere = async (fake: FakeProvider) => {
-	await fake.createFolder(CLIPBOARD_FOLDER);
-	await fake.createFile(
-		`${CLIPBOARD_FOLDER}/20261006T153012123Z-text-3f9a1c2b.txt`,
-		new TextEncoder().encode('from the phone')
-	);
-};
-
-/** What the clipboard shows: each item's preview. */
-export const previews = async (db: NotesDatabase) =>
-	(await db.clips.toArray()).map((row) => row.preview);
