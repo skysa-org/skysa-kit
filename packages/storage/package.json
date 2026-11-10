@@ -30,6 +30,7 @@
 		"zod": "catalog:"
 	},
 	"devDependencies": {
+		"@skysa/eslint-config": "workspace:*",
 		"@types/node": "catalog:",
 		"vitest": "catalog:"
 	}

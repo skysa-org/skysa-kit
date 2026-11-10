@@ -1,11 +1,7 @@
+import type { RemoteEntry } from '@skysa/storage';
 import { describe, expect, it } from 'vitest';
 
-import type { RemoteEntry } from '@skysa/storage';
-import {
-	decidedApartFromMoves,
-	decidedNotes,
-	reestablished,
-} from '../../src/pull/decided.js';
+import { decidedApartFromMoves, decidedNotes, reestablished } from '../../src/pull/decided.js';
 import type { PullChange } from '../../src/store.js';
 
 /**

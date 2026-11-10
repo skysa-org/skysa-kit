@@ -1,5 +1,5 @@
-import type { NewSyncOp } from '@skysa/sync';
 import { createFakeProvider } from '@skysa/storage/testing';
+import type { NewSyncOp } from '@skysa/sync';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { ClientStore } from '../../src/sync/scheduler.js';

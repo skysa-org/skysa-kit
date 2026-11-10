@@ -1,8 +1,9 @@
+import type { ProviderKind } from '@skysa/protocol';
+
 import { cell } from '../cell.js';
 import type { AppFolderSpec } from '../folderSpec.js';
 import { buildMarker, serializeMarker } from '../marker.js';
 import { isWithin, normalizePath, parentPath, rebasePath, ROOT } from '../paths.js';
-import type { ProviderKind } from '@skysa/protocol';
 import { decodeText } from './text.js';
 import {
 	type ChangeEntry,

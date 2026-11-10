@@ -1,5 +1,5 @@
 {
-	"extends": "../../tsconfig.base.json",
+	"extends": "@skysa/eslint-config/tsconfig.base.json",
 	"compilerOptions": {
 		// `Promise.withResolvers`, which the tests use, is ES2024's. Node 22 has it,
 		// and so does every browser the apps support.

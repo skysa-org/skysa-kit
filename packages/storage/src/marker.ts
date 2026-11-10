@@ -1,8 +1,8 @@
+import { PROVIDER_KINDS } from '@skysa/protocol';
 import { z } from 'zod';
 
 import type { MarkerSpec } from './folderSpec.js';
 import { parseJson } from './json.js';
-import { PROVIDER_KINDS } from '@skysa/protocol';
 
 /**
  * Debug-only provenance: which install created this folder, with what version.

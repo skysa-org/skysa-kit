@@ -1,6 +1,6 @@
+import { parentPath } from '@skysa/storage';
 import { describe, expect, it } from 'vitest';
 
-import { parentPath } from '@skysa/storage';
 import { entryAt, remoteAt } from '../kit/remote.js';
 import { boundTo } from '../kit/seed.js';
 import { syncWorld } from '../kit/world.js';

@@ -1,7 +1,7 @@
+import { TEST_FORMAT } from '@skysa/storage/testing';
 import { describe, expect, it } from 'vitest';
 
 import { createSyncEngine, type SyncProgress } from '../../src/engine.js';
-import { TEST_FORMAT } from '@skysa/storage/testing';
 import { reporting } from '../kit/engine.js';
 import { syncWorld } from '../kit/world.js';
 

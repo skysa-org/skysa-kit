@@ -10,7 +10,16 @@ export type { AppSchedulerOptions, ClientDevice } from './client/device.js';
 export { describeFailures } from './client/failures.js';
 export { describePausing } from './client/pausing.js';
 export { describePushTiming } from './client/pushTiming.js';
-export { cleanups, focused, nextTimer, quiet, reaches, remote, schedulerDefaults, stopSchedulers } from './client/schedulerHarness.js';
+export {
+	cleanups,
+	focused,
+	nextTimer,
+	quiet,
+	reaches,
+	remote,
+	schedulerDefaults,
+	stopSchedulers,
+} from './client/schedulerHarness.js';
 export { describeScheduling } from './client/scheduling.js';
 export { describeTokenSource } from './client/tokenSource.js';
 export { fakeEnvironment } from './support/fakes/environment.js';

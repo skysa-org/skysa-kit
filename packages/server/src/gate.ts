@@ -1,4 +1,13 @@
-import { type ConnectCodeCheck, type ConnectGate, ENTITLEMENT_CODES, type EntitlementCode, GATE_LIMITS, MAX_CODE_HOLD_SECONDS, MAX_CODE_REASON, MAX_CONNECT_CODE } from '@skysa/protocol';
+import {
+	type ConnectCodeCheck,
+	type ConnectGate,
+	ENTITLEMENT_CODES,
+	type EntitlementCode,
+	GATE_LIMITS,
+	MAX_CODE_HOLD_SECONDS,
+	MAX_CODE_REASON,
+	MAX_CONNECT_CODE,
+} from '@skysa/protocol';
 import { z } from 'zod';
 
 import { formatIssues } from './json.js';

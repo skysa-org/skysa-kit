@@ -1,4 +1,11 @@
-import { alwaysAllowed, type ConnectCodeCheck, type EntitlementProvider, MAX_CODE_HOLD_SECONDS, MAX_CONNECT_CODE, type RateLimiter } from '@skysa/protocol';
+import {
+	alwaysAllowed,
+	type ConnectCodeCheck,
+	type EntitlementProvider,
+	MAX_CODE_HOLD_SECONDS,
+	MAX_CONNECT_CODE,
+	type RateLimiter,
+} from '@skysa/protocol';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { buildApp } from './harness.js';

@@ -1,10 +1,9 @@
+import type { DocumentFormat } from '@skysa/storage';
+import { CursorResetError } from '@skysa/storage';
+import { createFakeProvider, type FakeProvider, TEST_FORMAT } from '@skysa/storage/testing';
 import { afterEach, beforeEach, expect } from 'vitest';
 
-import type { DocumentFormat } from '@skysa/storage';
-import { createFakeProvider, type FakeProvider } from '@skysa/storage/testing';
-import { CursorResetError } from '@skysa/storage';
 import type { SyncEngine } from '../../src/engine.js';
-import { TEST_FORMAT } from '@skysa/storage/testing';
 import { createMemoryStore, type MemoryStore } from '../memoryStore.js';
 import { engineFixture, type Rules } from './engine.js';
 import { expectSoundStore } from './invariants.js';

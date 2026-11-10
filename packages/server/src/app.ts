@@ -1,4 +1,9 @@
-import { alwaysAllowed, type EntitlementProvider, neverLimited, type RateLimiter } from '@skysa/protocol';
+import {
+	alwaysAllowed,
+	type EntitlementProvider,
+	neverLimited,
+	type RateLimiter,
+} from '@skysa/protocol';
 import { cell } from '@skysa/storage';
 import { Hono } from 'hono';
 import { csrf } from 'hono/csrf';
@@ -10,25 +15,12 @@ import { createDb } from './db/client.js';
 import type { AppConfig } from './env.js';
 import { checkGate } from './gate.js';
 import { fail } from './http.js';
-
-/**
- * Re-exported so a second Worker entry can build its config through the same
- * validation `src/worker.ts` uses, rather than reading env by hand, log what
- * `envWarnings` says of it at boot, and answer as it does while the config is
- * wrong (`misconfigured`). Together with `createApp` this is the whole of what
- * another deployment needs.
- */
-export { type AppConfig, envWarnings, parseEnv } from './env.js';
-export { misconfigured } from './http.js';
 import type { FetchLike } from './oauth/types.js';
 import type { RelayHub } from './relay/hub.js';
 import { connectRoutes } from './routes/connect.js';
 import { connectionRoutes } from './routes/connections.js';
 import { relayRoutes } from './routes/relay.js';
 import { tokenRoutes } from './routes/token.js';
-
-/** The request context's types, in `context.ts`; kept on the package entry. */
-export type { AppEnv, AuthedEnv, Bindings, Variables } from './context.js';
 
 export interface CreateAppOptions {
 	config: AppConfig;

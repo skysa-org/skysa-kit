@@ -29,6 +29,7 @@
 		"@skysa/storage": "workspace:*"
 	},
 	"devDependencies": {
+		"@skysa/eslint-config": "workspace:*",
 		"@types/node": "catalog:",
 		"vitest": "catalog:"
 	}

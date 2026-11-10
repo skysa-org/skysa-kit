@@ -1,8 +1,7 @@
+import { AuthError, type ChangeEntry, contentHash, type StorageProvider } from '@skysa/storage';
+import { createFakeProvider, type FakeProvider } from '@skysa/storage/testing';
 import { describe, expect, it } from 'vitest';
 
-import { contentHash } from '@skysa/storage';
-import { createFakeProvider, type FakeProvider } from '@skysa/storage/testing';
-import { AuthError, type ChangeEntry, type StorageProvider } from '@skysa/storage';
 import type { SyncEngine } from '../../src/engine.js';
 import type { SyncStore } from '../../src/store.js';
 import { reporting } from '../kit/engine.js';

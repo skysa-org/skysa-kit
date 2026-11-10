@@ -1,6 +1,11 @@
-import type { DocumentFormat } from '@skysa/storage';
-import type { DocumentNames } from '@skysa/storage';
-import type { EntryRef, RemoteEntry, StorageProvider } from '@skysa/storage';
+import type {
+	DocumentFormat,
+	DocumentNames,
+	EntryRef,
+	RemoteEntry,
+	StorageProvider,
+} from '@skysa/storage';
+
 import type { Watch } from './outcome.js';
 import type { Meter } from './progress.js';
 import type { ConflictResolution, PullChange, SyncNote, SyncStore } from './store.js';

@@ -1,6 +1,6 @@
+import type { ChangeEntry } from '@skysa/storage';
 import { describe, expect, it } from 'vitest';
 
-import type { ChangeEntry } from '@skysa/storage';
 import { renameHere } from '../kit/userActions.js';
 import { syncWorld } from '../kit/world.js';
 

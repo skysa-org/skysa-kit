@@ -1,5 +1,5 @@
 import { RateLimitError } from '@skysa/storage';
-import { type MergeInput } from '@skysa/sync';
+import type { MergeInput } from '@skysa/sync';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { ApiClient } from '../../src/api/client.js';

@@ -1,7 +1,7 @@
+import type { StorageProvider } from '@skysa/storage';
+import { createFakeProvider } from '@skysa/storage/testing';
 import { describe, expect, it } from 'vitest';
 
-import { createFakeProvider } from '@skysa/storage/testing';
-import type { StorageProvider } from '@skysa/storage';
 import type { SyncProgress } from '../../src/engine.js';
 import { boundTo } from '../kit/seed.js';
 import { syncWorld } from '../kit/world.js';

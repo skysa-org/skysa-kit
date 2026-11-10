@@ -35,6 +35,7 @@
 		"vite-plugin-pwa": "^1.3.0"
 	},
 	"devDependencies": {
+		"@skysa/eslint-config": "workspace:*",
 		"@types/node": "catalog:",
 		"vite": "^8.3.4",
 		"vite-plugin-pwa": "^1.3.0",

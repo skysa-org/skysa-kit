@@ -1,4 +1,12 @@
-import { type AppFolderSpec, cell, createDropboxProvider, createGDriveProvider, createOneDriveProvider, type DocumentFormat, type FetchLike } from '@skysa/storage';
+import {
+	type AppFolderSpec,
+	cell,
+	createDropboxProvider,
+	createGDriveProvider,
+	createOneDriveProvider,
+	type DocumentFormat,
+	type FetchLike,
+} from '@skysa/storage';
 
 import type { ProviderFactory } from './scheduler.js';
 
