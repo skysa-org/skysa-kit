@@ -62,6 +62,8 @@ If a task requires deviating from it, say so and propose the edit to it, or to t
 - Before pushing: `pnpm verify` (`format:check`, `lint`, `typecheck`, `knip`, `test`).
   CI runs the same, and checks the migrations against the schema.
 - Docs are one sentence per line.
+- Comments and docs are in American English (color, behavior, recognize, canceled), and the docs test holds them to it.
+  Identifiers and strings are left as they are, and so are the CLA texts and `NOTICE`, which are legal text.
 - When unsure about a provider API detail (scopes, endpoints, conflict semantics), check the current vendor docs rather than assuming; note the URL in a code comment.
 - Do not add dependencies without stating why in the PR description.
   Check license: MIT, Apache-2.0 or ISC for anything that ships.

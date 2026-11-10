@@ -266,7 +266,7 @@ export const createPullFolders = (
 	 */
 	const freeFolderPath = (path: string, taken: readonly string[]): Promise<string> =>
 		// Bounded, because the loop's termination rests on `conflictFolderName`
-		// recognising the name it just produced when that name is handed back in
+		// recognizing the name it just produced when that name is handed back in
 		// `taken`. Those are two folds — the one that writes the name and the one
 		// that reads it — and if they ever disagree, `n` stops advancing and this
 		// recurses for ever. That is not a wrong name: it is `pull()` never

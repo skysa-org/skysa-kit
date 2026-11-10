@@ -249,7 +249,7 @@ describe('a provider that reports a folder recursively', () => {
 		expect(noteAt('Work/a.md')).toBeUndefined();
 		// The same folder, moved — not deleted and conjured back into existence
 		// by a note's parent path, which leaves it with no `remoteId` and so no
-		// way to be recognised the next time it moves.
+		// way to be recognized the next time it moves.
 		expect(world.store.folders()).toEqual([{ path: 'Archive', remoteId: folder.remoteId }]);
 		// The same note, not a replacement that happens to hold the same text.
 		// Deleting and re-importing it reads the same from here and is not: it
@@ -279,7 +279,7 @@ describe('a provider that reports a folder recursively', () => {
 		expect(world.store.notes()).toHaveLength(1);
 		// Moved, not deleted and re-made: a folder that arrives as the side
 		// effect of a note's path has no `remoteId`, and a folder with no
-		// `remoteId` cannot be recognised the next time it moves, or reconciled
+		// `remoteId` cannot be recognized the next time it moves, or reconciled
 		// after a cursor reset.
 		expect(world.store.folders()).toEqual([{ path: 'Archive', remoteId: folder.remoteId }]);
 	});
@@ -711,7 +711,7 @@ describe('a folder whose ancestor moved in the same batch', () => {
 	it('keeps a displaced folder and its notes together when nothing claims it', async () => {
 		// The batch never says where `Archive` went — the entry is in the next
 		// window, or the provider never sends one. It stays where it was put,
-		// under a name the user can recognise, with its notes still inside it.
+		// under a name the user can recognize, with its notes still inside it.
 		// The alternative is the merge: two notebooks' notes in one, and a row
 		// gone for good.
 		const other = await world.provider.createFolder('Archive');

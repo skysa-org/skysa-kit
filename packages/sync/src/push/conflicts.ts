@@ -66,7 +66,7 @@ export const createConflictPush = (
 		onRemote = false
 	): Promise<string> =>
 		// Bounded exactly as `freeFolderPath` is, and for the same reason: each
-		// turn here is a request, and a `conflictName` that stopped recognising
+		// turn here is a request, and a `conflictName` that stopped recognizing
 		// its own names would spend them without end. Running out throws, as it
 		// does there, rather than handing back a name nobody has looked at: the
 		// op fails and is retried, where a note displaced onto a taken name

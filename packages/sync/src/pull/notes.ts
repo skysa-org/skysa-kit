@@ -102,7 +102,7 @@ export const createPullNotes = (
 
 	/**
 	 * The note an entry is about. `remoteId` is the identity; the path is the
-	 * fallback, and it is what lets a note created here be recognised when its
+	 * fallback, and it is what lets a note created here be recognized when its
 	 * own first push arrives back, and a file deleted and re-created at the same
 	 * path stay one note rather than becoming two rows the sidebar shows twice.
 	 *

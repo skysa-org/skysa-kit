@@ -301,7 +301,7 @@ export type PullChange =
 			 * Both sides changed the note, and the app's merge made the two one
 			 * (`SyncEngineOptions.merge`, docs/ARCHITECTURE.md §7, "Merge before
 			 * the copy"). skysa-notes has none; memoriam's merges a passage
-			 * practised on two devices. The note takes `content`, is bound to
+			 * practiced on two devices. The note takes `content`, is bound to
 			 * `remote` with `syncedHash` as its bytes, and goes to `path`, its
 			 * queued ops with it. Clean when `content` is the remote's own bytes,
 			 * its queued writes then dropped as a conflict drops them; dirty
@@ -463,7 +463,7 @@ export type PullChange =
 			 * old path. A store applying the rule itself does not — a
 			 * `move-folder` is always applied before the `delete-folder` that
 			 * follows it, and rebases every queued op on the way — but it costs
-			 * nothing to honour, and a rule that does not depend on the order
+			 * nothing to honor, and a rule that does not depend on the order
 			 * two changes happen to arrive in is the one worth writing down.
 			 */
 			was?: string;
@@ -813,7 +813,7 @@ export type OpOutcome =
 	| Readonly<{
 			/**
 			 * A `mkdir` landed. The folder row records the id, so a later
-			 * `rmdir` can say which folder it means and a scan can recognise
+			 * `rmdir` can say which folder it means and a scan can recognize
 			 * the folder as one we already have — until this, only a pull ever
 			 * set it, so a notebook made here had none until it came back.
 			 */
@@ -879,7 +879,7 @@ export type OpOutcome =
  * removes the file that was just imported.
  *
  * A note deleted here and changed remotely in the same window resolves in
- * favour of the delete — the row is written back by the pull and then
+ * favor of the delete — the row is written back by the pull and then
  * purged by the op behind it. That is a decision, not an accident: the
  * delete is something the user did, and the remote change may be their own
  * from the other device.
@@ -921,7 +921,7 @@ export interface SyncStore {
 	readonly notesUnder: (folderPath: string) => Promise<SyncNote[]>;
 	readonly folderByRemoteId: (remoteId: string) => Promise<SyncFolder | undefined>;
 	/**
-	 * Used to recognise a folder move reported as a deletion of the old path:
+	 * Used to recognize a folder move reported as a deletion of the old path:
 	 * the deletion may carry no id at all, and the only way to tell it from a
 	 * real one is that the folder that used to be there is alive elsewhere in
 	 * the same batch.

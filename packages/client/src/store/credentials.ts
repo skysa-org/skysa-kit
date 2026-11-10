@@ -163,7 +163,7 @@ export const credentialFor = (
  * anything — a revoked device, a disconnected account — and after a disconnect
  * this device asked for.
  *
- * There is nothing to tell the server: it has already stopped honouring the
+ * There is nothing to tell the server: it has already stopped honoring the
  * hash, and the hash stays spent there for ever so that a copy of this
  * credential taken before now can never be used to claim a connection of its
  * own (docs/ARCHITECTURE.md §6).

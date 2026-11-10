@@ -18,7 +18,7 @@ import {
 } from '../src/brand.js';
 
 /**
- * The brand: the one way a deployment names and colours the app without
+ * The brand: the one way a deployment names and colors the app without
  * changing this repo (docs/ARCHITECTURE.md §8, "Brand"). A mistake in a brand
  * file shows up nowhere in a build that goes ahead, only as an app that will
  * not install or installs without its icon, so each one has to stop the build.

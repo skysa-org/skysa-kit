@@ -205,7 +205,7 @@ Semantics the signatures do not carry:
 
 - `listsEverything` is what the engine asks before removing a folder because a listing showed it empty (§7).
   It is false on Google Drive alone: `drive.file` shows the app only the files it created, so a folder that lists empty may hold a file the user put there, and deleting it would take that file.
-  Every other capability question is answered by behaviour rather than a flag; this one cannot be, because the wrong answer is silent and costs a file.
+  Every other capability question is answered by behavior rather than a flag; this one cannot be, because the wrong answer is silent and costs a file.
 - `write` is create-or-update, never a blind overwrite.
   No `expectedVersion` means "I expect nothing here" — literally WebDAV's `If-None-Match: *` — so a file already at that path is a `ConflictError`.
   That is what makes §7's rule of re-creating on push a dirty note deleted remotely safe: if the file came back in the meantime the write conflicts instead of clobbering it.
@@ -237,7 +237,7 @@ Semantics the signatures do not carry:
   `contentType` is recorded where the provider keeps one and decides nothing; the extension is what the app reads.
   Every adapter sends the bytes in one request: a provider takes at least 150 MiB in one everywhere but Drive, which over 5 MB wants a resumable session, also sent in one `PUT` (§5.1).
 - No `AbortSignal` in the adapter interface: operations are short and the engine discards results it no longer wants.
-  **But the `fetch` an adapter is given is cancelled with its session (2026-09-23).**
+  **But the `fetch` an adapter is given is canceled with its session (2026-09-23).**
   The web app's `timedFetch` (`packages/client/src/sync/providers.ts`) combines each request's own 60 s timeout with the scheduler session's signal, so ending a session — Cancel on an import, a disconnect, a switch of source — stops a download in flight instead of leaving it to run out its timeout.
   The contract is unchanged; an adapter sees an aborted `fetch` as the network error it is.
   **The timeout grows with the bytes (2026-10-03, skysa-notes#187).**
@@ -415,7 +415,7 @@ Its `pageSize`, `folderChanges` and `setFault` options are what let the engine's
 - Files, update: `PUT /me/drive/items/{id}/content` with `If-Match: <eTag>` → `412` when stale.
   **By id, never by path**: an upload by path creates a file that is not there, and a file deleted since the caller last saw it is exactly what an expected version is meant to catch.
   The adapter looks the path up first for the id (and answers a stale or missing file without uploading); `If-Match` covers the moment between.
-- Neither the `conflictBehavior=fail` → `409` nor the `If-Match` → `412` behaviour of an upload is in Graph's reference pages — they come from the OneDrive docs' issue tracker and Microsoft Q&A — and the move page documents only `if-match`, not `conflictBehavior`.
+- Neither the `conflictBehavior=fail` → `409` nor the `If-Match` → `412` behavior of an upload is in Graph's reference pages — they come from the OneDrive docs' issue tracker and Microsoft Q&A — and the move page documents only `if-match`, not `conflictBehavior`.
   All three wait on the live run in Phase 3.
 - Folders, create: `POST /me/drive/items/{parentId}/children` with `{ name, folder: {}, '@microsoft.graph.conflictBehavior': 'fail' }`.
   **The parent goes in by id, never by path** — the same rule the update above follows, and for a blunter reason: Graph answers a `POST .../children` whose parent is addressed by path with a bare `400 invalidRequest`, at every depth, whatever the name and `conflictBehavior` say.
@@ -458,7 +458,7 @@ Its `pageSize`, `folderChanges` and `setFault` options are what let the engine's
 - The two resync codes are told apart.
   Graph answers a dead token with `410` and one of them, and they disagree about whose copy may have lost something: `resyncChangesApplyDifferences` says "Replace any local items with the server's version (including deletes)", which is what a scan does anyway, while `resyncChangesUploadDifferences` says "Upload any local items that the service didn't return" — a server-side restore.
   So `CursorResetError` carries `uploadDifferences`, and the rescan it starts deletes nothing (§7, "A rescan that uploads").
-  The code is read from `code`, from `innerError` and `innererror` alike, and from the `details` list, since the page says only "an error response containing one of the error codes below" and missing it is the direction that costs notes; anything unrecognised, `resyncRequired` included, falls back to today's reset and never to uploading.
+  The code is read from `code`, from `innerError` and `innererror` alike, and from the `details` list, since the page says only "an error response containing one of the error codes below" and missing it is the direction that costs notes; anything unrecognized, `resyncRequired` included, falls back to today's reset and never to uploading.
   A folder moved *into* the app folder from elsewhere is reported alone; whether Graph lists what is inside it is one of the live checks.
 - OAuth (`packages/server/src/oauth/onedrive.ts`): Authorization Code + PKCE against `login.microsoftonline.com/{MICROSOFT_TENANT}/oauth2/v2.0/{authorize,token}` as a confidential Web client, `response_mode=query`, `prompt=select_account` — without it Microsoft silently uses whatever account the browser is signed in to, which on a shared machine may be someone else's, and in storage-first that account then signs in as the user it is connected to.
 - Account id: the ID token's **`sub`**, read from the token endpoint's response without a signature check (OIDC Core §3.1.3.7 allows it for a token received directly over TLS), and refused unless its `aud` is this client.
@@ -501,7 +501,7 @@ Its `pageSize`, `folderChanges` and `setFault` options are what let the engine's
   So a `mkdir` whose parent another device removed does not fail, and the engine's `ensureRemoteFolder` retry is unreachable on Dropbox.
   Note the corollary: it silently re-creates a folder the user deleted elsewhere, rather than refusing.
 - A `rev` is lowercase hex of at least 9 characters, and Dropbox validates that **shape before it compares the value**: a malformed one is a plain 400, not a conflict and not a missing file.
-  Nothing in the engine can send one, since every rev it holds came from Dropbox, but a test that makes one up never reaches the behaviour it means to check — which is why the contract suite takes a per-provider `staleVersion`.
+  Nothing in the engine can send one, since every rev it holds came from Dropbox, but a test that makes one up never reaches the behavior it means to check — which is why the contract suite takes a per-provider `staleVersion`.
 - Worse for a test than the shape rule, and the reason the suite now seeds and deletes a real file rather than inventing a version: an `update` **whose rev Dropbox has never issued** finds nothing to conflict against, so where the path is absent it simply **creates the file**, `strict_conflict: true` or not.
   Measured 2026-09-21: absent path + unknown rev → created; deleted path + unknown rev → created; deleted path + that file's real former rev → `conflict`, which is the case above and the only one the engine can produce; present path + non-matching rev → `conflict`.
 - Version: `rev`.
@@ -794,7 +794,7 @@ Recorded here rather than done, because the seal/open signature is cheaper to ch
 <a id="per-connection-credentials"></a>
 ### Per-connection credentials (Phase 7)
 
-Until Phase 7 a user held **at most one connection**, because in `storage-first` any connected account signed you in as that user: two connections under one user would cross-authorise, and whoever held the OneDrive account would get tokens for the Dropbox one.
+Until Phase 7 a user held **at most one connection**, because in `storage-first` any connected account signed you in as that user: two connections under one user would cross-authorize, and whoever held the OneDrive account would get tokens for the Dropbox one.
 Phase 7 removes the premise rather than the guard.
 **There is no shared user.**
 Each connected storage account is its own silo — auth and data coupled — and the device switches between the ones it holds.
@@ -806,7 +806,7 @@ What proves a device's right to a connection is a credential it generated, not a
 2. The callback commits the connection **and** its grant in one `db.batch`, then redirects as before.
    The batch being one transaction is load-bearing for the racing-callback recovery, and that in turn assumes D1 enforces foreign keys within it — documented, but proven here only against the `node:sqlite` shim.
    If it did not, the loser of a race would commit a grant pointing at an id that does not exist, the user would see `connect=ok`, and the device would be 401 for ever with its hash spent.
-   The *security* property does not depend on it: a grant pointing at a dead id reads as claimed and authorises nothing.
+   The *security* property does not depend on it: a grant pointing at a dead id reads as claimed and authorizes nothing.
 3. The PWA presents `Authorization: Bearer sk1_…` from then on.
 
 The plaintext credential never enters a URL, a fragment, history, a `Set-Cookie`, a response body, a Worker log, or the database.
@@ -816,7 +816,7 @@ Each decision, with the reason it would otherwise be got wrong later:
 
 - **`/start` is a same-origin `POST`.**
   The hash is caller-supplied, so a `GET` would be a session-fixation hole: a link carrying the attacker's hash, consented to by the victim, hands the attacker a live credential to the victim's storage.
-  `hono/csrf` does not cover JSON bodies (it matches only form and text content types, leaning on CORS preflight), so the route checks `Origin === appOrigin || Sec-Fetch-Site: same-origin` itself and keeps `csrf()` as defence in depth.
+  `hono/csrf` does not cover JSON bodies (it matches only form and text content types, leaning on CORS preflight), so the route checks `Origin === appOrigin || Sec-Fetch-Site: same-origin` itself and keeps `csrf()` as defense in depth.
 - **Lookup is by hash, not `<id>.<secret>`.**
   An id-then-compare needs a constant-time comparison, and `crypto.subtle.timingSafeEqual` is a Workers extension **Node's webcrypto lacks** — and the suite runs on Node against a `node:sqlite` D1 shim.
   A unique index on the hash sidesteps a hand-rolled comparison tested under the wrong crypto.
@@ -843,7 +843,7 @@ Each decision, with the reason it would otherwise be got wrong later:
   Disconnect now signs out the device it is pressed on and no other (`signOut` in `packages/client/src/api/client.ts`: `GET /api/connection` for this device's `grantId`, then `DELETE` that grant), so only the last device out disconnects the account and withdraws its access at the provider.
   The question says which this will be before it is answered, from the device list's own count (live grants other than this one; `stillSignedIn`): "The other device connected to it stays connected and keeps syncing", or "This is the only device connected to it, so the account is disconnected too", or both where the server could not be asked.
   Where to withdraw OneDrive's access by hand is said only when the account may be going.
-  Cancelling a first import signs out the same way, since the account being imported may be one another device was already syncing.
+  Canceling a first import signs out the same way, since the account being imported may be one another device was already syncing.
   A device the user believes is stolen is signed out from the device list (Remove), which never takes the last.
   A grant idle past its expiry cannot authenticate and does not count as live.
   Connecting the account again makes a new row, and the device knows its notes by the account's id, not the row's.
@@ -932,7 +932,7 @@ Everything under `/api/connection*` and `POST /api/token` requires `Authorizatio
 Two refusals, and the difference is actionable: `credential_required` (401) means the device never had one and should connect; `credential_revoked` (401) means the one it holds is not known here any more and should be thrown away first.
 
 There are no sign-in routes, here or anywhere: identity is the storage connection (§6).
-`AUTH_MODE=account-first` refuses to boot, which is now a refusal to honour a setting that describes something this project has decided not to build rather than something it has not built yet — the env var itself goes with the tables (skysa-notes#118).
+`AUTH_MODE=account-first` refuses to boot, which is now a refusal to honor a setting that describes something this project has decided not to build rather than something it has not built yet — the env var itself goes with the tables (skysa-notes#118).
 
 <a id="change-relay"></a>
 ### Change relay (optional, 2026-10-05)
@@ -1052,7 +1052,7 @@ The rules, in `packages/sync/src/engine.ts` (`decideAttachment` and the function
   Rare: the app moves a file only with the note that links it, or with its notebook.
 - **A backstop**, `settleFileClashes`, settles two rows left at one path at the end of a batch.
 
-Within a batch, the decisions are replayed over the file rows exactly as the store will apply them (`placedFiles`), memoised per batch.
+Within a batch, the decisions are replayed over the file rows exactly as the store will apply them (`placedFiles`), memoized per batch.
 Exactly, because a row the replay and the store disagree about has a later change about it refused, and the batch with it, on every pull.
 The single-device soak (`randomRemote.test.ts`) checks after every pull, on every stub and page size, that the rows are the remote's files that are not notes.
 The two-device suite (`overProviders.test.ts`) does the same at rest, and checks that a file added on either device reaches the remote with its bytes unless its notebook was deleted.
@@ -1174,7 +1174,7 @@ Both appear in the UI; a small banner links to the pair.
 The stamp is UTC and minute-resolution, with the `:` replaced — a colon is illegal in a filename on Windows and rejected outright by several provider APIs, and a copy the provider refuses to store is the lost edit this rule exists to prevent.
 UTC so two devices in different zones name the same conflict the same way rather than producing two copies that look hours apart and unrelated.
 A minute is not unique enough on its own, so a second conflict on the same note inside one minute gets `-2`, `-3`, and so on; the comparison is case-insensitive, because Drive, Dropbox and macOS all are.
-The name is deliberately **not** slugified: the copy has to be recognisable as the note it came from and sort next to it.
+The name is deliberately **not** slugified: the copy has to be recognizable as the note it came from and sort next to it.
 
 The names are `packages/storage/src/names/conflicts.ts`; the copy's contents, with its own `id`, are the app's (`DocumentFormat`'s `conflictContent`).
 The engine asks for them through the document format it is handed, skysa-notes' `NOTE_FORMAT` ([record 0018](https://github.com/skysa-org/skysa-notes/blob/main/docs/decisions/0018-the-shared-kit.md)), and reads no markdown for itself.
@@ -1182,7 +1182,7 @@ The engine asks for them through the document format it is handed, skysa-notes' 
 <a id="merge-before-the-copy"></a>
 ### Merge before the copy
 An app may make the two sides one before the conflict rule applies, through the engine's `merge` option ([record 0018](https://github.com/skysa-org/skysa-notes/blob/main/docs/decisions/0018-the-shared-kit.md)).
-skysa-notes passes none, so for it the rule above is the whole of it; memoriam's merges a passage practised on two devices.
+skysa-notes passes none, so for it the rule above is the whole of it; memoriam's merges a passage practiced on two devices.
 - **The option.** `merge({ path, local, remote })` returns the merged text, or `undefined` where the two cannot be one.
   A merge that throws counts as none: a merge that cannot be made is a conflict copy, never a sync that stops.
 - **Where it is asked.** At both places the conflict rule is:
@@ -1332,7 +1332,7 @@ They live in `packages/sync/src/engine.ts` and, for the push, in `packages/sync/
   A file created, deleted and re-created at one path inside one cursor window arrives as three entries, and each of the last two has to know what the ones before it did: the deletion is about a note only this batch has made, and the second file lands on a path only this batch has filled.
   The store can say nothing about either — none of it has been applied — so the decisions already taken are read back as rows.
 - **A path can be reused.**
-  A note is identified by `remoteId`; the path is a fallback, and it is what lets a note created here be recognised when its own first push comes back.
+  A note is identified by `remoteId`; the path is a fallback, and it is what lets a note created here be recognized when its own first push comes back.
   The one note the fallback must not claim is one whose own remote copy is alive elsewhere in the batch: that note has been moved and the path merely reused, and claiming it would hand two notes each other's contents.
   Nor, found by a model of two devices syncing at random over every provider (`packages/sync/tests/overProviders.test.ts`), four more, each of which hands one device's file to a note that is not its note:
   - *a note the user has renamed onto the path*, not pushed yet — its file is still at the old name, and claimed it forgets that file, which the feed has no reason ever to mention again;
@@ -1669,20 +1669,20 @@ What follows is the kit's part of skysa-notes' §8; the rest — its fill window
   A worker already installed keeps the old rule until its update is accepted (`registerType: 'prompt'`, above).
 
 - **Brand (2026-10-01).**
-  What the app is called and how it looks is a build input, the path to a `brand.json` (skysa-notes reads it from `NOTES_BRAND`) that names the app (`name`, and a `shortName` of at most 12 characters for under a home-screen icon), describes it, gives the brand colour, the text on it and the title-bar colour for each of the light and dark themes plus the splash background, points at a folder of the six icons, and optionally gives woff2 files for a sans and a mono family.
+  What the app is called and how it looks is a build input, the path to a `brand.json` (skysa-notes reads it from `NOTES_BRAND`) that names the app (`name`, and a `shortName` of at most 12 characters for under a home-screen icon), describes it, gives the brand color, the text on it and the title-bar color for each of the light and dark themes plus the splash background, points at a folder of the six icons, and optionally gives woff2 files for a sans and a mono family.
   Without it the build uses the app's own default, which the app hands to `loadBrand`.
-  skysa-notes' is `apps/web/brand/brand.json` (`DEFAULT_BRAND` in its `pwaApp.ts`): "Notes", in gray (`#4B5563` light, `#9CA3AF` dark), the curled-page icons on that gray, and the system fonts, so its default build carries no deployment's name, colour or mark.
+  skysa-notes' is `apps/web/brand/brand.json` (`DEFAULT_BRAND` in its `pwaApp.ts`): "Notes", in gray (`#4B5563` light, `#9CA3AF` dark), the curled-page icons on that gray, and the system fonts, so its default build carries no deployment's name, color or mark.
   The brand file's JSON Schema is the kit's (`packages/pwa/brand.schema.json`, exported as `@skysa/pwa/brand.schema.json`).
-  `packages/pwa/src/brand.ts` reads and checks it and stops the build on anything wrong — a missing field, a colour that is not `#RRGGBB`, a long `shortName`, an icon missing or at the wrong size (read from its PNG header, as `tests/pwa.test.ts` always did), a font file missing or not woff2 — since a build that went ahead would only install without an icon, or not offer to install, and say nothing.
-  The installed app's navigation bar on Android is one colour for both themes, since a manifest has one value and no dark variant (Chrome's dark fields are an experiment it no longer reads), and which colour it is depends on the phone.
+  `packages/pwa/src/brand.ts` reads and checks it and stops the build on anything wrong — a missing field, a color that is not `#RRGGBB`, a long `shortName`, an icon missing or at the wrong size (read from its PNG header, as `tests/pwa.test.ts` always did), a font file missing or not woff2 — since a build that went ahead would only install without an icon, or not offer to install, and say nothing.
+  The installed app's navigation bar on Android is one color for both themes, since a manifest has one value and no dark variant (Chrome's dark fields are an experiment it no longer reads), and which color it is depends on the phone.
   On Android 14 and older Chrome paints it with `theme_color`, which is the light theme's `brand` (2026-10-11).
-  From Android 15 an app cannot paint the bar: it is transparent over the app's window, which Chrome fills with `background_color`, the brand's `background`, the splash's colour.
+  From Android 15 an app cannot paint the bar: it is transparent over the app's window, which Chrome fills with `background_color`, the brand's `background`, the splash's color.
   That was measured on a Pixel on Android 17 (2026-10-11): `theme_color` in the installed app and nowhere on screen, the bar exactly `background_color`, the page laid out between the system bars with no inset to fill.
   So neither leaving out `theme_color` (2026-10-10) nor setting it to the brand fixed a pale bar under the app in dark mode; the brand's `background` decides it, and skysa-notes' `self-hosting.md` says so to whoever picks it.
   A deployment that gives `background` the light `brand`'s value has one bar on every phone.
-  The page's `theme-color` tags still colour the status bar once it is open.
+  The page's `theme-color` tags still color the status bar once it is open.
   It is read at build time and not served by `/api/config` because everything it covers is settled before the app could ask: the manifest and the iOS home-screen title and icon are read by the platform at install, the precache is revisioned when the app is built, and the first paint comes from IndexedDB with no network.
-  A Vite plugin in `brand.ts` writes the title, the description, a `theme-color` per theme and the icon links into the page, with no script (§9); writes a stylesheet of `@font-face` rules and the custom properties `styles/` reads (`--brand`, `--on-brand`, `--font-sans`, `--font-mono`, the colours again under `prefers-color-scheme: dark`) as a file on this origin, so the Content-Security-Policy needs nothing new; and writes the icons at their fixed names and the stylesheet and fonts under `/brand/`, named by their content, beside the app, where the precache glob takes them in.
+  A Vite plugin in `brand.ts` writes the title, the description, a `theme-color` per theme and the icon links into the page, with no script (§9); writes a stylesheet of `@font-face` rules and the custom properties `styles/` reads (`--brand`, `--on-brand`, `--font-sans`, `--font-mono`, the colors again under `prefers-color-scheme: dark`) as a file on this origin, so the Content-Security-Policy needs nothing new; and writes the icons at their fixed names and the stylesheet and fonts under `/brand/`, named by their content, beside the app, where the precache glob takes them in.
   `pwa.ts` builds the manifest from it.
   **The brand is never data identity.**
   The app folder's name, its marker file and the app name the marker validates, the IndexedDB name, and the lock and cookie names stay as they are whatever the brand says: renaming any of them would leave every library already connected unfound.

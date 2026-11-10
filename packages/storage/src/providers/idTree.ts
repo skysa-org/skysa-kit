@@ -12,7 +12,7 @@ import { type ChangeEntry, CursorResetError, type RemoteEntry } from './types.js
 // value for path … renaming a folder doesn't result in any descendants of the
 // folder being returned") and Google Drive's `changes.list` both do. So the
 // adapter has to know the tree to say where anything is, and that knowledge has
-// to outlive the page it was learnt from: a note edited today sits in a folder
+// to outlive the page it was learned from: a note edited today sits in a folder
 // the feed last mentioned a month ago.
 //
 // It travels in the cursor, which the engine already persists per connection

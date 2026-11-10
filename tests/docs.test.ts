@@ -111,6 +111,25 @@ const unattributed = (text: string): readonly string[] =>
 const bareIssues = (text: string): readonly string[] =>
 	[...text.matchAll(/(?<![\w&/'"`[-])#\d+\b(?![0-9a-f])/giu)].map(([issue]) => issue);
 
+/**
+ * British spellings, which the kit's comments and documents do not use: its
+ * words are American. Identifiers and strings are what they are, so only prose
+ * is read, outside code, links and anchors.
+ */
+const BRITISH =
+	/\b(?:\w*(?:colour|behaviour|honour|favour|licence|defence|judgement|artefact|recognis|authoris|practis|memois)\w*|learnt|cancell(?:ed|ing)|signall(?:ed|ing))\b/giu;
+const LEGAL = new Set(['CLA-individual.md', 'CLA-entity.md']);
+const prose = (file: string, text: string): string =>
+	(file.endsWith('.md')
+		? withoutFences(text)
+		: text
+				.split('\n')
+				.filter((line) => /^\s*(?:\*|\/\/|\/\*)/u.test(line))
+				.join('\n')
+	).replace(/`[^`\n]*`|https?:\/\/\S+|\]\([^)]*\)|<a id="[^"]*">/gu, '');
+const british = (file: string, text: string): readonly string[] =>
+	LEGAL.has(file) ? [] : [...prose(file, text).matchAll(BRITISH)].map(([word]) => word);
+
 /** Each `[…](path)` in a markdown text, outside its code, that points at another file. */
 const links = (text: string): readonly string[] =>
 	[...text.replace(/```[\s\S]*?```|`[^`\n]*`/gu, '').matchAll(/\]\(([^)#\s]+)(?:#[^)]*)?\)/gu)]
@@ -178,6 +197,16 @@ describe('the docs', () => {
 		expect(citedNumbers('OpenID Connect Core §3.1.3.7 lets')).toEqual([]);
 	});
 
+	it('reads only prose for spelling', () => {
+		expect(british('x.ts', "// a colour\nconst colour = 'a colour';\n * `colour`")).toEqual([
+			'colour',
+		]);
+		expect(british('x.md', 'Its behaviour, [a](https://x.org/colour), cancellation.')).toEqual([
+			'behaviour',
+		]);
+		expect(british('CLA-individual.md', 'a licence grant')).toEqual([]);
+	});
+
 	it("tells what is skysa-notes' from what says whose it is", () => {
 		expect(unattributed('See `apps/web/src/sync/account.ts`. And more.')).toHaveLength(1);
 		expect(unattributed("See skysa-notes' `apps/web/src/sync/account.ts`.")).toEqual([]);
@@ -233,6 +262,13 @@ describe('the docs', () => {
 	it('lists every decision record', () => {
 		const index = textOf('docs/decisions/README.md');
 		expect(RECORDS.filter((file) => !index.includes(`(${file})`))).toEqual([]);
+	});
+
+	it('is written in American English', () => {
+		const words = CITING.flatMap((file) =>
+			british(file, textOf(file)).map((word) => `${file}: ${word}`)
+		);
+		expect(words).toEqual([]);
 	});
 
 	it("says whose it is where it names something of skysa-notes'", () => {

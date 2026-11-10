@@ -973,7 +973,7 @@ describe('a dead cursor', () => {
 		});
 
 		it('deletes as usual when the reset does not ask for it', async () => {
-			// The other half of the rule, and the one an unrecognised reset code
+			// The other half of the rule, and the one an unrecognized reset code
 			// falls back to: without the flag a scan is still the truth.
 			await remoteFile('a.md', 'one\n');
 			await world.engine.pull();
