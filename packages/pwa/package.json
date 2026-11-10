@@ -2,7 +2,6 @@
 	"name": "@skysa/pwa",
 	"version": "0.0.0",
 	"description": "The brand's Vite plugin, the web app manifest and the service worker's options, and the bundle budget.",
-	"private": true,
 	"license": "AGPL-3.0-only",
 	"repository": {
 		"type": "git",
@@ -11,6 +10,13 @@
 	},
 	"type": "module",
 	"sideEffects": false,
+	"files": [
+		"dist",
+		"!dist/*.tsbuildinfo",
+		"src",
+		"scripts",
+		"brand.schema.json"
+	],
 	"exports": {
 		".": {
 			"types": "./src/index.ts",
@@ -23,7 +29,24 @@
 		"./budget": "./scripts/bundleBudget.mjs",
 		"./brand.schema.json": "./brand.schema.json"
 	},
+	"publishConfig": {
+		"access": "public",
+		"provenance": true,
+		"exports": {
+			".": {
+				"types": "./dist/src/index.d.ts",
+				"default": "./dist/src/index.js"
+			},
+			"./testing": {
+				"types": "./dist/tests/testing.d.ts",
+				"default": "./dist/tests/testing.js"
+			},
+			"./budget": "./scripts/bundleBudget.mjs",
+			"./brand.schema.json": "./brand.schema.json"
+		}
+	},
 	"scripts": {
+		"prepack": "tsc -b tsconfig.build.json tsconfig.testing.json",
 		"typecheck": "tsc -p tsconfig.json --noEmit",
 		"test": "vitest run"
 	},

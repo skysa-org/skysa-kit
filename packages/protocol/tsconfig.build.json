@@ -1,0 +1,13 @@
+{
+	// What is published: src, built to dist/src with its declarations by
+	// `pnpm build` (`tsc -b` over every package, in the order they import
+	// each other).
+	"extends": "./tsconfig.json",
+	"compilerOptions": {
+		"composite": true,
+		"noEmit": false,
+		"rootDir": ".",
+		"outDir": "dist"
+	},
+	"include": ["src/**/*.ts"]
+}

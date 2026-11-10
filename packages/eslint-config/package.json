@@ -2,7 +2,6 @@
 	"name": "@skysa/eslint-config",
 	"version": "0.0.0",
 	"description": "The lint rules the Skysa apps share, their base tsconfig, and Prettier's settings.",
-	"private": true,
 	"license": "AGPL-3.0-only",
 	"repository": {
 		"type": "git",
@@ -10,10 +9,19 @@
 		"directory": "packages/eslint-config"
 	},
 	"type": "module",
+	"files": [
+		"index.js",
+		"tsconfig.base.json",
+		"prettier.json"
+	],
 	"exports": {
 		".": "./index.js",
 		"./tsconfig.base.json": "./tsconfig.base.json",
 		"./prettier": "./prettier.json"
+	},
+	"publishConfig": {
+		"access": "public",
+		"provenance": true
 	},
 	"dependencies": {
 		"@eslint/js": "^10.0.1",

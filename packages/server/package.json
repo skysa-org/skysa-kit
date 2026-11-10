@@ -2,7 +2,6 @@
 	"name": "@skysa/server",
 	"version": "0.0.0",
 	"description": "The Worker as a library, one connect flow per provider, and the D1 migrations.",
-	"private": true,
 	"license": "AGPL-3.0-only",
 	"repository": {
 		"type": "git",
@@ -11,6 +10,12 @@
 	},
 	"type": "module",
 	"sideEffects": false,
+	"files": [
+		"dist",
+		"!dist/*.tsbuildinfo",
+		"src",
+		"migrations/*.sql"
+	],
 	"exports": {
 		".": {
 			"types": "./src/index.ts",
@@ -21,8 +26,23 @@
 			"default": "./src/relay/durableObject.ts"
 		}
 	},
+	"publishConfig": {
+		"access": "public",
+		"provenance": true,
+		"exports": {
+			".": {
+				"types": "./dist/src/index.d.ts",
+				"default": "./dist/src/index.js"
+			},
+			"./relay": {
+				"types": "./dist/src/relay/durableObject.d.ts",
+				"default": "./dist/src/relay/durableObject.js"
+			}
+		}
+	},
 	"scripts": {
-		"typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.src.json --noEmit",
+		"prepack": "tsc -b tsconfig.build.json",
+		"typecheck": "tsc -p tsconfig.json --noEmit",
 		"test": "vitest run",
 		"db:generate": "drizzle-kit generate"
 	},

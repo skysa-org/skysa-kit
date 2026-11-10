@@ -2,7 +2,6 @@
 	"name": "@skysa/client",
 	"version": "0.0.0",
 	"description": "The API client, the token source, the provider factory and its request deadlines, the scheduler, the relay client, the connect code a device holds, a long run's count, and the stores a screen listens to.",
-	"private": true,
 	"license": "AGPL-3.0-only",
 	"repository": {
 		"type": "git",
@@ -11,6 +10,11 @@
 	},
 	"type": "module",
 	"sideEffects": false,
+	"files": [
+		"dist",
+		"!dist/*.tsbuildinfo",
+		"src"
+	],
 	"exports": {
 		".": {
 			"types": "./src/index.ts",
@@ -21,7 +25,22 @@
 			"default": "./tests/testing.ts"
 		}
 	},
+	"publishConfig": {
+		"access": "public",
+		"provenance": true,
+		"exports": {
+			".": {
+				"types": "./dist/src/index.d.ts",
+				"default": "./dist/src/index.js"
+			},
+			"./testing": {
+				"types": "./dist/tests/testing.d.ts",
+				"default": "./dist/tests/testing.js"
+			}
+		}
+	},
 	"scripts": {
+		"prepack": "tsc -b tsconfig.build.json tsconfig.testing.json",
 		"typecheck": "tsc -p tsconfig.json --noEmit",
 		"test": "vitest run"
 	},
@@ -32,7 +51,13 @@
 		"zod": "catalog:"
 	},
 	"peerDependencies": {
-		"react": "^19.3.0"
+		"react": "^19.3.0",
+		"vitest": "catalog:"
+	},
+	"peerDependenciesMeta": {
+		"vitest": {
+			"optional": true
+		}
 	},
 	"devDependencies": {
 		"@skysa/eslint-config": "workspace:*",

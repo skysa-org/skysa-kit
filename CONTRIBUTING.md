@@ -16,7 +16,7 @@ The server's tests use `node:sqlite`, which 22.x before 22.13 keeps behind a fla
 
 ```bash
 pnpm install
-pnpm verify   # format:check + lint + typecheck + knip + test
+pnpm verify   # format:check + lint + typecheck + build + knip + test + pack:check
 ```
 
 The kit is libraries, with nothing to start on its own.
@@ -26,7 +26,7 @@ To see a change in a running app, run one built on the kit against your copy of 
 ## Before you open a pull request
 
 Run `pnpm verify`.
-CI runs the same thing, a check that the D1 migrations match the schema, the tests again on Node 22.13, and `pnpm audit --prod` for information only.
+CI runs the same thing, a check that the D1 migrations match the schema, a check that a change to a package has a changeset, the tests again on Node 22.13, and `pnpm audit --prod` for information only.
 A pull request that has not run `pnpm verify` will fail, and there is nothing in it that a maintainer can fix for you.
 
 What is expected of a change:
@@ -35,6 +35,8 @@ What is expected of a change:
   Not coverage for its own sake — a test that fails if the thing you fixed comes back.
   A change to an adapter passes the contract every adapter passes (`packages/storage/tests/providers/contract.test.ts`).
 - **Amend `docs/ARCHITECTURE.md`**, or the record in `docs/decisions/`, if the change alters a decision recorded there.
+- **A changeset**, if the change touches anything under `packages/`: `pnpm run changeset`, or `pnpm run changeset --empty` for one that nothing outside the repository can observe.
+  [`.changeset/README.md`](.changeset/README.md) says which bump.
 - **Say why** for a new dependency, in the pull request description, and check the license.
   Anything a package ships must be MIT, Apache-2.0 or ISC; build- and test-time tools are held to a looser line, but say which it is.
 - **A doc comment says what the code promises, in one to five lines.**

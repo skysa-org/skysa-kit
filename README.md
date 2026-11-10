@@ -19,7 +19,7 @@ They were written for [skysa-notes](https://github.com/skysa-org/skysa-notes) an
 | `@skysa/eslint-config` | The lint rules the Skysa apps share, their base tsconfig, and Prettier's settings. |
 
 They share one version and are released together.
-None is on npm yet.
+None is on npm yet; [`.changeset/README.md`](.changeset/README.md) says how a release is cut, and what switches publishing on.
 
 ## What an app hands in
 

@@ -225,9 +225,9 @@ export default skysa({
 		{
 			// No Node built-ins anywhere in the Worker's code. `wrangler deploy
 			// --dry-run` bundles one without a word, and only the deployed Worker
-			// would find out. `pnpm typecheck` refuses it too, through
-			// `tsconfig.src.json` (src with no Node types; `tsconfig.json` holds the
-			// tests, which pull @types/node in), but this says why, and says it
+			// would find out. `pnpm build` refuses it too, through
+			// `tsconfig.build.json` (src with no Node types; `tsconfig.json` holds
+			// the tests, which pull @types/node in), but this says why, and says it
 			// first.
 			files: ['packages/server/src/**/*.ts'],
 			languageOptions: { globals: globals.node },

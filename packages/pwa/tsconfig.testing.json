@@ -1,0 +1,17 @@
+{
+	// What `/testing` exports: the test doubles and shared suites under tests/,
+	// built to dist/tests beside dist/src, which they import by relative path.
+	// No maps: tests/ is not published, so they would point at nothing.
+	"extends": "./tsconfig.json",
+	"compilerOptions": {
+		"composite": true,
+		"noEmit": false,
+		"rootDir": ".",
+		"outDir": "dist",
+		"declarationMap": false,
+		"sourceMap": false
+	},
+	"include": ["tests/**/*.ts"],
+	"exclude": ["tests/**/*.test.ts", "tests/**/*.test.tsx"],
+	"references": [{ "path": "./tsconfig.build.json" }]
+}

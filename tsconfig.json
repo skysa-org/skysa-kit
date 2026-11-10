@@ -2,8 +2,12 @@
 	"extends": "@skysa/eslint-config/tsconfig.base.json",
 	"compilerOptions": {
 		"types": ["node"],
-		"noEmit": true
+		"noEmit": true,
+		// The scripts are plain Node, so they run with nothing installed; their
+		// tests import them with the types TypeScript infers.
+		"allowJs": true
 	},
-	// The repository's own tests, of what is no one package's: its documents.
-	"include": ["tests/**/*.ts", "vitest.config.ts"]
+	// The repository's own tests, of what is no one package's: its documents
+	// and its release.
+	"include": ["tests/**/*.ts", "scripts/**/*.mjs", "vitest.config.ts"]
 }

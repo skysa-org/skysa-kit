@@ -44,6 +44,8 @@ const CITING = [
 		.filter((file) => /\.(?:tsx?|m?js)$/u.test(file)),
 	'packages/eslint-config/index.js',
 	'eslint.config.js',
+	...under('scripts').filter((file) => /\.m?js$/u.test(file)),
+	'.changeset/README.md',
 	...['CLAUDE.md', 'CONTRIBUTING.md', 'README.md', 'SECURITY.md', 'CODE_OF_CONDUCT.md'],
 	...['CLA-individual.md', 'CLA-entity.md'],
 	...CURRENT,

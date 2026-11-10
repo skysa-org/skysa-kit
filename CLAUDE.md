@@ -25,6 +25,7 @@ If a task requires deviating from it, say so and propose the edit to it, or to t
 - **Where each package runs.**
   `protocol`, `storage` and `sync` have no framework, DOM-only, or Node-only dependencies, and run in the browser, Node and Workers.
   A package imports another only through its entry, and only one its manifest lists; the `kit/edges` lint rule holds both.
+  `pnpm build` compiles their src with no ambient types, and `pnpm pack:check` loads every published entry in plain Node.
 - **The server reads no environment.**
   Everything in `@skysa/server` receives its configuration through `createApp(options)`; reading `process.env` or a Worker's env is the app's Worker entry's job, never the kit's.
 - **A document's text is the only source of truth for it.**
@@ -58,9 +59,13 @@ If a task requires deviating from it, say so and propose the edit to it, or to t
 - Work one issue at a time, and check the change against `docs/ARCHITECTURE.md` before starting.
   Start in plan mode for anything touching more than one package.
 - Prefer small PRs against `main`.
-  Each PR: tests for new behavior, and an amendment to `docs/ARCHITECTURE.md` or the record in `docs/decisions/` if a recorded decision changes.
-- Before pushing: `pnpm verify` (`format:check`, `lint`, `typecheck`, `knip`, `test`).
-  CI runs the same, and checks the migrations against the schema.
+  Each PR: tests for new behavior, an amendment to `docs/ARCHITECTURE.md` or the record in `docs/decisions/` if a recorded decision changes, and — if it changes anything under `packages/` — a changeset (`pnpm run changeset`, or `--empty` when nothing observable moved).
+  CI fails a PR that changes a package without one.
+  The seven packages share one version and one `vX.Y.Z` tag; `.changeset/README.md` says why and how a release is cut.
+- Nothing is published from a machine.
+  Only the release workflow publishes, and it is off until the repository variable `NPM_PUBLISH` is set.
+- Before pushing: `pnpm verify` (`format:check`, `lint`, `typecheck`, `build`, `knip`, `test`, `pack:check`).
+  CI runs the same, checks the migrations against the schema, and asks for a changeset.
 - Docs are one sentence per line.
 - Comments and docs are in American English (color, behavior, recognize, canceled), and the docs test holds them to it.
   Identifiers and strings are left as they are, and so are the CLA texts and `NOTICE`, which are legal text.
