@@ -1,0 +1,18 @@
+{
+	"name": "skysa-kit",
+	"private": true,
+	"license": "AGPL-3.0-only",
+	"type": "module",
+	"packageManager": "pnpm@10.34.5",
+	"engines": {
+		"node": ">=22.13"
+	},
+	"scripts": {
+		"test": "pnpm -r run test",
+		"typecheck": "pnpm -r run typecheck",
+		"verify": "pnpm typecheck && pnpm test"
+	},
+	"devDependencies": {
+		"typescript": "~6.0.3"
+	}
+}

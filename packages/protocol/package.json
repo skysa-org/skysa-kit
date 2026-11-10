@@ -1,0 +1,23 @@
+{
+	"name": "@skysa/protocol",
+	"version": "0.0.0",
+	"description": "What the server, the client and a deployment all speak: the API's error codes, the entitlement, gate and rate-limit seams, the relay's frames, and the provider kinds.",
+	"private": true,
+	"license": "AGPL-3.0-only",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/skysa-org/skysa-kit.git",
+		"directory": "packages/protocol"
+	},
+	"type": "module",
+	"sideEffects": false,
+	"exports": {
+		".": {
+			"types": "./src/index.ts",
+			"default": "./src/index.ts"
+		}
+	},
+	"scripts": {
+		"typecheck": "tsc -p tsconfig.json --noEmit"
+	}
+}

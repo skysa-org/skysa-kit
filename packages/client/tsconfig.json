@@ -1,0 +1,11 @@
+{
+	"extends": "../../tsconfig.base.json",
+	"compilerOptions": {
+		// `Promise.withResolvers`, which the tests use, is ES2024's. Node 22 has it,
+		// and so does every browser the apps support.
+		"lib": ["ES2022", "ES2024.Promise", "DOM", "DOM.Iterable"],
+		"jsx": "react-jsx",
+		"noEmit": true
+	},
+	"include": ["src/**/*.ts", "tests/**/*.ts", "tests/**/*.tsx", "vitest.config.ts"]
+}
