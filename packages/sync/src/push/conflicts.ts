@@ -66,7 +66,7 @@ export const createConflictPush = (
 		onRemote = false
 	): Promise<string> =>
 		// Bounded exactly as `freeFolderPath` is, and for the same reason: each
-		// turn here is a request, and a `conflictName` that stopped recognising
+		// turn here is a request, and a `conflictName` that stopped recognizing
 		// its own names would spend them without end. Running out throws, as it
 		// does there, rather than handing back a name nobody has looked at: the
 		// op fails and is retried, where a note displaced onto a taken name
@@ -373,7 +373,7 @@ export const createConflictPush = (
 		// because we have not pulled its rename yet. Resolving it would hand the
 		// note that file's `remoteId`, and two rows with one `remoteId` is the
 		// state the port calls unrecoverable — `noteByRemoteId` hands back one
-		// of them and the other is stale for ever, so the user sees one note
+		// of them and the other is stale forever, so the user sees one note
 		// twice and the next edit to the stale row pushes a third file.
 		//
 		// So the note moves aside instead, keeping its own bytes and its dirty

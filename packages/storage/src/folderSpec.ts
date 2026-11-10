@@ -1,5 +1,5 @@
 /**
- * What an app calls the folder it owns on a provider, and how it recognises
+ * What an app calls the folder it owns on a provider, and how it recognizes
  * it again: handed to the adapters by the app rather than imported, so that
  * the layers bound for the shared kit name no app of their own
  * (skysa-notes' record 0018). Every value here is in the user's

@@ -284,7 +284,7 @@ export const describeSyncStoreContract = (
 				// remove the file lives on the row. A store that hid the row the
 				// moment the user pressed delete would have the engine find
 				// nothing, finish the op as though there were nothing to send,
-				// and leave the file on the remote for ever.
+				// and leave the file on the remote forever.
 				const { store, seed, seedOp } = await harness();
 				await seed({ id: 'n1', path: 'a.md', content: 'x\n', remoteId: 'r1' });
 				const seq = await seedOp({ op: 'delete', noteId: 'n1', path: 'a.md' });
@@ -601,7 +601,7 @@ export const describeSyncStoreContract = (
 
 			it('forgives a reupload for something it does not have', async () => {
 				// A batch is decided before it is applied, and one the store
-				// rejects is retried for ever, since the cursor moves with it.
+				// rejects is retried forever, since the cursor moves with it.
 				const { store } = await harness();
 				await store.applyChanges({
 					changes: [
@@ -833,7 +833,7 @@ export const describeSyncStoreContract = (
 				// The engine puts a row back over the notes a cascade kept,
 				// without an id, and a folder moved onto that path in the same
 				// batch already has one. Forgotten, the deletion of that folder
-				// by id finds nothing, and the notebook stays for ever.
+				// by id finds nothing, and the notebook stays forever.
 				const { store, seedFolder } = await harness();
 				await seedFolder({ path: 'Work', remoteId: 'f1' });
 
@@ -867,7 +867,7 @@ export const describeSyncStoreContract = (
 			it('holds two notes at one path while a batch is mid-flight', async () => {
 				// A note moving out of the way is a change of its own and can
 				// come later in the batch. A unique index on `path` would reject
-				// this and be retried for ever; making room by deleting what is
+				// this and be retried forever; making room by deleting what is
 				// there takes that note's unpushed edits with it.
 				const { store, seed } = await harness();
 				await seed({ id: 'ours', path: 'a.md', content: 'mine\n', dirty: true });
@@ -970,7 +970,7 @@ export const describeSyncStoreContract = (
 
 			it('accepts a displacement of a note that is already gone', async () => {
 				// Same reasoning as the deletes: a batch the store rejects is
-				// retried for ever, because the cursor moves only with it.
+				// retried forever, because the cursor moves only with it.
 				const { store } = await harness();
 
 				await store.applyChanges({
@@ -986,7 +986,7 @@ export const describeSyncStoreContract = (
 				// folder and then everything that was in it, and the folder took
 				// them already. A store that rejected would fail the batch, and
 				// the cursor moves only with the batch — so the same batch would
-				// be retried for ever and the user's sync would never recover.
+				// be retried forever and the user's sync would never recover.
 				const { store, seed, seedFolder } = await harness();
 				await seedFolder({ path: 'Work', remoteId: 'f1' });
 				await seed({ id: 'n1', path: 'Work/a.md', content: 'x\n', remoteId: 'r1' });
@@ -1057,7 +1057,7 @@ export const describeSyncStoreContract = (
 
 			it('accepts a delete for a folder that is not there', async () => {
 				// Same reasoning as the delete of a note that is already gone: a
-				// batch that rejects is a batch that is retried for ever.
+				// batch that rejects is a batch that is retried forever.
 				const { store } = await harness();
 
 				await store.applyChanges({
@@ -1314,7 +1314,7 @@ export const describeSyncStoreContract = (
 
 			it('takes a forget for a file it never listed, and the batch with it', async () => {
 				// Same reasoning as the deletes: a batch the store rejects is
-				// retried for ever, since the cursor moves only with it.
+				// retried forever, since the cursor moves only with it.
 				const { store } = await harness();
 				await store.applyChanges({
 					changes: [{ kind: 'forget-unreadable', remoteId: 'never' }],
@@ -1778,7 +1778,7 @@ export const describeSyncStoreContract = (
 				});
 
 				// Two notes pointing at one remote file means the next push has
-				// them overwrite each other for ever.
+				// them overwrite each other forever.
 				expect((await store.noteById('c1'))?.remoteId).toBeUndefined();
 			});
 		});

@@ -58,7 +58,7 @@ describe('deletions that are not about a note', () => {
 
 	it('still acts on one that carries no id at all', async () => {
 		// The counterpart: with no id there is nothing but the path to go on,
-		// and refusing to act would leave deleted notes on the device for ever.
+		// and refusing to act would leave deleted notes on the device forever.
 		const entry = await remoteFile('a.md', 'one\n');
 		world.store.put({
 			id: 'n1',
@@ -151,7 +151,7 @@ describe('a deletion the same batch also describes as present', () => {
 		// Our own write coming back, and then the other device's deletion of
 		// that same file. "Alive anywhere in the batch" reads the first entry as
 		// evidence the file survived and drops the deletion — and a deletion
-		// dropped here is dropped for ever, because the cursor moves on and
+		// dropped here is dropped forever, because the cursor moves on and
 		// nothing mentions it again. The row is left holding a dead `remoteId`.
 		const entry = await remoteFile('a.md', 'body\n');
 		world.store.put({
@@ -175,7 +175,7 @@ describe('a deletion the same batch also describes as present', () => {
 		// The note was renamed here and not yet pushed, so our own push echo for
 		// the old path makes the engine move the row back — and the other
 		// device's deletion of that same file arrives behind it. Counting "this
-		// batch wrote the note back" as settled drops the deletion for ever: the
+		// batch wrote the note back" as settled drops the deletion forever: the
 		// cursor moves on, nothing says it again, and the row is left pointing
 		// at a file that does not exist. Every later queued op then piles up
 		// behind a move the remote cannot perform.
@@ -216,7 +216,7 @@ describe('a deletion the same batch also describes as present', () => {
 		// is about a different file from the one the row pointed at: the note
 		// takes the remote's bytes and the edit leaves in a copy. The deletion
 		// behind it names the file that was replaced, which is nothing to do
-		// with the row any more — acting on it cuts the note loose from the
+		// with the row anymore — acting on it cuts the note loose from the
 		// file it has just been given, and the next push makes a duplicate.
 		const first = await remoteFile('a.md', 'one\n');
 		await world.engine.pull();
@@ -618,7 +618,7 @@ describe('two id-less deletions of one path', () => {
 	it('takes the folder the first one found and the one renamed onto it', async () => {
 		// `C` deleted, `A` renamed to `C`, `C` deleted again: Dropbox says a
 		// path may appear more than once, in order. Folded into one, or read as
-		// both about the first `C`, the second folder stays for ever.
+		// both about the first `C`, the second folder stays forever.
 		await world.provider.createFolder('C');
 		await remoteFile('C/x.md', 'x\n');
 		await world.provider.createFolder('A');

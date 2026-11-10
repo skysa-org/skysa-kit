@@ -29,7 +29,7 @@ export interface EntitlementDecision {
  *
  * - `not_allowed`: this instance does not serve the account — an allowlist
  *   without it, or no plan.
- * - `lapsed`: it was allowed, and is not any more — a plan that ended.
+ * - `lapsed`: it was allowed, and is not anymore — a plan that ended.
  * - `limit_reached`: it would be allowed, but a limit is full — seats, or
  *   connections.
  */

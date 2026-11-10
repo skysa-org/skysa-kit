@@ -266,10 +266,10 @@ export const createPullFolders = (
 	 */
 	const freeFolderPath = (path: string, taken: readonly string[]): Promise<string> =>
 		// Bounded, because the loop's termination rests on `conflictFolderName`
-		// recognising the name it just produced when that name is handed back in
+		// recognizing the name it just produced when that name is handed back in
 		// `taken`. Those are two folds — the one that writes the name and the one
 		// that reads it — and if they ever disagree, `n` stops advancing and this
-		// recurses for ever. That is not a wrong name: it is `pull()` never
+		// recurses forever. That is not a wrong name: it is `pull()` never
 		// returning, with no error, no cursor movement and no way for the user to
 		// tell. Running out of attempts throws instead, which stops the batch and
 		// leaves the cursor where it was, so the next sync retries the same work.
@@ -430,7 +430,7 @@ export const createPullFolders = (
 	 * edit outranks a remote deletion — so there is no folder in the way and
 	 * still something at the path. Moving onto them puts two rows at one path.
 	 * The store has no way to tell them apart afterwards, and a push then sends
-	 * both to the same remote file, each overwriting the other for ever.
+	 * both to the same remote file, each overwriting the other forever.
 	 *
 	 * The local note moves aside rather than the arriving one, for the same
 	 * reason as every other displacement here: the remote keeps the path

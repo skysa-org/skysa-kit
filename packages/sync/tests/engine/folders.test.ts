@@ -93,7 +93,7 @@ describe('a rename the provider does not re-list the children of', () => {
 		// path. One that names the file is evidence in its own right — the
 		// provider knew it well enough to identify it — and "some folder above
 		// it is also in this batch" is not evidence against it. Dropped here it
-		// is dropped for ever: the cursor moves on and nothing mentions it again.
+		// is dropped forever: the cursor moves on and nothing mentions it again.
 		await world.provider.createFolder('Work');
 		const file = await remoteFile('Work/a.md', 'one\n');
 		await remoteFile('Work/b.md', 'two\n');
@@ -148,7 +148,7 @@ describe('a provider that reports a folder recursively', () => {
 	it('deletes a folder and everything in it without failing the batch', async () => {
 		// The batch names the note twice: once as itself, and once by way of the
 		// folder that cascades to it. The second one is about a row that is no
-		// longer there, and a batch that fails here fails for ever — the cursor
+		// longer there, and a batch that fails here fails forever — the cursor
 		// moves only with the batch, so the next pull gets the same one back.
 		const { file, folder } = await setUpWork();
 		await world.provider.createFolder('Work/Deep');
@@ -175,7 +175,7 @@ describe('a provider that reports a folder recursively', () => {
 		// Both halves are true: the folder really is gone, and the note really
 		// did survive it. Deciding the note against the store as it was — before
 		// the folder took it — names a row that will not be there, and the batch
-		// that rejects is retried for ever.
+		// that rejects is retried forever.
 		const { file, folder, noteId } = await setUpWork();
 		await world.provider.move(file, 'a.md');
 		await world.provider.delete(folder);
@@ -249,7 +249,7 @@ describe('a provider that reports a folder recursively', () => {
 		expect(noteAt('Work/a.md')).toBeUndefined();
 		// The same folder, moved — not deleted and conjured back into existence
 		// by a note's parent path, which leaves it with no `remoteId` and so no
-		// way to be recognised the next time it moves.
+		// way to be recognized the next time it moves.
 		expect(world.store.folders()).toEqual([{ path: 'Archive', remoteId: folder.remoteId }]);
 		// The same note, not a replacement that happens to hold the same text.
 		// Deleting and re-importing it reads the same from here and is not: it
@@ -279,7 +279,7 @@ describe('a provider that reports a folder recursively', () => {
 		expect(world.store.notes()).toHaveLength(1);
 		// Moved, not deleted and re-made: a folder that arrives as the side
 		// effect of a note's path has no `remoteId`, and a folder with no
-		// `remoteId` cannot be recognised the next time it moves, or reconciled
+		// `remoteId` cannot be recognized the next time it moves, or reconciled
 		// after a cursor reset.
 		expect(world.store.folders()).toEqual([{ path: 'Archive', remoteId: folder.remoteId }]);
 	});
@@ -467,7 +467,7 @@ describe('a folder whose ancestor moved in the same batch', () => {
 		// The user renamed `A` and then dragged `A/sub` out to the root, and both
 		// land in one window. By the time the second entry is decided the first
 		// has already rebased everything under `A`, so the store's answer for
-		// where `sub` is — `A/sub` — names a path nothing is at any more. A
+		// where `sub` is — `A/sub` — names a path nothing is at anymore. A
 		// folder move over a path that does not exist moves nothing and says
 		// nothing about it, and the tree disagrees with the remote for as long
 		// as the cursor lives.
@@ -711,7 +711,7 @@ describe('a folder whose ancestor moved in the same batch', () => {
 	it('keeps a displaced folder and its notes together when nothing claims it', async () => {
 		// The batch never says where `Archive` went — the entry is in the next
 		// window, or the provider never sends one. It stays where it was put,
-		// under a name the user can recognise, with its notes still inside it.
+		// under a name the user can recognize, with its notes still inside it.
 		// The alternative is the merge: two notebooks' notes in one, and a row
 		// gone for good.
 		const other = await world.provider.createFolder('Archive');
@@ -815,7 +815,7 @@ describe('a folder move landing on top of what is already there', () => {
 		// that leaves nothing at `B` for `clearTheWay` to find while there is
 		// still something at `B/x.md`. `A/x.md` then lands on top of it: two
 		// rows at one path, and after the next push both point at one file,
-		// each overwriting the other for ever.
+		// each overwriting the other forever.
 		const fa = await world.provider.createFolder('A');
 		await remoteFile('A/x.md', 'from A\n');
 		const fb = await world.provider.createFolder('B');
@@ -860,7 +860,7 @@ describe('a folder deletion decided against a path that changed hands', () => {
 		// Delete `B`, rename `A` onto `B`, delete `B/sub`. The third is about
 		// `A/sub`, which is at `B/sub` by the time it is decided — and the store
 		// has never held a row at that path. Asking the store alone drops the
-		// deletion, and a dropped deletion is dropped for ever: the cursor moves
+		// deletion, and a dropped deletion is dropped forever: the cursor moves
 		// on and nothing says it again.
 		const fa = await world.provider.createFolder('A');
 		await world.provider.createFolder('A/sub');
@@ -940,8 +940,8 @@ describe('a rescan that finds a whole notebook tree gone', () => {
 	it('says so once, not once per folder in it', async () => {
 		// `delete-folder` cascades over everything beneath it, so naming the
 		// nested one as well is a second delete of a row the first has already
-		// taken away. The store forgives that — a rejected batch is retried for
-		// ever — but forgiveness is not the same as being right, and a store
+		// taken away. The store forgives that — a rejected batch is retried
+		// forever — but forgiveness is not the same as being right, and a store
 		// that does reject would strand this user's sync permanently.
 		await world.provider.createFolder('Work');
 		await world.provider.createFolder('Work/Sub');
@@ -1087,7 +1087,7 @@ describe('a notebook removed here, whose directory the remote still has', () => 
 	it('removes the directory a renamed notebook left behind, after its notes move', async () => {
 		// The rename goes up as the note moving and the old directory being
 		// removed. Ordered the other way round, the `rmdir` would find the note
-		// still in there and leave the directory for ever.
+		// still in there and leave the directory forever.
 		const made = await world.provider.createFolder('Work');
 		await remoteFile('Work/a.md', 'a\n');
 		await world.engine.pull();
@@ -1218,7 +1218,7 @@ describe('a notebook removed here, whose directory the remote still has', () => 
 		expect(remoteFolders()).toEqual(['Ours', 'Work']);
 		expect(remoteAt(world.provider, 'Work')?.remoteId).toBe(theirs.remoteId);
 		// Ours is the one the op named, and it is still there too: the folder
-		// that moved away is not what the path says any more.
+		// that moved away is not what the path says anymore.
 		expect(remoteAt(world.provider, 'Ours')?.remoteId).toBe(made.remoteId);
 	});
 
@@ -1361,7 +1361,7 @@ describe('a notebook removed here, whose directory the remote still has', () => 
 		const result = await theirEngine.push();
 
 		expect(result.status).toBe('ok');
-		// Finished rather than retried for ever, with nothing asked of the
+		// Finished rather than retried forever, with nothing asked of the
 		// provider, and the directory stays.
 		expect(theirs.ops()).toEqual([]);
 		expect(fake.callLog().slice(asked)).toEqual([]);

@@ -82,7 +82,7 @@ export const requireSameOrigin = (appOrigin: string) =>
  *
  * The two refusals differ on purpose. `credential_required` means the device
  * never had one and has to connect; `credential_revoked` means the one it
- * holds is not known here any more — revoked, expired for idleness, or from
+ * holds is not known here anymore — revoked, expired for idleness, or from
  * a deployment that has since been reset — and it should throw the
  * credential away before offering to connect, or it will present it forever.
  */

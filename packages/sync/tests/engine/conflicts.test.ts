@@ -153,7 +153,7 @@ describe('a note of ours where a remote one lands', () => {
 		// remotely into a folder where we happen to have one of that name. Left
 		// where it is, the sidebar shows the same row twice and the queued write
 		// for ours eventually lands on the other one's file — after which both
-		// rows carry one remote id and overwrite each other for ever.
+		// rows carry one remote id and overwrite each other forever.
 		await world.provider.createFolder('Work');
 		const entry = await remoteFile('b.md', 'theirs\n');
 		await world.engine.pull();
@@ -202,7 +202,7 @@ describe('a note of ours where a remote one lands', () => {
 		// remote has something else here, so our note's own file is elsewhere by
 		// now. Leaving it would be two rows on one path until whenever the entry
 		// saying where it went turns up — and `noteByRemoteId` only ever hands
-		// back one of two rows, so the other would be stale for ever.
+		// back one of two rows, so the other would be stale forever.
 		const mine = await remoteFile('a.md', 'mine\n');
 		const theirs = await remoteFile('b.md', 'theirs\n');
 		await world.engine.pull();
@@ -283,7 +283,7 @@ describe('a note of ours where a remote one lands', () => {
 	it('does not move a note an earlier folder delete already took', async () => {
 		// The clean, never-pushed note at `Work/a.md` goes with the folder, so
 		// by the time the entry lands there is nothing to move aside. Asking the
-		// store to move it anyway fails the batch — for ever, since the cursor
+		// store to move it anyway fails the batch — forever, since the cursor
 		// moves only with it.
 		await world.provider.createFolder('Work');
 		const loose = await remoteFile('loose.md', 'theirs\n');
@@ -563,7 +563,7 @@ describe('a note of ours where a remote one lands', () => {
 		// The deletion carries no id, so it is matched by path and takes our
 		// local-only note with it. A later entry landing on that path would then
 		// ask the store to move a note that is not there — and a batch the store
-		// rejects is retried for ever, because the cursor moves only with it.
+		// rejects is retried forever, because the cursor moves only with it.
 		const entry = await remoteFile('b.md', 'theirs\n');
 		await world.engine.pull();
 		world.store.put({ id: 'mine', path: 'a.md', content: 'never pushed\n' });
@@ -832,7 +832,7 @@ describe('two devices making a conflict copy at once', () => {
 		// minute, so the obvious name is taken — by a file that is not in the
 		// store yet and will not be until this batch commits. Naming ours the
 		// same puts two notes at one path, which the sidebar shows twice and the
-		// next push has overwrite each other for ever.
+		// next push has overwrite each other forever.
 		const file = await remoteFile('a.md', 'one\n');
 		await world.engine.pull();
 		const mine = noteAt('a.md');
@@ -861,8 +861,8 @@ describe('a push conflict over a file another note already holds', () => {
 		// The file in the way is one we hold as a different note, whose own row
 		// is elsewhere because we have not pulled its rename yet. Adopting it
 		// would give two rows one `remoteId`, which the port calls unrecoverable
-		// — `noteByRemoteId` hands back one of them and the other is stale for
-		// ever.
+		// — `noteByRemoteId` hands back one of them and the other is stale
+		// forever.
 		const file = await remoteFile('c.md', 'theirs\n');
 		world.store.put({
 			id: 'theirs',

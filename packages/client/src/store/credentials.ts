@@ -82,7 +82,7 @@ export const toBase64Url = (bytes: Uint8Array): string =>
 		.replace(/\//g, '_')
 		.replace(/=+$/, '');
 
-/** A fresh credential. Never reused: the server spends a hash on first use, for ever. */
+/** A fresh credential. Never reused: the server spends a hash on first use, forever. */
 const newCredential = (): string =>
 	`${CREDENTIAL_PREFIX}${toBase64Url(crypto.getRandomValues(new Uint8Array(CREDENTIAL_BYTES)))}`;
 
@@ -163,8 +163,8 @@ export const credentialFor = (
  * anything — a revoked device, a disconnected account — and after a disconnect
  * this device asked for.
  *
- * There is nothing to tell the server: it has already stopped honouring the
- * hash, and the hash stays spent there for ever so that a copy of this
+ * There is nothing to tell the server: it has already stopped honoring the
+ * hash, and the hash stays spent there forever so that a copy of this
  * credential taken before now can never be used to claim a connection of its
  * own (docs/ARCHITECTURE.md §6).
  */

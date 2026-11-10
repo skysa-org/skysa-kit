@@ -185,7 +185,7 @@ describe('requests', () => {
 		// `storageQuotaExceeded` is a full Drive, which no wait fixes, and
 		// `google.rpc.Code` gives `RESOURCE_EXHAUSTED` for "a per-user quota, or
 		// perhaps the entire file system is out of space" — one code for both.
-		// Read over the reason, a full Drive would retry for ever and never be
+		// Read over the reason, a full Drive would retry forever and never be
 		// counted, and the user would never be told why nothing is syncing.
 		const provider = over(() =>
 			Promise.resolve(
@@ -223,8 +223,8 @@ describe('requests', () => {
 	});
 
 	it('does not read a 403 about the file itself as a rate limit', async () => {
-		// `insufficientFilePermissions` is out of reach, not busy: retried for
-		// ever it would never succeed, and the op would never surface.
+		// `insufficientFilePermissions` is out of reach, not busy: retried
+		// forever it would never succeed, and the op would never surface.
 		const provider = over(() =>
 			Promise.resolve(driveError(403, 'insufficientFilePermissions'))
 		);

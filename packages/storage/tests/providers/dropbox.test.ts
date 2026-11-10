@@ -508,8 +508,8 @@ describe('encoding', () => {
 
 	it('drops a byte-order mark, and does so deliberately', async () => {
 		// `TextDecoder` strips a leading BOM, as `Response.text()` did before the
-		// decode was made strict (`providers/text.ts`). That is the behaviour we want —
-		// a BOM is an encoding artefact, not something the user typed, and leaving
+		// decode was made strict (`providers/text.ts`). That is the behavior we want —
+		// a BOM is an encoding artifact, not something the user typed, and leaving
 		// it in would put a stray character at the top of the editor. Worth
 		// knowing: a note written by an editor that adds one loses it here the
 		// first time the user edits and it is written back.
@@ -727,7 +727,7 @@ describe('not knowing, rather than guessing', () => {
 	it('recognises its own file through a path that was never normalized', async () => {
 		// An `EntryRef` carries whatever path its caller holds, and a note row
 		// holds whatever path it was imported with rather than one this app
-		// composed. Compared raw, the entry would not recognise itself.
+		// composed. Compared raw, the entry would not recognize itself.
 		const doFetch = routed({
 			'files/move_v2': () =>
 				new Response(errorBody('to/conflict/file/...', 'to'), { status: 409 }),

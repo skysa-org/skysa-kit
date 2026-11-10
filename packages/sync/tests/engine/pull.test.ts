@@ -366,7 +366,7 @@ describe('an entry the provider sent twice', () => {
 		// Deletions are keyed by path because that is all Dropbox's
 		// `DeletedMetadata` carries. Keyed by the id they do not have, every
 		// id-less deletion in a batch is the same key and all but the last are
-		// dropped — so a note deleted remotely stays on the device for ever.
+		// dropped — so a note deleted remotely stays on the device forever.
 		const a = await remoteFile('a.md', 'a\n');
 		const b = await remoteFile('b.md', 'b\n');
 		await world.engine.pull();
@@ -745,7 +745,7 @@ describe('a dead cursor', () => {
 	it('removes a notebook the re-scan proves is gone', async () => {
 		// Folders too. A notebook deleted while the cursor was dead is never
 		// mentioned again by anything, so a scan that only reconciles notes
-		// leaves an empty row in the sidebar for ever.
+		// leaves an empty row in the sidebar forever.
 		await world.provider.createFolder('Work');
 		await world.engine.pull();
 		killTheCursor();
@@ -973,7 +973,7 @@ describe('a dead cursor', () => {
 		});
 
 		it('deletes as usual when the reset does not ask for it', async () => {
-			// The other half of the rule, and the one an unrecognised reset code
+			// The other half of the rule, and the one an unrecognized reset code
 			// falls back to: without the flag a scan is still the truth.
 			await remoteFile('a.md', 'one\n');
 			await world.engine.pull();

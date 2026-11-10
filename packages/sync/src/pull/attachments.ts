@@ -236,7 +236,7 @@ export const createPullAttachments = ({ store, now, newId }: EngineContext) => {
 	 * found. The first row bound there, and not on its way elsewhere, keeps
 	 * the path, and where there is none the first row does. One never sent, or
 	 * on its way elsewhere, steps aside. Another bound there goes: which of
-	 * two such rows the file really is, nothing in the batch says any more,
+	 * two such rows the file really is, nothing in the batch says anymore,
 	 * and the wrong one costs a picture that does not show until a scan.
 	 */
 	const settleFileClashes = ({

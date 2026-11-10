@@ -66,7 +66,7 @@ export interface SyncEngineOptions {
 	 * Undefined where it cannot, and the conflict rule applies as it always
 	 * did. Asked at both places the rule is: a pull that finds the note dirty,
 	 * and a write the remote refused. Absent, nothing is merged, which is this
-	 * app's way; memoriam's merges a passage practised on two devices.
+	 * app's way; memoriam's merges a passage practiced on two devices.
 	 */
 	merge?: (file: MergeInput) => string | undefined;
 	/**

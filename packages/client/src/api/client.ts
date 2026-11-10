@@ -227,7 +227,7 @@ export interface ApiClientOptions {
  * means one of two definite things. `credential_required` is this device having
  * sent nothing — it has to connect. `credential_revoked` is the server saying
  * this credential reaches nothing at all: revoked from another device, or the
- * account disconnected. Either way the credential is spent for ever and the
+ * account disconnected. Either way the credential is spent forever and the
  * only answer is to throw it away (docs/ARCHITECTURE.md §6).
  */
 const REFUSALS = [

@@ -278,7 +278,7 @@ describe('a file moved back onto the path a folder rename carried its note off',
 	it('lets go of the note when that file is gone by the time it is read', async () => {
 		// The deletion behind this entry is at `A/x.md`, and from Dropbox it has
 		// no id — so it finds nothing once the note has been carried to
-		// `B/x.md`, and the note is held there over no file for ever.
+		// `B/x.md`, and the note is held there over no file forever.
 		const folder = await world.provider.createFolder('A');
 		const file = await remoteFile('A/x.md', 'one\n');
 		await world.engine.pull();

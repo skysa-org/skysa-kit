@@ -10,7 +10,7 @@ import { z } from 'zod';
  * built (docs/ARCHITECTURE.md §8, "Brand").
  *
  * A deployment points `NOTES_BRAND` at its own `brand.json` and gets its own
- * name, colours, icons and fonts without changing anything in this repo.
+ * name, colors, icons and fonts without changing anything in this repo.
  * Without it, the build uses the app's own, whose file the app hands to
  * `loadBrand`. It is a build input and not something `/api/config` answers,
  * because the manifest, the home-screen title and icon, the precache and the
@@ -248,7 +248,7 @@ const stack = (given: BrandFont | undefined, fallback: string): string =>
 
 /**
  * The brand as a stylesheet: the fonts, and the custom properties `styles/`
- * reads for them and for the brand colour. A file of its own on this origin,
+ * reads for them and for the brand color. A file of its own on this origin,
  * so the Content-Security-Policy needs nothing new.
  */
 export const brandCss = (brand: Brand): string => {

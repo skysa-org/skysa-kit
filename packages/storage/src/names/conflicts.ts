@@ -5,7 +5,7 @@ import { foldName, hasExtension } from './fold.js';
 
 /**
  * A conflict copy's name and path (docs/ARCHITECTURE.md §7): beside the note it
- * came from, recognisably the same note, and never a name already taken. Its
+ * came from, recognizably the same note, and never a name already taken. Its
  * contents are the document format's (`DocumentFormat.conflictContent`).
  */
 
@@ -24,7 +24,7 @@ export const conflictStamp = (at: Date): string => at.toISOString().slice(0, 16)
  * The name for the copy, given the names already in the folder.
  *
  * Deliberately not run through `slugify`: the point of the name is that it
- * sorts next to the note it came from and is recognisably the same note, and a
+ * sorts next to the note it came from and is recognizably the same note, and a
  * slug would lowercase it and strip the parentheses that say what it is. The
  * characters it adds — spaces, parentheses, hyphens — are accepted by every
  * provider in §5.
@@ -101,7 +101,7 @@ export const documentNames = (extension: string): DocumentNames => {
  *
  * `conflictFilename` gives every copy the document's extension, `.md` here,
  * which is right for a note and wrong for anything else: a `photo.png` renamed `photo.png (conflict …).md`
- * is not a picture any more, and to the engine it is a note, which it then
+ * is not a picture anymore, and to the engine it is a note, which it then
  * tries to read as text. So the stamp goes before the extension, as it does
  * for a note: `photo (conflict 2026-09-15T14-32).png`.
  *
@@ -128,7 +128,7 @@ export const conflictNameKeepingExtension = (
  * notebook. Usually it is there for the length of a batch — the entry saying
  * where that folder really went moves it on — but it can be left standing if
  * that entry never comes, so it is named the way a note would be rather than
- * something the user would not recognise.
+ * something the user would not recognize.
  */
 export const conflictFolderName = (name: string, at: Date, taken: Iterable<string> = []): string =>
 	conflictName(name, '', at, taken);

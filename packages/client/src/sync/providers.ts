@@ -32,7 +32,7 @@ const PROVIDER_TIMEOUT_MS = 60_000;
  * The slowest connection a file is still expected to cross: 50 KB/s, a poor
  * mobile signal. An attachment can be 25 MB (skysa-notes#187), which at that rate takes
  * over eight minutes, and one minute for any request would cut every large
- * file off on any connection under about 3.5 Mbit/s and retry it for ever. So
+ * file off on any connection under about 3.5 Mbit/s and retry it forever. So
  * a request is given this long per byte on top of `PROVIDER_TIMEOUT_MS`: per
  * byte it sends, from the start, and per byte of its answer, from when the
  * answer begins. A note or a page of changes is a few kilobytes, a few

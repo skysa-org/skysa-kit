@@ -141,7 +141,7 @@ const RATE_LIMITED = new Set([
  * the user's Drive is full, which no wait fixes, and `google.rpc.Code` defines
  * `RESOURCE_EXHAUSTED` as "some resource has been exhausted, perhaps a per-user
  * quota, or perhaps the entire file system is out of space" — the same code for
- * both. Read over the reason, a full Drive would retry for ever without ever
+ * both. Read over the reason, a full Drive would retry forever without ever
  * counting against the op, and the user would never be told.
  *
  * Scoped to a 403, which is the only status it can earn its keep on: `google.rpc`

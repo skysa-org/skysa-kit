@@ -36,7 +36,7 @@ export const reestablished = (
 			// Written back, not merely mentioned. A `delete-note` carries an
 			// id too, and counting it here would mean a file arriving with
 			// the id of a note this batch deleted was refused that id — two
-			// devices then disagreeing for ever about which note it is.
+			// devices then disagreeing forever about which note it is.
 			return change.kind === 'upsert-note' ||
 				change.kind === 'adopt-version' ||
 				change.kind === 'move-note' ||

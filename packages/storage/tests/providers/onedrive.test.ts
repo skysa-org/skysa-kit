@@ -325,7 +325,7 @@ describe('mapping Graph failures onto typed errors', () => {
 			// overloaded", and the same table says its delay is "the length of
 			// which can be specified in a Retry-After header" — so the header
 			// cannot tell an outage from throttling. A rate limit is not counted
-			// against the op, so a 503 read as one would be retried for ever:
+			// against the op, so a 503 read as one would be retried forever:
 			// never blocked, never surfaced, every op behind it waiting.
 			// https://learn.microsoft.com/en-us/graph/errors
 			const { doFetch } = scripted(
@@ -393,7 +393,7 @@ describe('mapping Graph failures onto typed errors', () => {
 
 	it('does not read a 500 as anything but a failure to retry', async () => {
 		// The rate-limit branch must not swallow every 5xx: a 500 is a bug or an
-		// outage, and an op that meets one for ever has to reach `blocked`.
+		// outage, and an op that meets one forever has to reach `blocked`.
 		const { doFetch } = scripted(() => graphError(500, 'internalServerError'));
 		const error = await over(doFetch)
 			.list('')
@@ -954,7 +954,7 @@ describe('changes, when things leave the tree', () => {
 		])('trusts the scan for %s, which is what we have always done', async (code) => {
 			const error = await resetOver({ error: { code, message: 'resync' } });
 			expect(error).toBeInstanceOf(CursorResetError);
-			// Nothing about the reset says to upload, and an unrecognised code
+			// Nothing about the reset says to upload, and an unrecognized code
 			// must never be the one that does.
 			expect((error as CursorResetError).uploadDifferences).toBe(false);
 		});

@@ -100,7 +100,7 @@ export const createSeparate = (client: DriveClient, now: () => Date) => {
 	 *
 	 * Without this the engine, which holds one note per path, moves one note
 	 * aside locally on every pull, alternately, and an edit to the one moved
-	 * aside is written to a path with no file behind it for ever.
+	 * aside is written to a path with no file behind it forever.
 	 */
 	const separate = async (page: Page, { parent, name, ids }: Clash): Promise<void> => {
 		/** The file as it is now, if it is still in the clash. */

@@ -12,7 +12,7 @@ import { type ChangeEntry, CursorResetError, type RemoteEntry } from './types.js
 // value for path … renaming a folder doesn't result in any descendants of the
 // folder being returned") and Google Drive's `changes.list` both do. So the
 // adapter has to know the tree to say where anything is, and that knowledge has
-// to outlive the page it was learnt from: a note edited today sits in a folder
+// to outlive the page it was learned from: a note edited today sits in a folder
 // the feed last mentioned a month ago.
 //
 // It travels in the cursor, which the engine already persists per connection
@@ -355,7 +355,7 @@ export const applyAll = (page: Page, items: readonly TreeItem[]): void => {
  *   reported, by id alone. It may be a file this device pushed after its
  *   cursor, which another device deleted before this device pulled again: the
  *   round says only that the id is gone, and the note here is held by the id
- *   the push returned. Dropped, the note stays on this device for ever. An id
+ *   the push returned. Dropped, the note stays on this device forever. An id
  *   nothing holds — a cold start meeting a tombstone — the engine finds nothing
  *   for.
  * - A live item that can be placed is reported where it now is.

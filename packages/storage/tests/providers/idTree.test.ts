@@ -398,7 +398,7 @@ describe('an id tree', () => {
 
 		it('include a folder rescued from one deleted earlier in the round', () => {
 			// The tree still holds it, under a parent that is gone: nothing says
-			// what it held any more, so it is listed like any other arrival.
+			// what it held anymore, so it is listed like any other arrival.
 			const nested = run(EMPTY, [
 				folder('a', ROOT_ID, 'A'),
 				folder('b', 'a', 'B'),

@@ -256,7 +256,7 @@ export type PullChange =
 			 * applied*: a note moving out of the way is a change of its own, and
 			 * it can come later in the same batch. So the store must not enforce
 			 * uniqueness on `path` (a unique index would reject the batch, and a
-			 * rejected batch is retried for ever) and must not make room by
+			 * rejected batch is retried forever) and must not make room by
 			 * deleting whatever is there — that note is about to be moved, and
 			 * deleting it takes its unpushed edits with it. By the end of the
 			 * batch exactly one note is at each path; the engine sees to that.
@@ -301,7 +301,7 @@ export type PullChange =
 			 * Both sides changed the note, and the app's merge made the two one
 			 * (`SyncEngineOptions.merge`, docs/ARCHITECTURE.md §7, "Merge before
 			 * the copy"). skysa-notes has none; memoriam's merges a passage
-			 * practised on two devices. The note takes `content`, is bound to
+			 * practiced on two devices. The note takes `content`, is bound to
 			 * `remote` with `syncedHash` as its bytes, and goes to `path`, its
 			 * queued ops with it. Clean when `content` is the remote's own bytes,
 			 * its queued writes then dropped as a conflict drops them; dirty
@@ -348,7 +348,7 @@ export type PullChange =
 			 * Gone remotely, with nothing local worth keeping. An id that is not
 			 * in the store must succeed and do nothing: rejecting would fail the
 			 * whole batch, and since the cursor moves only with the batch the
-			 * same one would be retried for ever, leaving the user with a sync
+			 * same one would be retried forever, leaving the user with a sync
 			 * that never recovers on its own.
 			 *
 			 * A note that is here and dirty is refused rather than deleted: it was
@@ -377,7 +377,7 @@ export type PullChange =
 			 * Two rows at one path is a note the sidebar shows twice, two queued
 			 * writes racing for one file, and — once both have been pushed — one
 			 * `remoteId` between them, after which `noteByRemoteId` only ever
-			 * hands back one and the other is stale for ever.
+			 * hands back one and the other is stale forever.
 			 *
 			 * The store rebases the note's own queued ops in the same
 			 * transaction, exactly as `move-folder` does, and for a sharper
@@ -392,8 +392,8 @@ export type PullChange =
 			kind: 'displace-note';
 			/**
 			 * An id that is not in the store must succeed and do nothing, for the
-			 * same reason `delete-note` must: a rejected batch is retried for
-			 * ever, since the cursor moves only with the batch.
+			 * same reason `delete-note` must: a rejected batch is retried
+			 * forever, since the cursor moves only with the batch.
 			 */
 			id: string;
 			path: string;
@@ -463,7 +463,7 @@ export type PullChange =
 			 * old path. A store applying the rule itself does not — a
 			 * `move-folder` is always applied before the `delete-folder` that
 			 * follows it, and rebases every queued op on the way — but it costs
-			 * nothing to honour, and a rule that does not depend on the order
+			 * nothing to honor, and a rule that does not depend on the order
 			 * two changes happen to arrive in is the one worth writing down.
 			 */
 			was?: string;
@@ -521,8 +521,8 @@ export type PullChange =
 			 * would otherwise send.
 			 *
 			 * Tolerates an unknown id for the same reason `delete-note` does: a batch
-			 * is decided before it is applied, and a rejected batch is retried for
-			 * ever, since the cursor moves only with the batch.
+			 * is decided before it is applied, and a rejected batch is retried
+			 * forever, since the cursor moves only with the batch.
 			 */
 			kind: 'reupload-note';
 			id: string;
@@ -813,7 +813,7 @@ export type OpOutcome =
 	| Readonly<{
 			/**
 			 * A `mkdir` landed. The folder row records the id, so a later
-			 * `rmdir` can say which folder it means and a scan can recognise
+			 * `rmdir` can say which folder it means and a scan can recognize
 			 * the folder as one we already have — until this, only a pull ever
 			 * set it, so a notebook made here had none until it came back.
 			 */
@@ -828,7 +828,7 @@ export type OpOutcome =
 			 *
 			 * Against the row as it stands, which the user may have changed while
 			 * the bytes were on their way. Moved since (`sentAs` is not its path
-			 * any more), a `move-file` is queued to take the file after it.
+			 * anymore), a `move-file` is queued to take the file after it.
 			 * Deleted since, a `delete-file` is queued for what was made. Either
 			 * way, every `rmdir` over where the file landed goes behind it: the
 			 * notebook was let go meanwhile, and run first, its `rmdir` would
@@ -879,7 +879,7 @@ export type OpOutcome =
  * removes the file that was just imported.
  *
  * A note deleted here and changed remotely in the same window resolves in
- * favour of the delete — the row is written back by the pull and then
+ * favor of the delete — the row is written back by the pull and then
  * purged by the op behind it. That is a decision, not an accident: the
  * delete is something the user did, and the remote change may be their own
  * from the other device.
@@ -921,7 +921,7 @@ export interface SyncStore {
 	readonly notesUnder: (folderPath: string) => Promise<SyncNote[]>;
 	readonly folderByRemoteId: (remoteId: string) => Promise<SyncFolder | undefined>;
 	/**
-	 * Used to recognise a folder move reported as a deletion of the old path:
+	 * Used to recognize a folder move reported as a deletion of the old path:
 	 * the deletion may carry no id at all, and the only way to tell it from a
 	 * real one is that the folder that used to be there is alive elsewhere in
 	 * the same batch.
@@ -931,7 +931,7 @@ export interface SyncStore {
 	 * Every folder that has ever been pushed. Only needed after a cursor reset,
 	 * where a full scan reports what exists and never what was removed: a
 	 * notebook deleted while the cursor was dead would otherwise sit in the
-	 * sidebar for ever with nothing behind it. Folders with no `remoteId` were
+	 * sidebar forever with nothing behind it. Folders with no `remoteId` were
 	 * never in the scan to begin with and are not candidates.
 	 */
 	readonly foldersWithRemote: () => Promise<SyncFolder[]>;

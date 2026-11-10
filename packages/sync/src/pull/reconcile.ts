@@ -111,7 +111,7 @@ export const createPullReconcile = (
 			)
 			.map(upload ? keepNote : forgetNote);
 		// Folders too, or a notebook deleted while the cursor was dead stays
-		// in the sidebar for ever with nothing behind it.
+		// in the sidebar forever with nothing behind it.
 		//
 		// Unless the scan is one that may be missing things, in which case each
 		// of them is made again instead — every one, not the outermost only,

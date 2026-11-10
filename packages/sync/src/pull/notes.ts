@@ -102,7 +102,7 @@ export const createPullNotes = (
 
 	/**
 	 * The note an entry is about. `remoteId` is the identity; the path is the
-	 * fallback, and it is what lets a note created here be recognised when its
+	 * fallback, and it is what lets a note created here be recognized when its
 	 * own first push arrives back, and a file deleted and re-created at the same
 	 * path stay one note rather than becoming two rows the sidebar shows twice.
 	 *
@@ -161,7 +161,7 @@ export const createPullNotes = (
 		// own. When it does not — a provider need not report the deletion of a
 		// file replaced at its path — the provider is asked. Still there, it is
 		// unmentioned because unchanged, and this is a different file that has
-		// taken the name; claimed, the note forgets its own for ever.
+		// taken the name; claimed, the note forgets its own forever.
 		if (batch.scanning || batch.doomed.ids.has(own) || batch.doomed.paths.has(entry.path)) {
 			return byPath;
 		}
@@ -279,7 +279,7 @@ export const createPullNotes = (
 		// before it. Moving the row back undoes what the user just did in front
 		// of them, and worse, frees the path they renamed *to* — so a file
 		// arriving there in the same batch is imported rather than displaced,
-		// the queued move then conflicts on that path for ever, and the ordered
+		// the queued move then conflicts on that path forever, and the ordered
 		// queue strands every op behind it. The version is still adopted; only
 		// the path is left where the user put it. This is `followTheRename`'s
 		// question, asked from the pull side.
@@ -345,7 +345,7 @@ export const createPullNotes = (
 	 * the two share a path: the sidebar shows one row twice, the queued write
 	 * for ours eventually lands on the other one's file, and both rows end up
 	 * carrying one `remoteId`, after which `noteByRemoteId` only ever hands back
-	 * one of them and the other is stale for ever.
+	 * one of them and the other is stale forever.
 	 *
 	 * Ours moves whether or not it has been pushed. A note that has been pushed
 	 * has no claim to this path either — the remote has something else here, so
@@ -364,7 +364,7 @@ export const createPullNotes = (
 		// been moved on or taken away by an earlier decision, and one that is
 		// not may be about to be carried in by a folder move. Asking the store
 		// to move a note that is not there fails the batch — and a batch the
-		// store rejects is retried for ever, because the cursor moves only with
+		// store rejects is retried forever, because the cursor moves only with
 		// it. More than one can land here, since a folder move can bring a note
 		// down on top of one already in place.
 		const occupants = (await notesEndingIn(parentPath(path), decided)).filter(
@@ -447,8 +447,8 @@ export const createPullNotes = (
 	 * a note of the user's aside — every one of them, since a folder move can
 	 * land two rows on one name before this is reached, and kept on the record
 	 * when the file is listed again elsewhere, because those notes are still
-	 * where they were put. Any other file listed at this path is not at it any
-	 * more: a tool that saves by deleting and writing again gives the file a
+	 * where they were put. Any other file listed at this path is not at it
+	 * anymore: a tool that saves by deleting and writing again gives the file a
 	 * new id, and not every feed mentions the old one going.
 	 */
 	const leaveUnread = async (
@@ -575,7 +575,7 @@ export const createPullNotes = (
 		// `changes` and `read` are separate round trips on every provider, so the
 		// file the feed named can be deleted in between. Throwing here unwinds
 		// the whole pull, and since the cursor moves only with the batch, the
-		// next attempt fetches the same batch and dies the same way — for ever,
+		// next attempt fetches the same batch and dies the same way — forever,
 		// taking push with it, because `sync` stops when a pull is not `ok`.
 		// There is nothing to import and nothing of ours to move aside; the
 		// deletion arrives as an entry of its own, here or in a later batch.

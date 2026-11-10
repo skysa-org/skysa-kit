@@ -72,7 +72,7 @@ describe.each(PROVIDERS)('$provider', (each) => {
 
 	it('starts for a device that already holds another provider', async () => {
 		// This used to be refused, because in the old model any connected account
-		// signed you in as its user, so holding two crossed the authorisation
+		// signed you in as its user, so holding two crossed the authorization
 		// between them. Each connection is now its own silo, and a device may
 		// hold as many as the person has accounts.
 		const app = buildApp({ config: allProvidersConfig() });

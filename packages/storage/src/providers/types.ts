@@ -52,8 +52,8 @@ export type EntryRef = Pick<RemoteEntry, 'remoteId' | 'path'>;
  * So one of the two is always there, and either may be missing. A feed that
  * names items by id can be asked about a file it never placed — another
  * device's push after this device's cursor, deleted before the next pull — and
- * has no path to give. Dropping that deletion would leave the note here for
- * ever, since the cursor moves on and nothing mentions the file again.
+ * has no path to give. Dropping that deletion would leave the note here
+ * forever, since the cursor moves on and nothing mentions the file again.
  */
 export type DeletedEntry =
 	| { path: string; deleted: true; remoteId?: string }
@@ -301,7 +301,7 @@ export class CursorResetError extends Error {
 		 * the scan that follows must not be trusted to say what was deleted.
 		 * Graph's `resyncChangesUploadDifferences`: "Upload any local items that
 		 * the service didn't return". Absent — the ordinary case, and the one an
-		 * unrecognised reset falls back to — the scan is the truth and a note it
+		 * unrecognized reset falls back to — the scan is the truth and a note it
 		 * does not return is gone.
 		 * https://learn.microsoft.com/en-us/graph/api/driveitem-delta
 		 */

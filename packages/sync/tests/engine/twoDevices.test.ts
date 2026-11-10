@@ -67,7 +67,7 @@ describe('two devices at random', () => {
 	it('does not let a note renamed here onto a name take the file made there', async () => {
 		// Not even when the batch says what was there before went, which is what
 		// lets a note whose own file was replaced be claimed. The rename's file
-		// is still at the old name, and claimed, the note forgets it for ever.
+		// is still at the old name, and claimed, the note forgets it forever.
 		const { entry, note } = await pulledNote('a.md', 'mine\n');
 		renameHere(world.store, note, 'b.md');
 		const theirs = await remoteFile('b.md', 'theirs\n');
@@ -273,7 +273,7 @@ describe('two devices at random', () => {
 
 	it('does not move a note aside onto the old name of a queued rename', async () => {
 		// The file is still there until the rename runs, which is queued behind
-		// the write that would create the copy: that write conflicts for ever.
+		// the write that would create the copy: that write conflicts forever.
 		// Here the note in the way was made, and its write queued, before the
 		// rename.
 		const copyName = 'b (conflict 2026-09-15T14-32).md';
