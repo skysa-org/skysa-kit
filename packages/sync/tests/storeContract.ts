@@ -1,7 +1,6 @@
+import type { DocumentFormat, RemoteEntry } from '@skysa/storage';
 import { describe, expect, it } from 'vitest';
 
-import type { DocumentFormat } from '@skysa/storage';
-import type { RemoteEntry } from '@skysa/storage';
 import type { NewSyncOp, SyncFile, SyncFolder, SyncNote, SyncStore } from '../src/store.js';
 
 /**

@@ -1,4 +1,5 @@
 import { ancestorPaths, isWithin, normalizePath, parentPath, ROOT } from '@skysa/storage';
+
 import type { PullChange, SyncOp } from '../store.js';
 import type { PullAttachments } from './attachments.js';
 import type { FileBase } from './files.js';

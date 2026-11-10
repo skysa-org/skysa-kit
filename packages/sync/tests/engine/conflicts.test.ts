@@ -1,7 +1,7 @@
-import { describe, expect, it } from 'vitest';
-
 import { basename } from '@skysa/storage';
 import { conflictPath } from '@skysa/storage/testing';
+import { describe, expect, it } from 'vitest';
+
 import { AT } from '../kit/engine.js';
 import { remoteAt } from '../kit/remote.js';
 import { boundTo } from '../kit/seed.js';

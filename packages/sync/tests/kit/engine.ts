@@ -1,7 +1,6 @@
+import type { ChangeEntry, DocumentFormat, StorageProvider } from '@skysa/storage';
 import { beforeEach } from 'vitest';
 
-import type { DocumentFormat } from '@skysa/storage';
-import type { ChangeEntry, StorageProvider } from '@skysa/storage';
 import { createSyncEngine, type SyncEngineOptions } from '../../src/engine.js';
 import type { SyncStore } from '../../src/store.js';
 

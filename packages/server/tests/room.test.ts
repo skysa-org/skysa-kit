@@ -1,4 +1,8 @@
-import { RELAY_CHANGED as CHANGED, RELAY_CLOSE, RELAY_PUSHED_INTERVAL_MS as PUSHED_INTERVAL_MS } from '@skysa/protocol';
+import {
+	RELAY_CHANGED as CHANGED,
+	RELAY_CLOSE,
+	RELAY_PUSHED_INTERVAL_MS as PUSHED_INTERVAL_MS,
+} from '@skysa/protocol';
 import { describe, expect, it } from 'vitest';
 
 import {

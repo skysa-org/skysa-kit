@@ -1,7 +1,7 @@
-import { type ProviderKind } from '@skysa/protocol';
+import type { ProviderKind } from '@skysa/protocol';
 import { cell, isNotFoundError } from '@skysa/storage';
-import { outOfAttempts, type SyncStore } from '@skysa/sync';
 import { TEST_FORMAT } from '@skysa/storage/testing';
+import { outOfAttempts, type SyncStore } from '@skysa/sync';
 import { createMemoryStore, type MemoryStore } from '@skysa/sync/testing';
 
 import type { AccessToken } from '../../src/api/client.js';

@@ -1,5 +1,5 @@
-import type { FakeProvider } from '@skysa/storage/testing';
 import type { RemoteEntry } from '@skysa/storage';
+import type { FakeProvider } from '@skysa/storage/testing';
 
 /** What the remote holds at a path, if anything. */
 export const remoteAt = (provider: FakeProvider, path: string): RemoteEntry | undefined =>

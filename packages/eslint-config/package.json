@@ -1,0 +1,41 @@
+{
+	"name": "@skysa/eslint-config",
+	"version": "0.0.0",
+	"description": "The lint rules the Skysa apps share, their base tsconfig, and Prettier's settings.",
+	"private": true,
+	"license": "AGPL-3.0-only",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/skysa-org/skysa-kit.git",
+		"directory": "packages/eslint-config"
+	},
+	"type": "module",
+	"exports": {
+		".": "./index.js",
+		"./tsconfig.base.json": "./tsconfig.base.json",
+		"./prettier": "./prettier.json"
+	},
+	"dependencies": {
+		"@eslint/js": "^10.0.1",
+		"eslint-config-prettier": "^10.1.8",
+		"eslint-plugin-functional": "^10.0.1",
+		"eslint-plugin-jsx-a11y": "^6.10.2",
+		"eslint-plugin-prefer-arrow-functions": "^3.10.2",
+		"eslint-plugin-react": "^7.37.5",
+		"eslint-plugin-react-hooks": "^7.1.1",
+		"eslint-plugin-simple-import-sort": "^14.0.0",
+		"eslint-plugin-unused-imports": "^4.4.1",
+		"globals": "^17.13.0",
+		"typescript-eslint": "^8.71.1"
+	},
+	"peerDependencies": {
+		"eslint": "^10.12.0",
+		"prettier": "^3.9.10",
+		"typescript": "~6.0.3"
+	},
+	"peerDependenciesMeta": {
+		"prettier": {
+			"optional": true
+		}
+	}
+}

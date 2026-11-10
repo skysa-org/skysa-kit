@@ -1,5 +1,6 @@
-import { isWithin, normalizePath, parentPath, rebasePath, ROOT } from '@skysa/storage';
 import type { DeletedEntry } from '@skysa/storage';
+import { isWithin, normalizePath, parentPath, rebasePath, ROOT } from '@skysa/storage';
+
 import type { EngineContext } from '../context.js';
 import { orIfNotFound } from '../providerOps.js';
 import type { PullChange, SyncNote } from '../store.js';

@@ -1,7 +1,8 @@
-import { conflictFolderPath } from '@skysa/storage';
+import type { ChangeEntry, RemoteEntry } from '@skysa/storage';
 import {
 	ancestorPaths,
 	basename,
+	conflictFolderPath,
 	isWithin,
 	joinPath,
 	normalizePath,
@@ -9,7 +10,7 @@ import {
 	rebasePath,
 	ROOT,
 } from '@skysa/storage';
-import type { ChangeEntry, RemoteEntry } from '@skysa/storage';
+
 import type { EngineContext } from '../context.js';
 import { findFreeName, FREE_PATH_ATTEMPTS } from '../names.js';
 import type { PullChange, SyncFolder, SyncNote } from '../store.js';

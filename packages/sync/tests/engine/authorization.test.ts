@@ -1,6 +1,6 @@
+import { AuthError, CursorResetError } from '@skysa/storage';
 import { describe, expect, it } from 'vitest';
 
-import { AuthError, CursorResetError } from '@skysa/storage';
 import type { SyncEngine } from '../../src/engine.js';
 import { remoteAt } from '../kit/remote.js';
 import { boundTo } from '../kit/seed.js';

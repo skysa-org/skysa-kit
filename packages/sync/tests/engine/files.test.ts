@@ -1,20 +1,19 @@
-import { describe, expect, it } from 'vitest';
-
-import { conflictFilePath } from '@skysa/storage';
-import { basename } from '@skysa/storage';
-import { createFakeProvider } from '@skysa/storage/testing';
 import {
 	AuthError,
+	basename,
 	type ChangeEntry,
 	ConflictError,
+	conflictFilePath,
 	CursorResetError,
 	NotFoundError,
 	RateLimitError,
 	type RemoteEntry,
 	type StorageProvider,
 } from '@skysa/storage';
+import { conflictPath, createFakeProvider } from '@skysa/storage/testing';
+import { describe, expect, it } from 'vitest';
+
 import type { PullBatch, SyncNote, SyncStore } from '../../src/store.js';
-import { conflictPath } from '@skysa/storage/testing';
 import { AT, reporting } from '../kit/engine.js';
 import { entryAt, remoteAt } from '../kit/remote.js';
 import { boundTo } from '../kit/seed.js';

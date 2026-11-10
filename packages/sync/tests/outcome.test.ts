@@ -1,6 +1,6 @@
+import type { ChangeEntry } from '@skysa/storage';
 import { describe, expect, it } from 'vitest';
 
-import type { ChangeEntry } from '@skysa/storage';
 import { metIn, metOf } from '../src/outcome.js';
 
 /**

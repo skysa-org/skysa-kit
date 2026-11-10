@@ -112,10 +112,7 @@ const HOUR = 60 * 60 * 1000;
 
 const relayObject = () => {
 	const fake = fakeState();
-	const relay = new ConnectionRelay(
-		fake.state as unknown as DurableObjectState,
-		{} as Cloudflare.Env
-	);
+	const relay = new ConnectionRelay(fake.state as unknown as DurableObjectState, {});
 	return { relay, ...fake };
 };
 

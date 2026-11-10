@@ -1,19 +1,20 @@
-import { describe, expect, it } from 'vitest';
-
 import { isWithin } from '@skysa/storage';
-import { createSyncEngine } from '../src/engine.js';
-import { drainChanges } from '@skysa/storage/testing';
 import {
 	AT,
+	conflictFilename,
+	createGDriveStub,
+	drainChanges,
 	driveWorld,
 	emptyFeed,
 	feedRequests,
 	FOLDER,
 	MARKER_FILE,
 	over,
+	TEST_FORMAT,
 } from '@skysa/storage/testing';
-import { createGDriveStub } from '@skysa/storage/testing';
-import { conflictFilename, TEST_FORMAT } from '@skysa/storage/testing';
+import { describe, expect, it } from 'vitest';
+
+import { createSyncEngine } from '../src/engine.js';
 import { createMemoryStore } from './memoryStore.js';
 
 /**

@@ -1,6 +1,6 @@
-import { conflictFilePath } from '@skysa/storage';
-import { basename, parentPath, rebasePath } from '@skysa/storage';
 import type { DeletedEntry, RemoteEntry } from '@skysa/storage';
+import { basename, conflictFilePath, parentPath, rebasePath } from '@skysa/storage';
+
 import type { EngineContext } from '../context.js';
 import type { PullChange, SyncOp } from '../store.js';
 import { aliveElsewhere, type Batch, listedAfter, type Step } from './batch.js';

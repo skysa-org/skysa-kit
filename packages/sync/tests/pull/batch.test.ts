@@ -1,6 +1,6 @@
+import type { ChangeEntry, RemoteEntry } from '@skysa/storage';
 import { describe, expect, it } from 'vitest';
 
-import type { ChangeEntry, RemoteEntry } from '@skysa/storage';
 import {
 	aliveElsewhere,
 	type Batch,

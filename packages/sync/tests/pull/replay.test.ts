@@ -1,6 +1,6 @@
+import type { RemoteEntry } from '@skysa/storage';
 import { describe, expect, it } from 'vitest';
 
-import type { RemoteEntry } from '@skysa/storage';
 import {
 	folderBefore,
 	folderNow,

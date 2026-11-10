@@ -1,5 +1,6 @@
-import { isWithin } from '@skysa/storage';
 import type { ChangeEntry, RemoteEntry } from '@skysa/storage';
+import { isWithin } from '@skysa/storage';
+
 import type { PullChange, SyncNote, UnreadableFile } from '../store.js';
 import type { FileBase } from './files.js';
 

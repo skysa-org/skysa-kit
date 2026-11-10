@@ -1,6 +1,6 @@
 import type { DocumentFormat } from '@skysa/storage';
-import { foldName } from '@skysa/storage';
-import { isWithin, normalizePath, parentPath, rebasePath, ROOT } from '@skysa/storage';
+import { foldName, isWithin, normalizePath, parentPath, rebasePath, ROOT } from '@skysa/storage';
+
 import {
 	type ConflictResolution,
 	type FileChange,

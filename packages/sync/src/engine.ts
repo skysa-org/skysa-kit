@@ -1,7 +1,6 @@
-import type { DocumentFormat } from '@skysa/storage';
-import { documentNames } from '@skysa/storage';
-import { isHidden } from '@skysa/storage';
-import type { ChangeEntry, RemoteEntry, StorageProvider } from '@skysa/storage';
+import type { ChangeEntry, DocumentFormat, RemoteEntry, StorageProvider } from '@skysa/storage';
+import { documentNames, isHidden } from '@skysa/storage';
+
 import type { EngineContext } from './context.js';
 import { readDocument } from './document.js';
 import { metOf, type SyncOutcome, transient, type Watch } from './outcome.js';

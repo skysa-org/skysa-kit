@@ -1,6 +1,6 @@
+import { createFakeProvider } from '@skysa/storage/testing';
 import { describe, expect, it } from 'vitest';
 
-import { createFakeProvider } from '@skysa/storage/testing';
 import type { SyncNote } from '../../src/store.js';
 import { expectSoundStore } from '../kit/invariants.js';
 import { entryAt } from '../kit/remote.js';

@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
-import { createApp, envWarnings, misconfigured, parseEnv } from '../src/app.js';
+import { createApp, envWarnings, misconfigured, parseEnv } from '../src/index.js';
 
 /**
- * `@skysa/api` resolves to `src/app.ts` and nothing else, so what a second
- * Worker entry can reach is exactly what this module exports. docs/ARCHITECTURE.md
- * §6 says an operator composes their own entry from `createApp`; that is only
- * true if they can also build a config the way `src/worker.ts` does.
+ * `@skysa/server` resolves to `src/index.ts` (and the Durable Object to
+ * `/relay`), so what an app's Worker entry can reach is exactly what that
+ * module exports. An app composes its own entry from `createApp`; that is only
+ * true if it can also build a config the way the server's own checks do.
  */
 describe('the package entry', () => {
 	it('exports parseEnv and envWarnings beside createApp', () => {
