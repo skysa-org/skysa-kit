@@ -12,7 +12,7 @@ import { type FileBase, fileGone, type FilePlace, placedFiles, startingFiles } f
  * (`filesNow`), a listed file placed or adopted (`decideAttachment`), one
  * the remote no longer has or has turned into a note (`fileNoLonger`,
  * `deletedFile`, `fileUnderMoved`), and two rows left on one path
- * (`settleFileClashes`). Moved out of `engine.ts` as they were (#446).
+ * (`settleFileClashes`). Moved out of `engine.ts` as they were (skysa-notes#446).
  */
 
 export const createPullAttachments = ({ store, now, newId }: EngineContext) => {
@@ -127,7 +127,7 @@ export const createPullAttachments = ({ store, now, newId }: EngineContext) => {
 	 * another and never the deletion of the one it replaced, which
 	 * `clearFilePath` answers for a row still at the path; for a row the user
 	 * moved away, the move would find nothing to move and leave the row bound
-	 * to nothing. Gone, as a deletion would have said (#194).
+	 * to nothing. Gone, as a deletion would have said (skysa-notes#194).
 	 */
 	const originsTaken = (entry: RemoteEntry, { batch, decided, at }: Step): PullChange[] =>
 		[...filesNow(batch.files, decided).values()].flatMap((file) => {

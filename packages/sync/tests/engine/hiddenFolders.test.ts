@@ -8,14 +8,14 @@ import { syncWorld } from '../kit/world.js';
 /**
  * Hidden paths, and what the engine makes of them: it passes over every one
  * unless it is handed a rule that syncs it, and says it met one only of a
- * watch it is handed. This app's folders are in `tests/appFolder.sync.test.ts`.
+ * watch it is handed. skysa-notes' folders are in its `tests/appFolder.sync.test.ts`.
  */
 const { world, engineWith, pullNow, remoteFile, noteAt } = syncWorld();
 
 describe('an engine and the rules it is handed', () => {
-	// The engine knows no app's folders (docs/decisions/0018-the-shared-kit.md):
+	// The engine knows no app's folders (skysa-notes' record 0018):
 	// which hidden paths sync, and which it is to say it met, are handed to it.
-	// This app's are tested with it in `tests/appFolder.sync.test.ts`; these
+	// skysa-notes' are tested with it in its `tests/appFolder.sync.test.ts`; these
 	// run with others.
 	const syncsData = (path: string) => path === '.data' || path.startsWith('.data/');
 

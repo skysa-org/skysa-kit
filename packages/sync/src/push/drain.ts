@@ -22,7 +22,7 @@ import { createNotePush } from './notes.js';
  * The push: the queue drained in order, op by op (`drainOps`), each sent by
  * the part for its kind, writes sent together where the provider takes more
  * than one at once, and what an op that fails comes to (`handleOpError`).
- * Moved out of `engine.ts` as it was (#446); `createSyncEngine` hands it the
+ * Moved out of `engine.ts` as it was (skysa-notes#446); `createSyncEngine` hands it the
  * three things it shares with the pull.
  */
 

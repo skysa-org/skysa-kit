@@ -36,7 +36,7 @@ describe('readFlowState', () => {
 		});
 	});
 
-	// Checked, not cast (#450): a signature says this server wrote it, not that
+	// Checked, not cast (skysa-notes#450): a signature says this server wrote it, not that
 	// it is the shape this code reads.
 	it('refuses a signed flow that is not the shape of one', async () => {
 		const { verifier: _verifier, ...noVerifier } = flow;

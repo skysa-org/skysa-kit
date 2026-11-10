@@ -163,7 +163,7 @@ export interface Batch {
 	 * `live` without what is at a hidden path, for the files' rules: `decide`
 	 * passes such an entry over, so it says nothing of where a file went.
 	 * Read as the file's next place, it kept a row for a file that had gone
-	 * where nothing would ever put the row (#194).
+	 * where nothing would ever put the row (skysa-notes#194).
 	 */
 	listed: LiveEntries;
 	/**

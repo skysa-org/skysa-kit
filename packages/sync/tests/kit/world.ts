@@ -9,7 +9,7 @@ import { engineFixture, type Rules } from './engine.js';
 import { expectSoundStore } from './invariants.js';
 
 /**
- * What an engine test works against, made new before every test (#460). A
+ * What an engine test works against, made new before every test (skysa-notes#460). A
  * test that wants another provider or store puts it here, and engines made
  * afterwards (`engineWith`) are over it.
  */

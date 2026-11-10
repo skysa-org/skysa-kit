@@ -7,7 +7,7 @@ const BLOCK = /^---\n([\s\S]*?)\n---(?:\n|$)/;
 /**
  * The documents the engine's and the adapters' own tests sync when a test
  * names none: the fake's `TEST_FOLDER`'s partner, so that those tests assume
- * no app's format (docs/decisions/0018-the-shared-kit.md). Markdown files
+ * no app's format (skysa-notes' record 0018). Markdown files
  * claiming an id on an `id: <id>` line of a leading `---` block, read by a
  * line rather than by notes' frontmatter parser: every engine test passed on
  * it as it is, so none of them is about notes' format, which notes tests for

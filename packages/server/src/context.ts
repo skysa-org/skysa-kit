@@ -24,7 +24,7 @@ export type AppEnv = { Bindings: Bindings; Variables: Variables };
  * `bearer`, and answers 401 rather than calling `next()` when there is nothing
  * to put there, so a handler typed with this always finds one. A handler that
  * reads `bearer` without the middleware is typed `AppEnv` and does not compile
- * (#450); one that never reads it is caught by the test that asks every
+ * (skysa-notes#450); one that never reads it is caught by the test that asks every
  * `/connection*` route without a credential (`connections.test.ts`).
  */
 export type AuthedEnv = {
@@ -46,7 +46,7 @@ export interface Keys {
 }
 
 /**
- * What every router is built with, once, by `createApp` (#450): the one way a
+ * What every router is built with, once, by `createApp` (skysa-notes#450): the one way a
  * route reaches the app's configuration and seams, where they used to arrive
  * both as factory arguments and through the request.
  */

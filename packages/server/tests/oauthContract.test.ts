@@ -15,7 +15,7 @@ import {
 
 /**
  * What every provider whose grant comes with an ID token does the same way,
- * asked of each (#450). Where they differ — Google's scope that can be
+ * asked of each (skysa-notes#450). Where they differ — Google's scope that can be
  * unticked, Microsoft's tenant and rotating refresh token — stays in
  * `gdrive.test.ts` and `onedrive.test.ts`. Dropbox names its account from an
  * API call, not a token, and is not one of these.

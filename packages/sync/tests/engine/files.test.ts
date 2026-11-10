@@ -1072,7 +1072,7 @@ describe('pulling a file that is not a note', () => {
 		it('is adopted by the same picture arriving at its target as its own file goes', async () => {
 			// Held nowhere here. The deletion leaves the row pending, which is
 			// what the store does too; dropped by the store and adopted by the
-			// engine, it rejected the batch on every pull for good (#194).
+			// engine, it rejected the batch on every pull for good (skysa-notes#194).
 			const file = await moved();
 			await world.provider.delete(file);
 			await world.provider.createFolder('Work');
@@ -1353,7 +1353,7 @@ describe('pulling a file that is not a note', () => {
 			],
 		])('is let go of when its file is taken %s, held nowhere here', async (_how, take) => {
 			// Pending after the pull whatever is held, so that what the engine
-			// decides next about the row is about a row the store has (#194);
+			// decides next about the row is about a row the store has (skysa-notes#194);
 			// its upload then finds nothing to send.
 			await moved();
 			await take();
@@ -1510,7 +1510,7 @@ describe('pulling a file that is not a note', () => {
 
 	describe('gone to a hidden path', () => {
 		// `decide` passes a hidden entry over, so it says nothing of where a
-		// file went: read as its next place, it kept rows for nothing (#194).
+		// file went: read as its next place, it kept rows for nothing (skysa-notes#194).
 		it.each([
 			['by path', (trips: RemoteEntry) => ({ deleted: true as const, path: trips.path })],
 			[

@@ -67,8 +67,8 @@ const conflictName = (
  * What names say about the documents `extension` names (`DocumentFormat`):
  * whether a name is one's, and where a copy of one goes. Made once for a
  * format, so the engine and the providers are handed the extension rather
- * than importing one (docs/decisions/0018-the-shared-kit.md). This app's are
- * in `notes.ts`.
+ * than importing one (skysa-notes' record 0018). skysa-notes'
+ * are in its `notes.ts`.
  */
 export interface DocumentNames {
 	/** Whether a name or path is a document's (`hasExtension`). */
@@ -136,6 +136,6 @@ export const conflictFolderName = (name: string, at: Date, taken: Iterable<strin
 export const conflictFolderPath = (path: string, at: Date, taken: Iterable<string> = []): string =>
 	replaceBasename(path, conflictFolderName(basename(path), at, taken));
 
-/** The same, for a file that is not a note: its own extension kept (#187). */
+/** The same, for a file that is not a note: its own extension kept (skysa-notes#187). */
 export const conflictFilePath = (path: string, at: Date, taken: Iterable<string> = []): string =>
 	replaceBasename(path, conflictNameKeepingExtension(basename(path), at, taken));

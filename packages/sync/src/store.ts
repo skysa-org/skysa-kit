@@ -1,9 +1,9 @@
 import type { RemoteEntry } from '@skysa/storage';
 
 /**
- * The local store, as the sync engine needs it. `packages/core` cannot import
- * Dexie — it has to run in Node and in a Worker — so the engine talks to this
- * port and `apps/web` implements it over IndexedDB.
+ * The local store, as the sync engine needs it. `@skysa/sync` cannot import
+ * an app's database — it has to run in Node and in a Worker — so the engine talks
+ * to this port and the app implements it over IndexedDB.
  *
  * Two things shape the shape of it:
  *
@@ -77,7 +77,7 @@ export interface UnreadableFile {
 
 /**
  * A file beside a note that is not one: a picture, a PDF, anything a note links
- * (#187, docs/ARCHITECTURE.md §7). Mirrored as what the remote says of it and
+ * (skysa-notes#187, docs/ARCHITECTURE.md §7). Mirrored as what the remote says of it and
  * nothing more — its bytes are fetched when it is shown, not when it is pulled
  * — so a row is cheap, and a store holds one for every such file the remote
  * has, linked or not.
@@ -122,7 +122,7 @@ interface Queued {
 
 /**
  * One queued push, by what it does: each kind carries the fields it needs, so
- * the engine never asks at run time for one it cannot be without (#447).
+ * the engine never asks at run time for one it cannot be without (skysa-notes#447).
  */
 export type SyncOp = Queued &
 	(
@@ -300,7 +300,7 @@ export type PullChange =
 			/**
 			 * Both sides changed the note, and the app's merge made the two one
 			 * (`SyncEngineOptions.merge`, docs/ARCHITECTURE.md §7, "Merge before
-			 * the copy"). This app has none; memoriam's merges a passage
+			 * the copy"). skysa-notes has none; memoriam's merges a passage
 			 * practised on two devices. The note takes `content`, is bound to
 			 * `remote` with `syncedHash` as its bytes, and goes to `path`, its
 			 * queued ops with it. Clean when `content` is the remote's own bytes,
@@ -648,7 +648,7 @@ export type PullChange =
 			 * to know what the row is after this: a later file in the same batch
 			 * at its path, of its size, is adopted into it, and adopting a row the
 			 * store had dropped would reject the batch on every pull for good
-			 * (#194). A `move-file` queued for it goes: the upload is to where the
+			 * (skysa-notes#194). A `move-file` queued for it goes: the upload is to where the
 			 * row is. An unknown id is a no-op.
 			 */
 			kind: 'reupload-file';
@@ -659,7 +659,7 @@ export type PullChange =
  * What each kind of change is about, and what it says of it: whether it puts
  * it at a `path`, and whether it binds it to a `remote` file. Named for every
  * kind, so a new one does not compile until it says, and read by the helpers
- * below, so nothing asks a change which fields it happens to have (#447). A
+ * below, so nothing asks a change which fields it happens to have (skysa-notes#447). A
  * kind said to carry a field it does not have fails to compile where the
  * helper reads it. A conflict is about two notes, by its resolution's ids,
  * and every caller that asks says what it wants of those.

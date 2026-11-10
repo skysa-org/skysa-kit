@@ -2,7 +2,7 @@ import { cell } from '@skysa/storage';
 
 /**
  * The two halves of every store the UI reads through `useSyncExternalStore`,
- * written once (#457): being told of a change, and a value that tells of its
+ * written once (skysa-notes#457): being told of a change, and a value that tells of its
  * own. Fifteen modules wrote the listener set and its loop out by hand.
  *
  * A listener that throws stops the ones after it and reaches whoever made the

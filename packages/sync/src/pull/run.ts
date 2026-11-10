@@ -21,7 +21,7 @@ import type { PullReconcile } from './reconcile.js';
  * reconciled at the end (`drainScan`, `applyScan`); a cursor the provider has
  * let go of answered with a scan, and an expired token, in either, with one
  * retry after a refresh (`runPull`, `authRetry`). Moved out of `engine.ts`
- * (#446).
+ * (skysa-notes#446).
  */
 
 /**

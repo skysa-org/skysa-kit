@@ -8,7 +8,7 @@ import type { SyncOpOf } from '../store.js';
  * The remote's folders, as a push needs them: made, a level at a time,
  * before a write that needs one (`ensureRemoteFolder`), and removed or left
  * once a notebook deleted here is empty there (`runRmdir`). Moved out of
- * `engine.ts` as they were (#446).
+ * `engine.ts` as they were (skysa-notes#446).
  */
 
 export const createFolderPush = ({ provider, store }: EngineContext) => {

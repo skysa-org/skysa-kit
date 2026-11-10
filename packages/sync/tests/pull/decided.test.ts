@@ -8,7 +8,7 @@ import type { PullChange } from '../../src/store.js';
  * What a batch has spoken for, read off its decisions (`pull/decided.ts`).
  * The engine's tests (`engine/*.test.ts`) reach these through whole pulls;
  * this says what each answers for one change of every kind, `merge-note`
- * among them, which this app's engine never makes: it passes no merge.
+ * among them, which skysa-notes' engine never makes: it passes no merge.
  */
 
 const entry = (remoteId: string, path: string): RemoteEntry => ({

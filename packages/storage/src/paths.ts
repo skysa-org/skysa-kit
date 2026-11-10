@@ -68,8 +68,8 @@ export const replaceBasename = (path: string, name: string): string =>
  * Anything under a dot-prefixed segment: the marker file, the app's own
  * bookkeeping, another tool's (`.git`, `.obsidian`). The sync engine passes
  * over a hidden path unless the app syncs it all the same
- * (`SyncEngineOptions.syncsHidden`); this app's own rule, which lets its
- * scratchpad and vault through, is `isPassedOver` in `appFolder.ts`.
+ * (`SyncEngineOptions.syncsHidden`); skysa-notes' own rule, which lets its
+ * scratchpad and vault through, is `isPassedOver` in its `appFolder.ts`.
  */
 export const isHidden = (path: string): boolean =>
 	pathSegments(path).some((segment) => segment.startsWith(HIDDEN_PREFIX));

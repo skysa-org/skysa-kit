@@ -8,7 +8,7 @@ import { syncWorld } from '../kit/world.js';
 
 /**
  * The engine asks the format it is handed what a document is, and knows no
- * file format of its own (docs/decisions/0018-the-shared-kit.md). Every other
+ * file format of its own (skysa-notes' record 0018). Every other
  * engine test runs with markdown (`TEST_FORMAT`); these run with plain text
  * (`TEXT_FORMAT`), the store included, so that anything still reading
  * markdown for itself shows here.

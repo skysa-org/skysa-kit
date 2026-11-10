@@ -28,7 +28,7 @@ const REVOKE = 'https://oauth2.googleapis.com/revoke';
  * The one scope the app cannot work without. `drive.file` reaches only files
  * this app made, and is non-sensitive, so going to production needs no
  * verification; brand verification only puts the app's name and logo on the
- * consent screen (docs/google-oauth.md).
+ * consent screen (skysa-notes' docs/google-oauth.md).
  */
 const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.file';
 
@@ -40,7 +40,7 @@ const GOOGLE_SCOPES = ['openid', 'email', DRIVE_SCOPE].join(' ');
  * OAuth 2.0 scopes previously granted to a project, invalidating any issued
  * access or refresh tokens for all clients registered under that project."
  * That is why a deployment wants a Cloud project of its own
- * (docs/google-oauth.md). Best effort, like Dropbox's.
+ * (skysa-notes' docs/google-oauth.md). Best effort, like Dropbox's.
  */
 const revokeToken = (doFetch: FetchLike, accessToken: string): Promise<boolean> =>
 	revokeByForm(doFetch, REVOKE, accessToken);

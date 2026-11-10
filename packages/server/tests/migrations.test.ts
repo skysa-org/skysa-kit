@@ -199,7 +199,7 @@ describe('0004_per_connection_credentials', () => {
 		expect(names).not.toContain('sessions');
 		// `users` and `identities` are still here. They were kept for account-first,
 		// which was dropped on 2026-09-18, so they are now owed a migration of
-		// their own (issue #118) — but 0005 is a record of what it did, and
+		// their own (issue skysa-notes#118) — but 0005 is a record of what it did, and
 		// what it did was leave them.
 		expect(names).toContain('users');
 		expect(names).toContain('identities');

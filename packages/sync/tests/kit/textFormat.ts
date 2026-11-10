@@ -5,7 +5,7 @@ import type { DocumentFormat } from '@skysa/storage';
  * an id on a first line `@id <id>`, refusing any that start `BINARY`. The
  * engine and the in-memory store are run with it as well as with
  * `TEST_FORMAT`, so that anything still reading markdown for itself shows
- * (docs/decisions/0018-the-shared-kit.md).
+ * (skysa-notes' record 0018).
  */
 export const TEXT_FORMAT: DocumentFormat = {
 	extension: '.txt',

@@ -365,7 +365,7 @@ export const memoryDevice = (): ClientDevice => {
 	};
 
 	/**
-	 * The write a change owes, by the app's rule (`queueWrite` in this app's
+	 * The write a change owes, by the app's rule (`queueWrite` in skysa-notes'
 	 * `store/queue.ts`): a write already waiting carries it, unless every one
 	 * waiting is lazy and this change is not, which puts one that is not lazy in
 	 * their place, at the back of the queue.

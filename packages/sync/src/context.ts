@@ -17,7 +17,7 @@ import type { ConflictResolution, PullChange, SyncNote, SyncStore } from './stor
  * injected for tests, its bounds, a way to renew the token,
  * the meter that tells `onProgress` how far a run has got, and the two sides
  * of a file made one where the app can make them one (`mergedOf`). Built once
- * per engine, so the parts moved out of `engine.ts` (#446) share one rather
+ * per engine, so the parts moved out of `engine.ts` (skysa-notes#446) share one rather
  * than each closing over its own.
  */
 export interface EngineContext {

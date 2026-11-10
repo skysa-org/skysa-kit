@@ -29,11 +29,11 @@ import { z } from 'zod';
 
 /**
  * What the operator shows in place of the connect buttons (`ConnectGate` in
- * `@skysa/core`). The server checks it before it will serve it; it is checked
+ * `@skysa/protocol`). The server checks it before it will serve it; it is checked
  * again here because its URL becomes a link on this page, and a link is the
  * one place a value from the server turns into something the browser follows.
  * `https:` only — never `javascript:` or `data:`, which would be script in the
- * page `script-src 'self'` protects (CLAUDE.md; issue #89 asks the same of the
+ * page `script-src 'self'` protects (CLAUDE.md; issue skysa-notes#89 asks the same of the
  * connect flow's URL).
  *
  * Its own schema, not the server's: the server refuses a gate that is wrong,
@@ -46,7 +46,7 @@ const gateSchema = z.object({
 	message: z.string().min(1).max(GATE_LIMITS.message),
 	action: z.object({
 		label: z.string().min(1).max(GATE_LIMITS.label),
-		// Normalized for the reason `apps/api/src/gate.ts` gives: an
+		// Normalized for the reason `packages/server/src/gate.ts` gives: an
 		// `https:example.com` would otherwise be a link into this app.
 		url: z.url({ protocol: /^https$/, normalize: true }).max(GATE_LIMITS.url),
 	}),
@@ -126,7 +126,7 @@ const authorizeSchema = z.object({ authorizeUrl: z.url() });
 
 /**
  * The policy's word on a code as it is used (`ConnectCodeCheck` in
- * `@skysa/core`): how many seconds to keep it, and what to keep in its place
+ * `@skysa/protocol`): how many seconds to keep it, and what to keep in its place
  * where the policy gave something, or why not, in words the server has already
  * held to plain text. A reason this app cannot show is dropped and the refusal
  * kept.

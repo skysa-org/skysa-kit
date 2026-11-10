@@ -23,7 +23,7 @@ import { type Placement, remoteNow, removedInBatch, unreadNow, whereNow } from '
  * rule (`decideFile`, `decideKnown`), the note in its way moved aside
  * (`displaceOccupant`), and what a note the remote no longer has becomes
  * (`forgetNote`, `keepNote`, `noteNoLonger`). Moved out of `engine.ts` as they
- * were (#446).
+ * were (skysa-notes#446).
  */
 
 export const createPullNotes = (

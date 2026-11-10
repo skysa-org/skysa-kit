@@ -24,7 +24,7 @@ import {
  * folder or a file (`decideDeleted`), believed or not by what the rest of the
  * batch says, and what it takes with it once it is (`decideDeletedRow`); and
  * an unreadable file forgotten with the note or folder it was under
- * (`forgetUnread`). Moved out of `engine.ts` as they were (#446).
+ * (`forgetUnread`). Moved out of `engine.ts` as they were (skysa-notes#446).
  */
 
 /** Stop listing every unreadable file `gone` is true of. */

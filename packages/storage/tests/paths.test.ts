@@ -100,7 +100,7 @@ describe('isHidden', () => {
 	});
 
 	it('hides the dot-named folders this app syncs all the same, as any app’s rule', () => {
-		// This app's exception for them is `syncsHidden` (`appFolder.ts`),
+		// skysa-notes' exception for them is `syncsHidden` (its `appFolder.ts`),
 		// which the sync engine is handed.
 		expect(isHidden('.scratchpad/untitled.md')).toBe(true);
 		expect(isHidden('.vault/github.md')).toBe(true);

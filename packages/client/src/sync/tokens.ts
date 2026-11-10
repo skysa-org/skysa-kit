@@ -12,7 +12,7 @@ import { credentialFor, type CredentialStore } from '../store/credentials.js';
  * is replaced before it is used rather than after the provider refuses it,
  * and `refresh` is what the engine calls when the provider refuses one anyway.
  *
- * It goes to the shared kit (docs/decisions/0018-the-shared-kit.md), so the
+ * It goes to the shared kit (skysa-notes' record 0018), so the
  * row is reached through a port (`TokenStates`), which the app makes over its
  * database (`sync/dexiePorts.ts`).
  */

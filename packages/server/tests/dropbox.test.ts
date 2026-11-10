@@ -17,7 +17,7 @@ describe("Dropbox's account name", () => {
 		expect(await nameFrom('{"name":{"display_name":"A"}}')).toBe('A');
 	});
 
-	// Checked, not cast (#450): what is not a name is passed over, never stored.
+	// Checked, not cast (skysa-notes#450): what is not a name is passed over, never stored.
 	it('passes over a field that is not a name, and falls back rather than failing', async () => {
 		expect(await nameFrom('{"email":"","name":{"display_name":"A"}}')).toBe('A');
 		expect(await nameFrom('{"email":5,"name":"A"}')).toBe('Dropbox');

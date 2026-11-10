@@ -69,7 +69,7 @@ const ONE_OF_EACH: { readonly [Kind in PullChange['kind']]: Extract<PullChange, 
 		'reupload-file': { kind: 'reupload-file', fileId: 'f1' },
 	};
 
-describe('what a change is about, by its kind (#447)', () => {
+describe('what a change is about, by its kind (skysa-notes#447)', () => {
 	const changes: PullChange[] = Object.values(ONE_OF_EACH);
 
 	it.each(changes.map((change) => [change.kind, change] as const))(

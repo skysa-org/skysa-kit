@@ -228,7 +228,7 @@ export class ProviderResponseError extends Error {
 
 /**
  * Errors carry a `code` as well as their class. `instanceof` is the ergonomic
- * check and works today, since `@skysa/core` resolves to one module per bundle;
+ * check and works today, since `@skysa/storage` resolves to one module per bundle;
  * the code is what keeps the guards below honest if core is ever published and
  * a consumer ends up with two copies of it either side of a sync boundary.
  */

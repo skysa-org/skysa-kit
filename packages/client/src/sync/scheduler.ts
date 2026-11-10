@@ -27,7 +27,7 @@ import { createTokenSource, type TokenSource, type TokenStates } from './tokens.
 
 /**
  * When to sync, and what the last attempt came to. The engine decides nothing
- * about time (`packages/core/src/sync/engine.ts`); this is the part that does,
+ * about time (`packages/sync/src/engine.ts`); this is the part that does,
  * with the triggers docs/ARCHITECTURE.md §7 lists: app open, the tab regaining focus or
  * becoming visible, `online`, every minute while visible, and shortly after a
  * local edit. Background Sync is not here: it needs the service worker to reach
@@ -214,9 +214,9 @@ interface HeldUp {
 
 /**
  * What the scheduler reads and writes on the device. It goes to the shared
- * kit (docs/decisions/0018-the-shared-kit.md) and reaches IndexedDB only
- * through this, which this app makes over its own database
- * (`sync/dexiePorts.ts`). Every write is onto a source the device still
+ * kit (skysa-notes' record 0018) and reaches IndexedDB only
+ * through this, which skysa-notes makes over its own database
+ * (its `sync/dexiePorts.ts`). Every write is onto a source the device still
  * syncs: one let go meanwhile does not get its row back, and one kept
  * detached is not written to.
  */
@@ -295,7 +295,7 @@ export interface SyncSchedulerOptions {
 	document: DocumentFormat;
 	/**
 	 * The two sides of a document that both changed, made one where the app
-	 * can, for the engine (`SyncEngineOptions.merge`). This app passes none.
+	 * can, for the engine (`SyncEngineOptions.merge`). skysa-notes passes none.
 	 */
 	merge?: (file: MergeInput) => string | undefined;
 	/**
@@ -317,7 +317,7 @@ export interface SyncSchedulerOptions {
 	 * How long a write queued lazily (`queueWrite`'s `timing`) may wait to be
 	 * sent, at most: it goes with the next sync — the poll while the page is in
 	 * sight, or as the page is hidden — and by then at the latest. Absent, as
-	 * in this app, no write waits beyond the debounce, and the queue is not read
+	 * in skysa-notes, no write waits beyond the debounce, and the queue is not read
 	 * to tell.
 	 */
 	lazyMs?: number;

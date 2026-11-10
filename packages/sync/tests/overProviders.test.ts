@@ -42,7 +42,7 @@ import { createMemoryStore, type MemoryStore } from './memoryStore.js';
  *
  * Two devices share one remote. Each is an engine over its own store and its
  * own adapter, as two browsers would be, and the user's actions are made the
- * way `apps/web/src/store/queue.ts` queues them.
+ * way skysa-notes' `apps/web/src/store/queue.ts` queues them.
  */
 
 interface Remote {

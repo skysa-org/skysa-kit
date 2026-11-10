@@ -117,7 +117,7 @@ export const grantHolder = async (
 	// A row existing says nothing about whether it may still be used. Revoked,
 	// disconnected and pruned grants keep their rows, with `connection_id` set to
 	// null, so that their hashes can never be claimed a second time (see
-	// apps/api/src/db/schema.ts). `IS NOT NULL` is what tells those apart from
+	// packages/server/src/db/schema.ts). `IS NOT NULL` is what tells those apart from
 	// live ones. No mutation of it can be made to fail a test, because there are
 	// three guards and not one: this clause, the null branch below, and the fact
 	// that a null would not match a connection id in the second query either.

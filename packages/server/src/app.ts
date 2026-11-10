@@ -147,9 +147,9 @@ export const createApp = (options: CreateAppOptions) => {
 	 * stores. Setting a header after the fact makes Hono copy the response, and
 	 * a copy is not the one that holds the socket.
 	 *
-	 * The service worker is already `NetworkOnly` for `/api/*` (`apps/web/pwa.ts`);
+	 * The service worker is already `NetworkOnly` for `/api/*` (`packages/pwa/src/pwa.ts`);
 	 * this is the same rule for the caches it does not control, and the client
-	 * asks with `cache: 'no-store'` from its side (`apps/web/src/api/client.ts`).
+	 * asks with `cache: 'no-store'` from its side (`packages/client/src/api/client.ts`).
 	 * https://www.rfc-editor.org/rfc/rfc9111#name-no-store
 	 */
 	app.use('*', async (c, next) => {

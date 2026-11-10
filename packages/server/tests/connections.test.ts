@@ -683,7 +683,7 @@ describe('recording that a device is still in use', () => {
 });
 
 /**
- * Each route that acts on a connection mounts `requireBearer` itself (#450),
+ * Each route that acts on a connection mounts `requireBearer` itself (skysa-notes#450),
  * where one app-wide guard used to cover the paths. A handler that reads
  * `bearer` without it does not compile; this is the rule for one that never
  * reads it. The routes come from the app, not from a list here, so one added

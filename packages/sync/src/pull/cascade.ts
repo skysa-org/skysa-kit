@@ -10,7 +10,7 @@ import type { Occupancy } from './occupancy.js';
  * the batch keeps, which it must not delete (`roofsFor`, `roofOver`), the
  * renames queued here that carry a note out first (`renamesQueued`), and the
  * notes and files its cascade passes over (`cascadeOver`). Moved out of
- * `engine.ts` as they were (#446).
+ * `engine.ts` as they were (skysa-notes#446).
  */
 
 export const createCascade = ({
