@@ -50,6 +50,13 @@
       "when": 1790942114996,
       "tag": "0006_grant_device",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1794425590389,
+      "tag": "0007_drop_sign_in_tables",
+      "breakpoints": true
     }
   ]
 }

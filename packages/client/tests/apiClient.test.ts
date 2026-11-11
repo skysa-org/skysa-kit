@@ -22,9 +22,22 @@ describe('the API client', () => {
 		});
 
 		expect(await createApiClient({ fetch }).config()).toEqual({
-			authMode: 'storage-first',
 			providers: ['dropbox'],
 		});
+	});
+
+	it('reads the config the same whatever it says of authMode, which nothing reads (skysa-notes#118)', async () => {
+		for (const answer of [
+			{ providers: ['dropbox'] },
+			{ authMode: 'storage-first', providers: ['dropbox'] },
+			{ authMode: 'account-first', providers: ['dropbox'] },
+		]) {
+			expect(await createApiClient({ fetch: answering(200, answer).fetch }).config()).toEqual(
+				{
+					providers: ['dropbox'],
+				}
+			);
+		}
 	});
 
 	it("reads the operator's connect gate, where the instance has one", async () => {
@@ -39,7 +52,6 @@ describe('the API client', () => {
 		});
 
 		expect(await createApiClient({ fetch }).config()).toEqual({
-			authMode: 'storage-first',
 			providers: ['dropbox'],
 			connectGate,
 		});
@@ -77,7 +89,7 @@ describe('the API client', () => {
 
 		const config = await createApiClient({ fetch }).config();
 
-		expect(config).toEqual({ authMode: 'storage-first', providers: ['dropbox'] });
+		expect(config).toEqual({ providers: ['dropbox'] });
 		expect(config.connectGate).toBeUndefined();
 	});
 

@@ -1,4 +1,4 @@
-import { AUTH_MODES, type AuthMode, PROVIDER_KINDS, type ProviderKind } from '@skysa/protocol';
+import { PROVIDER_KINDS, type ProviderKind } from '@skysa/protocol';
 import { z } from 'zod';
 
 import { fromBase64Url } from './crypto.js';
@@ -58,7 +58,6 @@ const oauthCredentials = z.object({
 });
 
 const rawEnvSchema = z.object({
-	AUTH_MODE: z.enum(AUTH_MODES).default('storage-first'),
 	// `prefault` (not `default`): the fallback is the raw string, fed through the
 	// same split-and-validate pipeline as an operator-supplied value.
 	//
@@ -114,7 +113,6 @@ const rawEnvSchema = z.object({
 });
 
 export type AppConfig = {
-	authMode: AuthMode;
 	enabledProviders: ProviderKind[];
 	appOrigin: string;
 	/** False only for a plain-HTTP origin, which in practice means localhost. */
@@ -150,22 +148,19 @@ const missingCredentialIssues = (raw: Record<string, unknown>): string[] => {
 };
 
 /**
- * `account-first` is not built and is **not going to be** (docs/ARCHITECTURE.md §6, "No
- * sign-in separate from storage"). It used to be accepted and then behave
- * exactly like `storage-first`, which is the worst of the three possibilities:
- * an operator who set it believed connections were gated behind a sign-in they
- * had configured, and they were not. Refusing at boot is the only answer that
- * cannot be misread.
- *
- * The whole variable goes in a change of its own — removing it is breaking for
- * anyone with it in a `wrangler.toml` (issue skysa-notes#118 lists every site).
- * Until then this refusal is what keeps the setting from meaning anything.
+ * `AUTH_MODE` is gone (skysa-notes#118): every connected account is its own
+ * silo, and there is no other way to run (docs/ARCHITECTURE.md §6, "No sign-in
+ * separate from storage"). `account-first` is still refused at boot, as it was
+ * while the variable was read: it was never built, and an operator who set it
+ * would believe connections were gated behind a sign-in when they were not.
+ * Refusing is the only answer that cannot be misread. Any other value is the
+ * one that ran, and `envWarnings` asks for it to be removed.
  */
 const unbuiltAuthModeIssues = (raw: Record<string, unknown>): string[] =>
 	raw.AUTH_MODE === 'account-first'
 		? [
 				'AUTH_MODE: account-first is not implemented and will not be (docs/ARCHITECTURE.md §6). ' +
-					'Use storage-first, where each connected account is its own silo.',
+					'Remove AUTH_MODE: each connected account is its own silo.',
 			]
 		: [];
 
@@ -208,7 +203,6 @@ export const parseEnv = (raw: unknown): AppConfig => {
 	);
 
 	return {
-		authMode: env.AUTH_MODE,
 		// Accepted, so a deployment that lists it keeps booting, but not offered:
 		// its connect answers 404 (`envWarnings` says so at boot).
 		enabledProviders: env.ENABLED_PROVIDERS.filter((provider) => provider !== 'webdav'),
@@ -224,8 +218,8 @@ export const parseEnv = (raw: unknown): AppConfig => {
 
 /**
  * Settings that are accepted and do nothing, each said in a line for the
- * Worker's log at boot (skysa-notes#450). Refusing them would break anyone who has them
- * set, so they warn until skysa-notes#118's breaking change removes them.
+ * Worker's log at boot (skysa-notes#450). Refusing them would break anyone who
+ * has them set, so they warn.
  */
 export const envWarnings = (raw: unknown): string[] => {
 	const record = recordOf(raw);
@@ -245,6 +239,13 @@ export const envWarnings = (raw: unknown): string[] => {
 			? []
 			: [
 					'WEBDAV_ALLOW_PRIVATE: deprecated, and does nothing, since WebDAV is not built. Remove it.',
+				]),
+		// `account-first` is refused instead (`unbuiltAuthModeIssues`).
+		...(record.AUTH_MODE === undefined || record.AUTH_MODE === 'account-first'
+			? []
+			: [
+					'AUTH_MODE: no longer read, since each connected account is its own silo ' +
+						'(docs/ARCHITECTURE.md §6). Remove it.',
 				]),
 	];
 };

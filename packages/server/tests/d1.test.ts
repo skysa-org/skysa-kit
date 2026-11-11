@@ -16,13 +16,14 @@ describe('the node:sqlite D1 shim', () => {
 			.all<{ name: string }>();
 
 		const names = results.map((row) => row.name);
-		expect(names).toEqual(
-			expect.arrayContaining(['grants', 'identities', 'storage_connections', 'users'])
-		);
+		expect(names).toEqual(expect.arrayContaining(['grants', 'storage_connections']));
 		// 0004 and 0005 take these away. A migration that left either behind would
 		// leave a table nothing reads holding live refresh tokens.
 		expect(names).not.toContain('sessions');
 		expect(names).not.toContain('connections');
+		// And 0007 these, which nothing ever read (skysa-notes#118).
+		expect(names).not.toContain('users');
+		expect(names).not.toContain('identities');
 	});
 
 	it('enforces one connection per provider account', async () => {
@@ -107,15 +108,15 @@ describe('the node:sqlite D1 shim', () => {
 		const db = createD1();
 		await db
 			.prepare(
-				'INSERT INTO users (id, email, email_verified, created_at) VALUES (?, ?, 0, 0)'
+				'INSERT INTO storage_connections (id, provider, account_id, display_name, secret_ciphertext, secret_iv, secret_key_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, 0)'
 			)
-			.bind('user-1', 'u@example.com')
+			.bind('connection-1', 'dropbox', 'dbid:1', 'x', 'c', 'i', 'k1')
 			.run();
 		await db
 			.prepare(
-				'INSERT INTO identities (id, user_id, provider, subject, email, email_verified, created_at) VALUES (?, ?, ?, ?, ?, 0, 0)'
+				'INSERT INTO grants (id, connection_id, secret_hash, created_at, last_used_at) VALUES (?, ?, ?, 0, 0)'
 			)
-			.bind('identity-1', 'user-1', 'google', 's', 'u@example.com')
+			.bind('grant-1', 'connection-1', 'h')
 			.run();
 
 		// Node 22 has no `StatementSync.columns()`, so duplicate column names in a
@@ -123,7 +124,9 @@ describe('the node:sqlite D1 shim', () => {
 		// this throws or answers depends on the Node version; what must never
 		// happen is a quiet wrong answer.
 		const attempt = db
-			.prepare('SELECT u.id, i.id FROM users u JOIN identities i ON i.user_id = u.id')
+			.prepare(
+				'SELECT c.id, g.id FROM storage_connections c JOIN grants g ON g.connection_id = c.id'
+			)
 			.bind()
 			.raw();
 
@@ -134,7 +137,7 @@ describe('the node:sqlite D1 shim', () => {
 
 		// Two columns both named `id`. Against empty tables this test would pass
 		// whether or not they collapsed, which is why there is a row in them.
-		if (outcome.ok) expect(outcome.rows).toEqual([['user-1', 'identity-1']]);
+		if (outcome.ok) expect(outcome.rows).toEqual([['connection-1', 'grant-1']]);
 		else expect(String(outcome.error)).toContain('duplicate column names');
 	});
 });

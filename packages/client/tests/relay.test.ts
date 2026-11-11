@@ -486,7 +486,7 @@ describe('relay links over the API', () => {
 		return device.store.credentials;
 	};
 
-	const CONFIG: InstanceConfig = { authMode: 'storage-first', providers: ['dropbox'] };
+	const CONFIG: InstanceConfig = { providers: ['dropbox'] };
 
 	const api = (
 		config: () => Promise<InstanceConfig>,

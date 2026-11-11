@@ -7,54 +7,6 @@ import { index, integer, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqli
  */
 
 /**
- * Two tables with no caller, waiting on a migration to remove them.
- *
- * There are no users here: a connection is reached by the credential the device
- * that made it holds, and nothing aggregates connections under a subject. These
- * two were kept for `account-first`, which was **dropped** on 2026-09-18 —
- * identity and storage are coupled deliberately (docs/ARCHITECTURE.md §6, "No sign-in
- * separate from storage"). So they are now dead rather than early, and issue
- * skysa-notes#118 tracks dropping them: a hand-written migration, `identities` before `users`
- * because of the foreign key.
- *
- * Nothing in `src/` reads either one. Do not start.
- */
-export const users = sqliteTable(
-	'users',
-	{
-		id: text('id').primaryKey(),
-		email: text('email').notNull(),
-		emailVerified: integer('email_verified', { mode: 'boolean' }).notNull().default(false),
-		createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
-	},
-	// Deliberately not unique: an unverified sign-in with an existing address must
-	// create a separate user rather than merge into one. See docs/ARCHITECTURE.md §6.
-	(t) => [index('users_email_idx').on(t.email)]
-);
-
-/** No caller: one row per external sign-in attached to a user. See above. */
-export const identities = sqliteTable(
-	'identities',
-	{
-		id: text('id').primaryKey(),
-		userId: text('user_id')
-			.notNull()
-			.references(() => users.id, { onDelete: 'cascade' }),
-		provider: text('provider', { enum: ['google', 'microsoft'] }).notNull(),
-		subject: text('subject').notNull(),
-		email: text('email').notNull(),
-		emailVerified: integer('email_verified', { mode: 'boolean' }).notNull().default(false),
-		createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
-	},
-	(t) => [
-		// An external identity belongs to exactly one user; linking it to a second
-		// must fail rather than silently merge accounts.
-		uniqueIndex('identities_provider_subject_idx').on(t.provider, t.subject),
-		index('identities_user_id_idx').on(t.userId),
-	]
-);
-
-/**
  * One connected storage account. Auth and data are coupled: a connection is its
  * own silo, and the device switches between them (docs/ARCHITECTURE.md §6).
  *
@@ -168,7 +120,5 @@ export const grants = sqliteTable(
 	]
 );
 
-export type User = typeof users.$inferSelect;
-export type Identity = typeof identities.$inferSelect;
 export type Connection = typeof connections.$inferSelect;
 export type Grant = typeof grants.$inferSelect;

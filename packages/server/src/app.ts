@@ -181,7 +181,10 @@ export const createApp = (options: CreateAppOptions) => {
 	 */
 	app.get('/config', (c) =>
 		c.json({
-			authMode: config.authMode,
+			// Read by nothing since skysa-notes#118, and sent anyway: an app from
+			// before it requires the field, and a phone runs its cached copy
+			// until it updates.
+			authMode: 'storage-first',
 			providers: config.enabledProviders,
 			...(gate === undefined ? {} : { connectGate: gate }),
 			// Only where there is one: an app that is not told polls as it always has.

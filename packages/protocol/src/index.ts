@@ -4,7 +4,7 @@
  * `PROVIDER_KINDS`.
  */
 
-export { API_ERROR_CODES, type ApiErrorCode, AUTH_MODES, type AuthMode } from './api.js';
+export { API_ERROR_CODES, type ApiErrorCode } from './api.js';
 export {
 	alwaysAllowed,
 	type ConnectCodeCheck,
