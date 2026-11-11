@@ -1,6 +1,6 @@
 {
 	"name": "@skysa/sync",
-	"version": "0.1.0",
+	"version": "0.2.0",
 	"description": "The sync engine and its store port, over a document format the app supplies.",
 	"license": "AGPL-3.0-only",
 	"repository": {

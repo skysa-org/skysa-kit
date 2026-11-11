@@ -1,6 +1,6 @@
 {
 	"name": "@skysa/protocol",
-	"version": "0.1.0",
+	"version": "0.2.0",
 	"description": "What the server, the client and a deployment all speak: the API's error codes, the entitlement, gate and rate-limit seams, the relay's frames, and the provider kinds.",
 	"license": "AGPL-3.0-only",
 	"repository": {
