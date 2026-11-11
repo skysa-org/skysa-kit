@@ -24,7 +24,6 @@ describe('parseEnv', () => {
 		});
 		expect(config.enabledProviders).toEqual(['dropbox']);
 		expect(config.secretsKeyId).toBe('k1');
-		expect(config.webdavAllowPrivate).toBe(false);
 	});
 
 	it('parses ENABLED_PROVIDERS and ignores whitespace', () => {
@@ -107,15 +106,16 @@ describe('parseEnv', () => {
 		}
 	});
 
-	it('reads WEBDAV_ALLOW_PRIVATE as a string flag', () => {
-		expect(
-			parseEnv({ ...base, ENABLED_PROVIDERS: 'webdav', WEBDAV_ALLOW_PRIVATE: 'true' })
-				.webdavAllowPrivate
-		).toBe(true);
-		expect(
-			parseEnv({ ...base, ENABLED_PROVIDERS: 'webdav', WEBDAV_ALLOW_PRIVATE: 'false' })
-				.webdavAllowPrivate
-		).toBe(false);
+	it('no longer reads WEBDAV_ALLOW_PRIVATE, whatever it is set to', () => {
+		['true', 'false', '', 'yes'].forEach((value) => {
+			const config = parseEnv({
+				...base,
+				ENABLED_PROVIDERS: 'webdav',
+				WEBDAV_ALLOW_PRIVATE: value,
+			});
+			expect(config).toEqual(parseEnv({ ...base, ENABLED_PROVIDERS: 'webdav' }));
+			expect(config).not.toHaveProperty('webdavAllowPrivate');
+		});
 	});
 
 	it('leaves the change relay off unless it is asked for', () => {
@@ -238,13 +238,15 @@ describe('envWarnings', () => {
 		);
 	});
 
-	it('names WEBDAV_ALLOW_PRIVATE whatever it is set to, and boots with it', () => {
+	it('names WEBDAV_ALLOW_PRIVATE, which is no longer read, whatever it is set to', () => {
 		['true', 'false', '', 'yes'].forEach((value) => {
-			const env = { ...base, ENABLED_PROVIDERS: 'webdav', WEBDAV_ALLOW_PRIVATE: value };
-			const warnings = envWarnings(env);
+			const warnings = envWarnings({
+				...base,
+				ENABLED_PROVIDERS: 'webdav',
+				WEBDAV_ALLOW_PRIVATE: value,
+			});
 			expect(warnings).toHaveLength(2);
-			expect(warnings[1]).toMatch(/^WEBDAV_ALLOW_PRIVATE: deprecated, and does nothing/);
-			expect(() => parseEnv(env)).not.toThrow();
+			expect(warnings[1]).toMatch(/^WEBDAV_ALLOW_PRIVATE: no longer read, .* Remove it\.$/);
 		});
 	});
 
