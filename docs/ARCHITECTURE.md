@@ -694,8 +694,10 @@ Keep it boring.
   The gain is that a whole class of question stops needing an answer here: which of two identities a grant belongs to, what a verified email is worth, what happens when a linked provider is unlinked, and who may see a connection someone else made.
   A shared instance is still possible — that is what the entitlement seam is for — it just gates on the storage account rather than on a user the server invented.
 
-  **Still in the tree, and going:** `AUTH_MODE` (an env var with one legal value), the `users` and `identities` tables (`packages/server/src/db/schema.ts`, unread by any code), and skysa-notes' `account-first` branch in its storage panel (`components/account/NotConnected.tsx`).
-  They are left standing in the change that made this decision because dropping the two tables is a hand-written D1 migration and this is a documentation change; skysa-notes#118 tracks them.
+  **What it left standing is gone** (skysa-notes#118).
+  The server no longer reads `AUTH_MODE`: a deployment that still sets it boots and is told at boot to remove it, and `account-first` is still refused, below.
+  Migration `0007` drops the `users` and `identities` tables, which nothing ever read.
+  `/api/config` still sends `authMode: 'storage-first'`, a fixed value, because an app from before this change requires it and a phone runs its cached copy until it updates; the client no longer reads it, and `AUTH_MODES` has left `@skysa/protocol`.
 
 - **One OAuth flow per provider, and it is for storage.**
   `/auth/connect/:provider` requests storage scopes only.
@@ -865,7 +867,7 @@ Each decision, with the reason it would otherwise be got wrong later:
   A rebuild written by hand avoids the pragma but not the `DROP TABLE` + `RENAME` pair in the middle, whose partial state no re-run can recover from; so the new shape gets a new table name (`storage_connections`), `0004` never drops the table it reads, and dropping the old one is `0005`'s single statement.
   Every device reconnects after this: sessions carried that right before, and a grant can only be created by the OAuth callback.
 - **`sessions` goes; `users` and `identities` stayed**, annotated at the time as the account-first mode's only callers.
-  That mode was dropped on 2026-09-18, so the two tables now have no caller at all and are owed a migration (skysa-notes#118).
+  That mode was dropped on 2026-09-18, which left the two tables with no caller at all, and `0007` drops them (skysa-notes#118).
 - This retires `holdsAnotherProvider`, `session_mismatch`, `claimedBy`, the compensating delete, and the `conflict`/`signin`/`occupied` outcomes — not by relocating them but by removing what made them necessary.
 
 **The device half.**
@@ -898,8 +900,6 @@ A revocation list is the one of the three that could still be built on what exis
 <a id="data-model-drizzle-d1"></a>
 ### Data model (Drizzle, D1)
 ```
-users               id, email, email_verified, created_at              (no caller; to be dropped — skysa-notes#118)
-identities          id, user_id, provider ('google'|'microsoft'), subject, email, created_at   (no caller; to be dropped)
 storage_connections id, provider, account_id, display_name, root_id,
                     secret_ciphertext, secret_iv, secret_key_id, created_at, last_used_at
                     -- unique on (provider, account_id); no user
@@ -933,7 +933,8 @@ Everything under `/api/connection*` and `POST /api/token` requires `Authorizatio
 Two refusals, and the difference is actionable: `credential_required` (401) means the device never had one and should connect; `credential_revoked` (401) means the one it holds is not known here anymore and should be thrown away first.
 
 There are no sign-in routes, here or anywhere: identity is the storage connection (§6).
-`AUTH_MODE=account-first` refuses to boot, which is now a refusal to honor a setting that describes something this project has decided not to build rather than something it has not built yet — the env var itself goes with the tables (skysa-notes#118).
+`AUTH_MODE=account-first` still refuses to boot, though the server no longer reads the variable (skysa-notes#118): it describes something this project has decided not to build, and booting with it would let an operator believe connections were gated behind a sign-in.
+Any other value boots, with a warning to remove it.
 
 <a id="change-relay"></a>
 ### Change relay (optional, 2026-10-05)

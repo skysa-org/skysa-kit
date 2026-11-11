@@ -16,13 +16,12 @@ describe('parseEnv', () => {
 	 * operator had registered apps with Google *and* Microsoft, for flows that
 	 * do not exist yet.
 	 */
-	it('defaults to storage-first with the one implemented provider', () => {
+	it('defaults to the one implemented provider', () => {
 		const config = parseEnv({
 			...base,
 			DROPBOX_CLIENT_ID: 'd',
 			DROPBOX_CLIENT_SECRET: 'ds',
 		});
-		expect(config.authMode).toBe('storage-first');
 		expect(config.enabledProviders).toEqual(['dropbox']);
 		expect(config.secretsKeyId).toBe('k1');
 		expect(config.webdavAllowPrivate).toBe(false);
@@ -89,9 +88,9 @@ describe('parseEnv', () => {
 		// were not. Configuring a sign-in provider does not make it true either.
 		//
 		// Since 2026-09-18 the refusal is permanent rather than an interim: there
-		// is no sign-in layer coming (docs/ARCHITECTURE.md §6). The variable outlives the
-		// decision only because removing it is breaking for anyone who has it
-		// set, which is a change of its own (issue skysa-notes#118).
+		// is no sign-in layer coming (docs/ARCHITECTURE.md §6). The variable is no
+		// longer read (skysa-notes#118), but this value of it is still refused,
+		// since booting with it would be the same misreading.
 		for (const extra of [
 			{},
 			{ MICROSOFT_CLIENT_ID: 'm', MICROSOFT_CLIENT_SECRET: 'ms' },
@@ -221,7 +220,7 @@ describe('what the first draft got wrong', () => {
 });
 
 describe('envWarnings', () => {
-	it('says nothing for a deployment that sets neither inert setting', () => {
+	it('says nothing for a deployment that sets no inert setting', () => {
 		expect(envWarnings({ ...base, ENABLED_PROVIDERS: 'dropbox' })).toEqual([]);
 		expect(envWarnings(undefined)).toEqual([]);
 	});
@@ -247,5 +246,21 @@ describe('envWarnings', () => {
 			expect(warnings[1]).toMatch(/^WEBDAV_ALLOW_PRIVATE: deprecated, and does nothing/);
 			expect(() => parseEnv(env)).not.toThrow();
 		});
+	});
+
+	it('names AUTH_MODE, which is no longer read, and boots with it', () => {
+		['storage-first', '', 'anything'].forEach((value) => {
+			const env = { ...base, ENABLED_PROVIDERS: 'webdav', AUTH_MODE: value };
+			expect(envWarnings(env)).toContainEqual(
+				expect.stringMatching(/^AUTH_MODE: no longer read, .* Remove it\.$/)
+			);
+			expect(parseEnv(env)).not.toHaveProperty('authMode');
+		});
+	});
+
+	it('leaves account-first to the refusal at boot', () => {
+		const env = { ...base, ENABLED_PROVIDERS: 'webdav', AUTH_MODE: 'account-first' };
+		expect(envWarnings(env).filter((line) => line.startsWith('AUTH_MODE'))).toEqual([]);
+		expect(() => parseEnv(env)).toThrow(/Remove AUTH_MODE/);
 	});
 });

@@ -10,8 +10,8 @@ import { useInstanceConfig } from '../src/api/instanceConfig.js';
  * not one that has since been handed another client.
  */
 
-const DROPBOX: InstanceConfig = { authMode: 'storage-first', providers: ['dropbox'] };
-const DRIVE: InstanceConfig = { authMode: 'storage-first', providers: ['gdrive'] };
+const DROPBOX: InstanceConfig = { providers: ['dropbox'] };
+const DRIVE: InstanceConfig = { providers: ['gdrive'] };
 
 /** A request the test settles when it chooses. */
 const held = <T,>() => {

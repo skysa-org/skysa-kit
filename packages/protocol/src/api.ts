@@ -48,12 +48,3 @@ export const API_ERROR_CODES = [
 ] as const;
 
 export type ApiErrorCode = (typeof API_ERROR_CODES)[number];
-
-/**
- * How the app relates to the server's sign-in, as `/api/config` says
- * (`AUTH_MODE`). Only `storage-first` boots; the other is refused at start,
- * and removing it is issue skysa-notes#118.
- */
-export const AUTH_MODES = ['storage-first', 'account-first'] as const;
-
-export type AuthMode = (typeof AUTH_MODES)[number];

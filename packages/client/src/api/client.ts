@@ -1,6 +1,5 @@
 import {
 	type ApiErrorCode,
-	AUTH_MODES,
 	type ConnectCodeCheck,
 	type ConnectGate,
 	ENTITLEMENT_CODES,
@@ -65,7 +64,6 @@ const gateSchema = z.object({
 }) satisfies z.ZodType<ConnectGate>;
 
 const configSchema = z.object({
-	authMode: z.enum(AUTH_MODES),
 	// A provider this build has never heard of is dropped rather than failing
 	// the whole config: a newer Worker in front of an older cached app.
 	providers: z

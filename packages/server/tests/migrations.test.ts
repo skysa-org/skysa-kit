@@ -39,6 +39,13 @@ const open = (upTo: string): DatabaseSync => {
 	return db;
 };
 
+const tables = (db: DatabaseSync): string[] =>
+	(
+		db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name").all() as {
+			name: string;
+		}[]
+	).map((row) => row.name);
+
 const addUser = (db: DatabaseSync, id: string): void => {
 	db.prepare('INSERT INTO users (id, email, email_verified, created_at) VALUES (?, ?, 0, 0)').run(
 		id,
@@ -158,13 +165,6 @@ describe('0004_per_connection_credentials', () => {
 			db.prepare('SELECT id FROM storage_connections ORDER BY id').all() as { id: string }[]
 		).map((row) => row.id);
 
-	const tables = (db: DatabaseSync): string[] =>
-		(
-			db
-				.prepare("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name")
-				.all() as { name: string }[]
-		).map((row) => row.name);
-
 	it('carries every addressable connection across, and its secret with it', () => {
 		const db = before();
 		apply(db, '0004_per_connection_credentials.sql');
@@ -198,9 +198,8 @@ describe('0004_per_connection_credentials', () => {
 		expect(names).not.toContain('connections');
 		expect(names).not.toContain('sessions');
 		// `users` and `identities` are still here. They were kept for account-first,
-		// which was dropped on 2026-09-18, so they are now owed a migration of
-		// their own (issue skysa-notes#118) — but 0005 is a record of what it did, and
-		// what it did was leave them.
+		// which was dropped on 2026-09-18, and 0007 drops them (skysa-notes#118) —
+		// but 0005 is a record of what it did, and what it did was leave them.
 		expect(names).toContain('users');
 		expect(names).toContain('identities');
 	});
@@ -283,5 +282,47 @@ describe('0006_grant_device', () => {
 		expect(db.prepare('SELECT id, secret_hash, device FROM grants').all()).toEqual([
 			{ id: 'g', secret_hash: 'h', device: null },
 		]);
+	});
+});
+
+describe('0007_drop_sign_in_tables', () => {
+	const signedIn = (): DatabaseSync => {
+		const db = open('0006_grant_device.sql');
+		addUser(db, 'u');
+		db.prepare(
+			'INSERT INTO identities (id, user_id, provider, subject, email, email_verified, created_at) VALUES (?, ?, ?, ?, ?, 0, 0)'
+		).run('i', 'u', 'google', 'sub', 'u@example.com');
+		db.prepare(
+			'INSERT INTO storage_connections (id, provider, account_id, display_name, secret_ciphertext, secret_iv, secret_key_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, 0)'
+		).run('c', 'dropbox', 'dbid:1', 'x', 'c', 'i', 'k1');
+		db.prepare(
+			'INSERT INTO grants (id, connection_id, secret_hash, created_at, last_used_at) VALUES (?, ?, ?, 0, 0)'
+		).run('g', 'c', 'h');
+		return db;
+	};
+
+	it('drops both tables, rows and all, and leaves the connections and their grants', () => {
+		const db = signedIn();
+
+		apply(db, '0007_drop_sign_in_tables.sql');
+
+		const names = tables(db);
+		expect(names).not.toContain('users');
+		expect(names).not.toContain('identities');
+		expect(db.prepare('SELECT id FROM storage_connections').all()).toEqual([{ id: 'c' }]);
+		expect(db.prepare('SELECT id, connection_id FROM grants').all()).toEqual([
+			{ id: 'g', connection_id: 'c' },
+		]);
+	});
+
+	it('can be run again after it stopped between the two', () => {
+		const db = signedIn();
+		apply(db, '0007_drop_sign_in_tables.sql', 1);
+		expect(tables(db)).toContain('users');
+
+		expect(() => {
+			apply(db, '0007_drop_sign_in_tables.sql');
+		}).not.toThrow();
+		expect(tables(db)).not.toContain('users');
 	});
 });
