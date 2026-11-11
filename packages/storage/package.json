@@ -1,6 +1,6 @@
 {
 	"name": "@skysa/storage",
-	"version": "0.1.0",
+	"version": "0.2.0",
 	"description": "The storage adapter interface and its errors, one adapter per provider, and below them names, paths, the marker and hashing.",
 	"license": "AGPL-3.0-only",
 	"repository": {
