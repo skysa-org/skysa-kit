@@ -218,8 +218,8 @@ export const parseEnv = (raw: unknown): AppConfig => {
 
 /**
  * Settings that are accepted and do nothing, each said in a line for the
- * Worker's log at boot (skysa-notes#450). Refusing them would break anyone who
- * has them set, so they warn.
+ * Worker's log at boot (skysa-notes#450). Refusing them would break anyone who has them
+ * set, so they warn until skysa-notes#118's breaking change removes them.
  */
 export const envWarnings = (raw: unknown): string[] => {
 	const record = recordOf(raw);
