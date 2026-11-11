@@ -252,7 +252,8 @@ jobs:
         # deployment rule admits only `v*` tags, so a run from a branch, with
         # its own copy of this file, can publish nothing. It is made, with that
         # rule, before `NPM_PUBLISH` is switched on: GitHub would otherwise
-        # make it here, with no rule at all.
+        # make it here, with no rule at all. The rule is a tag rule: `v*` as a
+        # branch rule refuses this job (`.changeset/README.md`).
         environment: npm
         permissions:
             contents: read
