@@ -34,6 +34,7 @@ Then two jobs do the work: `pack` builds every package and runs the pack check a
 Only `publish` holds the credential to publish, and it runs nothing but npm and that script.
 It runs in the repository's `npm` environment, whose deployment rule admits only `v*` tags, so a run from a branch, with its own copy of the workflow, can publish nothing.
 The environment is made, with that rule, before publishing is switched on, since GitHub would otherwise make it on first use with no rule at all.
+The rule's "Ref type" is **Tag**, which the dialog does not start on: the same `v*` as a branch rule refuses every run from a tag, and admits any branch named `v…`, which is how the first publish was refused.
 None of this runs unless the repository variable `NPM_PUBLISH` is `true`, and the repository is public, which npm's provenance needs.
 
 The tag check runs from the tag's own copy of the workflow, so it stops a tag pushed by mistake, not someone who can push and changes the check at that tag as well.
