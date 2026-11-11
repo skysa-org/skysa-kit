@@ -92,15 +92,6 @@ const rawEnvSchema = z.object({
 	SECRETS_KEY_ID: z.string().min(1).default('k1'),
 
 	/**
-	 * Deprecated, and does nothing: it was for a WebDAV proxy that is not built
-	 * (docs/ARCHITECTURE.md §5.4). Still read, and warned of at boot
-	 * (`envWarnings`), so a deployment that sets it keeps booting; it goes in
-	 * skysa-notes#118's breaking change. Any value boots: one this would once have refused
-	 * reads as false, since nothing reads it either way.
-	 */
-	WEBDAV_ALLOW_PRIVATE: booleanish.default(false).catch(false),
-
-	/**
 	 * Run the change relay (docs/ARCHITECTURE.md §6, "Change relay"). Off by
 	 * default: it tells the server when each connection is edited, and on
 	 * Workers Free it spends the daily request cap that token refresh shares.
@@ -119,8 +110,6 @@ export type AppConfig = {
 	cookiesSecure: boolean;
 	secretsKey: string;
 	secretsKeyId: string;
-	/** Deprecated, and does nothing; see `WEBDAV_ALLOW_PRIVATE`. */
-	webdavAllowPrivate: boolean;
 	/** Whether the operator turned the change relay on. The entry decides what carries it. */
 	relay: boolean;
 	/** Each enabled OAuth provider's app; OneDrive's carries its tenant. */
@@ -210,16 +199,17 @@ export const parseEnv = (raw: unknown): AppConfig => {
 		cookiesSecure: env.APP_ORIGIN.startsWith('https://'),
 		secretsKey: env.SECRETS_KEY,
 		secretsKeyId: env.SECRETS_KEY_ID,
-		webdavAllowPrivate: env.WEBDAV_ALLOW_PRIVATE,
 		relay: env.RELAY,
 		oauth,
 	};
 };
 
 /**
- * Settings that are accepted and do nothing, each said in a line for the
- * Worker's log at boot (skysa-notes#450). Refusing them would break anyone who has them
- * set, so they warn until skysa-notes#118's breaking change removes them.
+ * Settings that are set and do nothing, each said in a line for the Worker's
+ * log at boot (skysa-notes#450). Refusing them would break a deployment that
+ * sets them, so they warn. `webdav` is still accepted in `ENABLED_PROVIDERS`,
+ * since WebDAV is deferred rather than dropped (docs/ARCHITECTURE.md §5.4);
+ * `WEBDAV_ALLOW_PRIVATE` and `AUTH_MODE` are no longer read (skysa-notes#118).
  */
 export const envWarnings = (raw: unknown): string[] => {
 	const record = recordOf(raw);
@@ -238,7 +228,8 @@ export const envWarnings = (raw: unknown): string[] => {
 		...(record.WEBDAV_ALLOW_PRIVATE === undefined
 			? []
 			: [
-					'WEBDAV_ALLOW_PRIVATE: deprecated, and does nothing, since WebDAV is not built. Remove it.',
+					'WEBDAV_ALLOW_PRIVATE: no longer read, since WebDAV is not built ' +
+						'(docs/ARCHITECTURE.md §5.4). Remove it.',
 				]),
 		// `account-first` is refused instead (`unbuiltAuthModeIssues`).
 		...(record.AUTH_MODE === undefined || record.AUTH_MODE === 'account-first'

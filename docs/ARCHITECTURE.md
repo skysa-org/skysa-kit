@@ -680,8 +680,8 @@ Keep it boring.
 - **Provider enablement** (`ENABLED_PROVIDERS` env, default `dropbox` — only what is implemented; each OAuth provider listed must have its credentials or the app refuses to boot).
   Which settings those are is said once, in `OAUTH_ENV` in `packages/server/src/env.ts`, keyed by the flows in `oauth/providers.ts`, so a provider added to one and not the other does not compile; the schema, the boot check and the credentials `createApp` is handed all read it (skysa-notes#450).
   `webdav` is accepted and needs no credentials, but WebDAV is deferred (§5.4): nothing is mounted for it, `/api/config` does not offer it, and the Worker logs a warning at boot while it is listed.
-  `WEBDAV_ALLOW_PRIVATE` is likewise read, does nothing, and warns.
-  Refusing either would break a deployment that has it set, so both stay until skysa-notes#118's breaking change (decided 2026-10-25, skysa-notes#450).
+  It stays accepted because WebDAV is deferred, not dropped, and refusing it would break a deployment that lists it (decided 2026-10-25, skysa-notes#450, and kept 2026-11-11).
+  `WEBDAV_ALLOW_PRIVATE` is no longer read (skysa-notes#118), and the Worker warns at boot while it is set, as it does for `AUTH_MODE`.
   If it is ever built, its routes and proxy are mounted only when `webdav` is listed.
 - **No sign-in separate from storage.**
   Decided 2026-09-18, and it closes what used to be two modes behind an `AUTH_MODE` env.
@@ -1721,7 +1721,7 @@ What an app shows and opens is its own ([skysa-notes §9](https://github.com/sky
 - *(Only if WebDAV is built, §5.4.)*
   WebDAV proxy SSRF hardening (on by default; protects operators who expose their instance to the internet): HTTPS only; resolve the host and reject private/loopback/link-local/cloud-metadata ranges (10/8, 172.16/12, 192.168/16, 127/8, 169.254/16, fc00::/7, ::1); reject IP-literal hosts; re-validate on redirect (or disable redirects); per-user rate limit and daily byte budget.
   Self-hosters could relax the private-range rule for a LAN Nextcloud.
-  The `WEBDAV_ALLOW_PRIVATE` flag reserved for that does nothing today and is deprecated (§6, provider enablement); a built WebDAV would bring its own.
+  The `WEBDAV_ALLOW_PRIVATE` flag once reserved for that is no longer read (§6, provider enablement); a built WebDAV would bring its own.
 - CSP: `connect-src` limited to self + `www.googleapis.com` + `*.dropboxapi.com` + OneDrive's `graph.microsoft.com` and its download hosts (`*.files.1drv.com`, `my.microsoftpersonalcontent.com`, `*.sharepoint.com`, §5.2) — each provider's hosts added with its adapter, never ahead of it (WebDAV goes through the proxy, so it adds none).
   skysa-notes sets it for every static response in `apps/web/public/_headers` (Cloudflare applies it to the shell, the assets and `sw.js`, and a response the service worker replays keeps it; `/api/*` is the Worker's and is not a page); its `tests/csp.test.ts` holds it, including that every host the adapters request is allowed.
   `script-src 'self'` with nothing inline or eval'd: zod's `new Function` probe is turned off (skysa-notes' `src/jitless.ts`, imported first), since it reports a violation even when refused.
