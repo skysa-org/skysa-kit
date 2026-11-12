@@ -22,6 +22,7 @@ export {
 	conflictFilePath,
 	conflictFolderPath,
 	conflictNameKeepingExtension,
+	conflictStamp,
 	documentNames,
 	type DocumentNames,
 } from './names/conflicts.js';

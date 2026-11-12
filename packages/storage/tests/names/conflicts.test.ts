@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { conflictStamp as offered } from '../../src/index.js';
 import {
 	conflictFilePath,
 	conflictFolderName,
@@ -37,6 +38,13 @@ describe('conflictStamp', () => {
 		expect(conflictStamp(new Date('2026-09-15T14:32:10Z'))).toBe(
 			conflictStamp(new Date('2026-09-15T16:32:10+02:00'))
 		);
+	});
+
+	it('is offered to an app as the one every conflict name carries', () => {
+		// An app that says the stamp anywhere else, as skysa-draw does in the
+		// title of its editor's copy of a drawing, says the name's.
+		expect(offered).toBe(conflictStamp);
+		expect(conflictFilename('Plan.md', AT)).toBe(`Plan (conflict ${offered(AT)}).md`);
 	});
 });
 
