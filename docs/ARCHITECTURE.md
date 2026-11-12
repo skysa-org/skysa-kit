@@ -408,7 +408,7 @@ Its `pageSize`, `folderChanges` and `setFault` options are what let the engine's
 - Scopes: `Files.ReadWrite.AppFolder offline_access openid email`.
   User consent only.
 - Root: `GET /me/drive/special/approot` — Microsoft creates `/Apps/<AppName>` automatically, where `<AppName>` is the Entra app registration display name.
-  Register it as `skysa-notes` to match `APP_FOLDER_NAME`; no ensureRoot creation logic beyond writing `.notesapp.json`.
+  Register it under the app folder's name (skysa-notes registers `skysa-notes`, its `APP_FOLDER_NAME`); no ensureRoot creation logic beyond writing the app's marker file (skysa-notes' `.notesapp.json`).
 - Files, create: `PUT /me/drive/special/approot:/{path}:/content?@microsoft.graph.conflictBehavior=fail` (simple upload, fine for markdown; add a resumable session only if a file ever exceeds 250 MB).
   Graph's default for an upload is to **replace**, so the `fail` is what keeps a create from being a blind overwrite; a name in use answers `409`.
   The adapter looks the path up before raising `ConflictError`; Graph does not say what an upload into a missing folder does (it may make the folders), so a refusal with nothing at the path and no parent folder is `NotFoundError` for the parent.
@@ -475,7 +475,7 @@ Its `pageSize`, `folderChanges` and `setFault` options are what let the engine's
 - App type: **App folder** access.
   Scopes: `files.metadata.read files.metadata.write files.content.read files.content.write account_info.read`.
 - Root: with App folder access, the API root *is* `/Apps/<AppName>`, where `<AppName>` is the app name set in the Dropbox App Console (immutable after creation — create it as `skysa-notes`).
-  All paths are relative to it. ensureRoot just writes `.notesapp.json` at `/`.
+  All paths are relative to it. ensureRoot just writes the app's marker file (skysa-notes' `.notesapp.json`) at `/`.
 - Files: `POST content.dropboxapi.com/2/files/upload` with `mode: { ".tag": "update", update: rev }` for conflict-safe overwrite (Dropbox returns a conflict error rather than auto-renaming when `autorename: false`).
   `mode: add` for create.
   **`strict_conflict: true` is required**: without it an `update` whose rev no longer matches still succeeds when the file has since been deleted, which is exactly the case the expected version exists to catch.
@@ -530,7 +530,7 @@ What follows is the design as planned, kept so it need not be worked out again i
   The proxy forwards method/headers/body verbatim, injects Basic auth, restricts to the configured base URL, and streams bodies.
   Supported methods: `PROPFIND`, `GET`, `PUT`, `MKCOL`, `MOVE`, `DELETE`, `REPORT`.
 - Root: the user supplies a base URL that *is* the app folder (e.g. `https://cloud.example.com/remote.php/dav/files/david/Notes/`).
-  ensureRoot does `PROPFIND depth 0`, `MKCOL` if 404, then writes `.notesapp.json`.
+  ensureRoot does `PROPFIND depth 0`, `MKCOL` if 404, then writes the app's marker file.
 - Files: `PUT` with `If-Match: <etag>` for updates, `If-None-Match: *` for creates.
   Version = `ETag` (strip weak prefix `W/` and normalize quotes).
 - Changes: no universal delta.
@@ -1204,7 +1204,7 @@ The branch table is the specification; these are the cases it does not mention, 
 They live in `packages/sync/src/engine.ts` and, for the push, in `packages/sync/src/push/`.
 
 - **A file that is not a note is mirrored, and never read as one** ("Pulling files", above); anything at a hidden path is ignored.
-  The app owns the folder but not everything in it: a PDF the user dropped beside their notes would be corrupted by being read as markdown and written back, and `.notesapp.json` is our own bookkeeping.
+  The app owns the folder but not everything in it: a PDF the user dropped beside their notes would be corrupted by being read as markdown and written back, and the marker file (skysa-notes' `.notesapp.json`) is the app's own bookkeeping.
   Two separate checks, because the marker happens to satisfy both and would otherwise hide the loss of either.
 - **Same bytes, new version → adopt the version, do not conflict.**
   This is our own write coming back, or two devices that saved the same thing.
@@ -1684,7 +1684,7 @@ What follows is the kit's part of skysa-notes' §8; the rest — its fill window
   A deployment that gives `background` the light `brand`'s value has one bar on every phone.
   The page's `theme-color` tags still color the status bar once it is open.
   It is read at build time and not served by `/api/config` because everything it covers is settled before the app could ask: the manifest and the iOS home-screen title and icon are read by the platform at install, the precache is revisioned when the app is built, and the first paint comes from IndexedDB with no network.
-  A Vite plugin in `brand.ts` writes the title, the description, a `theme-color` per theme and the icon links into the page, with no script (§9); writes a stylesheet of `@font-face` rules and the custom properties `styles/` reads (`--brand`, `--on-brand`, `--font-sans`, `--font-mono`, the colors again under `prefers-color-scheme: dark`) as a file on this origin, so the Content-Security-Policy needs nothing new; and writes the icons at their fixed names and the stylesheet and fonts under `/brand/`, named by their content, beside the app, where the precache glob takes them in.
+  A Vite plugin in `brand.ts` writes the title, the description, a `theme-color` per theme and the icon links into the page, with no script (§9); writes a stylesheet of `@font-face` rules and the custom properties an app's styles read (skysa-notes' `styles/`: `--brand`, `--on-brand`, `--font-sans`, `--font-mono`, the colors again under `prefers-color-scheme: dark`) as a file on this origin, so the Content-Security-Policy needs nothing new; and writes the icons at their fixed names and the stylesheet and fonts under `/brand/`, named by their content, beside the app, where the precache glob takes them in.
   `pwa.ts` builds the manifest from it.
   **The brand is never data identity.**
   The app folder's name, its marker file and the app name the marker validates, the IndexedDB name, and the lock and cookie names stay as they are whatever the brand says: renaming any of them would leave every library already connected unfound.

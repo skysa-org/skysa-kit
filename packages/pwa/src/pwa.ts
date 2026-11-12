@@ -136,7 +136,7 @@ export const pwaOptions = (brand: Brand, app: PwaApp): Partial<VitePWAOptions> =
 	// Registered by the app through `virtual:pwa-register/react` (skysa-notes'
 	// `UpdatePrompt`), never by a script the plugin writes into the page: an
 	// inline one would be refused by the app's Content-Security-Policy
-	// (skysa-notes' `public/_headers`).
+	// (skysa-notes' `apps/web/public/_headers`).
 	injectRegister: false,
 	// The service worker runs in dev too: an app on the kit boots from
 	// IndexedDB and is meant to be exercised offline while it is being built.

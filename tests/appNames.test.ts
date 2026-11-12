@@ -18,21 +18,27 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
  * The apps the kit serves, by the ways their names are spelled in code: in
  * full (`skysa-notes`, `Skysa Notes`, `skysa.draw`), as their folders' tags
  * (`notesapp`, `.drawapp.json`), as a prefix (`notes-`, `NOTES_`,
- * `VITE_NOTES_`, `draw:`), and, for draw, which means nothing in the kit, in
- * a camel-cased name (`drawMarker`, `DrawDatabase`). The kit's own words are
- * not among them: a "note" is any app's document (`upsert-note`,
- * `notesUnderNow`, `NOTE_KINDS`, `notes.md`), so only the plural, an app's
- * name, counts, and only where it starts a word and a separator follows.
+ * `VITE_NOTES_`), by skysa-notes' own packages and paths (`@skysa/core`,
+ * `apps/web/`), and, for draw, in a camel-cased name (`drawMarker`,
+ * `DrawDatabase`). The kit's own words are not among them: a "note" is any
+ * app's document (`upsert-note`, `notesUnderNow`, `notesApplied`,
+ * `NOTE_KINDS`, `notes.md`, "3 notes: …"), so only the plural, an app's name,
+ * counts, and only where it starts a word and a hyphen or an underscore
+ * follows.
  *
- * A list, and so only as good as it is long: an app that comes to the kit
- * adds its names here.
+ * A pattern, and so a net with holes: it catches the ways the apps' names
+ * have been spelled, and an app that comes to the kit adds its own here. A
+ * kit word it catches by mistake is renamed, or the pattern takes the
+ * exception, with a reason.
  */
 const APP =
-	/skysa[\s_./:-]?(?:notes|draw)|memoriam|(?:notes|draw)app|(?<![a-z-])(?:notes|draw(?:ings?)?)[-_:]/iu;
+	/skysa[\s_./:-]?(?:notes|draw)|memoriam|(?:notes|draw)app(?![a-z])|(?<![a-z-])(?:notes|draw(?:ings?)?)[-_]|@skysa\/core\b|apps\/(?:web|api)\//iu;
 const CAMEL = /\b[Dd]raw(?:ings?)?[A-Z]/u;
-/** A citation says whose a thing is, as a comment does: an issue, or a link. */
-const CITED =
-	/https:\/\/github\.com\/skysa-org\/[\w./#-]*|skysa-org\/skysa-[\w-]+|skysa-[\w-]+#\d+/gu;
+/**
+ * A citation says whose a thing is, as a comment does: an issue in brackets,
+ * as the lint messages give one (`(skysa-notes#449)`), or a link.
+ */
+const CITED = /https:\/\/github\.com\/skysa-org\/[\w./#-]*|\(skysa-[\w-]+#\d+\)/gu;
 const names = (text: string): boolean => {
 	const uncited = text.replace(CITED, '');
 	return APP.test(uncited) || CAMEL.test(uncited);
@@ -140,10 +146,13 @@ describe("the kit's code", () => {
 			'VITE_NOTES_RELAY',
 			'DRAW_FORMAT',
 			'drawing-row',
-			'notes:sync',
 			'Skysa Notes',
 			'skysaDraw',
 			'skysa.notes.prefs',
+			'skysa-org/skysa-notes:sync',
+			'skysa-notes-db#1',
+			'import it from @skysa/core',
+			'apps/web/src/sync/account.ts',
 			'.notesapp.json',
 			'drawapp',
 			'drawMarker',
@@ -159,13 +168,15 @@ describe("the kit's code", () => {
 			'PullNotes',
 			'NOTE_KINDS',
 			'notes.md',
+			'notesApplied',
+			'} notes: ${',
 			'./pull/notes.js',
 			'release-notes-x',
 			'withdrawn',
 			'skysa-update',
 			'@skysa/pwa:brand',
 			'from a test (skysa-notes#449).',
-			'skysa-notes-cloud#12',
+			'(skysa-notes-cloud#12)',
 			'https://github.com/skysa-org/skysa-notes/blob/main/docs/ARCHITECTURE.md',
 		].forEach((word) => {
 			expect(names(word), word).toBe(false);
@@ -182,12 +193,25 @@ describe("the kit's code", () => {
 	});
 
 	it('makes no table, column or key that names an app', () => {
+		// The SQL, without its comments, which may name an app as the example.
 		const named = MIGRATIONS.flatMap((file) =>
 			readFileSync(join(ROOT, file), 'utf8')
+				.replace(/\/\*[\s\S]*?\*\//gu, '')
 				.split('\n')
-				.filter((line) => !/^\s*--/u.test(line) && names(line))
+				.map((line) => line.replace(/--.*$/u, ''))
+				.filter(names)
 				.map((line) => `${file}: ${line}`)
 		);
+		expect(named).toEqual([]);
+	});
+
+	it("describes no package as an app's", () => {
+		const named = PACKAGES.flatMap((folder) => {
+			const { description = '', keywords = [] } = JSON.parse(
+				readFileSync(join(ROOT, folder, 'package.json'), 'utf8')
+			) as { description?: string; keywords?: readonly string[] };
+			return [description, ...keywords].filter(names).map((text) => `${folder}: ${text}`);
+		});
 		expect(named).toEqual([]);
 	});
 });

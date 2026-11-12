@@ -183,7 +183,7 @@ describe('a brand of its own', () => {
 			brandCssUrl(brand),
 		]);
 		// An app's Content-Security-Policy allows no inline script (skysa-notes'
-		// `public/_headers`).
+		// `apps/web/public/_headers`).
 		expect(tags.some((tag) => tag.tag === 'script')).toBe(false);
 	});
 });
