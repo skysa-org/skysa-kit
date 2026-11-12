@@ -353,7 +353,7 @@ describe('ensureRoot', () => {
 					'.tag': 'file',
 					id: 'id:1',
 					rev: 'r1',
-					path_display: '/.notesapp.json',
+					path_display: '/.testapp.json',
 				}),
 				{ status: 200 }
 			),

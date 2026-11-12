@@ -27,7 +27,7 @@ describe('normalizePath', () => {
 	});
 
 	it('keeps names that only look like . and .. segments', () => {
-		expect(normalizePath('.notesapp.json')).toBe('.notesapp.json');
+		expect(normalizePath('.testapp.json')).toBe('.testapp.json');
 		expect(normalizePath('a../...b/.../..c')).toBe('a../...b/.../..c');
 		expect(normalizePath('work/..')).toBe(ROOT);
 		expect(normalizePath('./work')).toBe('work');
@@ -90,7 +90,7 @@ describe('basename and replaceBasename', () => {
 
 describe('isHidden', () => {
 	it('hides anything under a dot segment', () => {
-		expect(isHidden('.notesapp.json')).toBe(true);
+		expect(isHidden('.testapp.json')).toBe(true);
 		expect(isHidden('.trash/old.md')).toBe(true);
 		expect(isHidden('work/.hidden.md')).toBe(true);
 	});
