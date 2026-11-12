@@ -13,9 +13,10 @@ import { z } from 'zod';
  * (skysa-notes reads it from `NOTES_BRAND`) and gets its own name, colors,
  * icons and fonts without changing anything in the app's repo.
  * Without one, the app builds with a brand file of its own: the app picks the
- * file `loadBrand` reads, and the kit has no default. It is a build input and not something `/api/config` answers,
- * because the manifest, the home-screen title and icon, the precache and the
- * first paint are all settled before the app could ask.
+ * file `loadBrand` reads, and the kit has no default. It is a build input and
+ * not something `/api/config` answers, because the manifest, the home-screen
+ * title and icon, the precache and the first paint are all settled before the
+ * app could ask.
  *
  * The brand is never data identity. The app folder, its marker, the IndexedDB
  * name and the lock and cookie names stay as they are whatever this says, or
