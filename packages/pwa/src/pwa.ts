@@ -3,7 +3,7 @@ import type { ManifestOptions, VitePWAOptions } from 'vite-plugin-pwa';
 import type { Brand } from './brand.js';
 
 /**
- * The PWA configuration, kept out of `vite.config.ts` so it can be tested.
+ * The PWA configuration, kept out of an app's `vite.config.ts` so it can be tested.
  *
  * Installability is a checklist the browser applies silently: get one field
  * wrong and the app simply stops offering to install, with nothing in the build
@@ -133,12 +133,13 @@ export const pwaWorkbox = (app: PwaApp): VitePWAOptions['workbox'] => ({
 export const pwaOptions = (brand: Brand, app: PwaApp): Partial<VitePWAOptions> => ({
 	// A new build never swaps itself in underneath a half-written note.
 	registerType: 'prompt',
-	// Registered by `UpdatePrompt` through `virtual:pwa-register/react`, never
-	// by a script the plugin writes into the page: an inline one would be
-	// refused by the Content-Security-Policy (`public/_headers`).
+	// Registered by the app through `virtual:pwa-register/react` (skysa-notes'
+	// `UpdatePrompt`), never by a script the plugin writes into the page: an
+	// inline one would be refused by the app's Content-Security-Policy
+	// (skysa-notes' `public/_headers`).
 	injectRegister: false,
-	// The service worker runs in dev too: this app boots from IndexedDB and is
-	// meant to be exercised offline while it is being built.
+	// The service worker runs in dev too: an app on the kit boots from
+	// IndexedDB and is meant to be exercised offline while it is being built.
 	devOptions: { enabled: true, type: 'module' },
 	// No `includeAssets`: the glob below already matches every icon, which
 	// `brand.ts` writes into the build beside the app. (The plugin

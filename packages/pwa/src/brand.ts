@@ -12,8 +12,8 @@ import { z } from 'zod';
  * A deployment points the app's build input at its own `brand.json`
  * (skysa-notes reads it from `NOTES_BRAND`) and gets its own name, colors,
  * icons and fonts without changing anything in the app's repo.
- * Without it, the build uses the app's own, whose file the app hands to
- * `loadBrand`. It is a build input and not something `/api/config` answers,
+ * Without one, the app builds with a brand file of its own: the app picks the
+ * file `loadBrand` reads, and the kit has no default. It is a build input and not something `/api/config` answers,
  * because the manifest, the home-screen title and icon, the precache and the
  * first paint are all settled before the app could ask.
  *
@@ -248,8 +248,8 @@ const stack = (given: BrandFont | undefined, fallback: string): string =>
 	given === undefined ? fallback : `'${given.family}', ${fallback}`;
 
 /**
- * The brand as a stylesheet: the fonts, and the custom properties `styles/`
- * reads for them and for the brand color. A file of its own on this origin,
+ * The brand as a stylesheet: the fonts, and the custom properties an app's
+ * styles read for them and for the brand color. A file of its own on this origin,
  * so the Content-Security-Policy needs nothing new.
  */
 export const brandCss = (brand: Brand): string => {
