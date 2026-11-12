@@ -1,4 +1,4 @@
-import { RateLimitError } from '@skysa/storage';
+import { cell, RateLimitError } from '@skysa/storage';
 import type { MergeInput } from '@skysa/sync';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -860,7 +860,13 @@ export const describeFailures = (
 			// are; the scheduler's part is to hand it both and keep its answer.
 			// skysa-notes passes no merge (`SyncSchedulerOptions.merge`); memoriam's does.
 			const merged = fileOf(device, 'one\ntheirs\nmine\n', note.id);
-			const merge = vi.fn((_: MergeInput) => merged);
+			const theirs = fileOf(device, 'one\ntheirs\n', note.id);
+			const mine = cell<string | undefined>(undefined);
+			// Its answer is the merge only for this note's two sides as they are,
+			// so that what both sides hold at the end says which call was kept.
+			const merge = vi.fn(({ path, local, remote }: MergeInput) =>
+				path === note.path && local === mine.current && remote === theirs ? merged : local
+			);
 			const h = started(device, { merge });
 			const documents = device.store.syncStore('c1');
 			await vi.waitFor(async () => {
@@ -872,17 +878,16 @@ export const describeFailures = (
 				.find((entry) => entry.path === note.path)?.version;
 
 			// Edited elsewhere, and here, before either syncs.
-			const theirs = fileOf(device, 'one\ntheirs\n', note.id);
 			await h.remote.fake.write(note.path, theirs, { expectedVersion: version });
 			const synced = (await documents.noteById(note.id))?.content;
 			await device.edit('c1', note.id, 'one\nmine\n');
-			const mine = (await documents.noteById(note.id))?.content;
-			expect(mine).not.toBe(synced);
+			mine.current = (await documents.noteById(note.id))?.content;
+			expect(mine.current).not.toBe(synced);
 			await h.scheduler.syncNow();
 
 			// Asked at least once: a pull the store refuses asks again.
 			expect(merge).toHaveBeenCalledWith(
-				expect.objectContaining({ path: note.path, local: mine, remote: theirs })
+				expect.objectContaining({ path: note.path, local: mine.current, remote: theirs })
 			);
 			expect(h.scheduler.status()).toMatchObject({ phase: 'idle', conflicts: [] });
 			expect(h.remote.fake.contentAt(note.path)).toBe(merged);

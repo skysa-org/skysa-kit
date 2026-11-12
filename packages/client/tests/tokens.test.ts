@@ -1,4 +1,3 @@
-import { framedDevice } from './client/framed.js';
 import { memoryDevice } from './client/memoryDevice.js';
 import { describeTokenSource } from './client/tokenSource.js';
 
@@ -6,4 +5,3 @@ import { describeTokenSource } from './client/tokenSource.js';
 // runs it (skysa-notes' record 0018). skysa-notes' own run, over
 // its database, is `tokens.dexie.test.ts`.
 describeTokenSource('over the ports in memory', memoryDevice);
-describeTokenSource('over the ports in memory, in frames', framedDevice);

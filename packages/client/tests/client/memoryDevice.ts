@@ -45,10 +45,13 @@ const appOf = (document: DocumentFormat): AppSchedulerOptions => ({
 	syncsHidden: () => false,
 });
 
-/** A device's documents, where they are not the kit's own (`ClientDevice.written`). */
-interface MemoryDeviceOptions {
-	readonly document?: DocumentFormat;
-	readonly written?: (body: string, id?: string) => string;
+/**
+ * A device's documents where they are not the kit's own: their format, and
+ * how a file of it is written (`ClientDevice.written`), which go together.
+ */
+interface Documents {
+	readonly format: DocumentFormat;
+	readonly written: (body: string, id?: string) => string;
 }
 
 /** The store's writes, refused for a source the device does not sync, or not yet. */
@@ -66,15 +69,13 @@ const tell = <T>(watcher: Watcher<T>, value: T): void => {
 /**
  * A device whose ports are maps: the kit's own, for running the client's
  * suites with no app's database (`device.ts`). Each connection's documents and
- * queue are core's memory store, over the kit's own format unless `document`
- * names another, whose files `written` makes from a body.
+ * queue are core's memory store, over the kit's own format unless it is
+ * handed `documents` of another.
  */
-export const memoryDevice = ({
-	document = TEST_FORMAT,
-	written,
-}: MemoryDeviceOptions = {}): ClientDevice => {
-	const app = appOf(document);
-	const asWritten = (body: string, id: string): string => written?.(body, id) ?? body;
+export const memoryDevice = (documents?: Documents): ClientDevice => {
+	const format = documents?.format ?? TEST_FORMAT;
+	const app = appOf(format);
+	const written = documents?.written ?? ((body: string) => body);
 	const held = new Map<string, CredentialRecord>();
 	const rows = new Map<string, Row>();
 	const kept = new Map<string, AccessToken>();
@@ -191,7 +192,7 @@ export const memoryDevice = ({
 	 */
 	const syncStore = (connectionId: string): SyncStore => {
 		const documents = (): MemoryStore =>
-			rows.get(connectionId)?.documents ?? createMemoryStore(document);
+			rows.get(connectionId)?.documents ?? createMemoryStore(format);
 		const through =
 			(key: string) =>
 			async (...args: unknown[]): Promise<unknown> => {
@@ -209,7 +210,7 @@ export const memoryDevice = ({
 				}
 			};
 		return Object.fromEntries(
-			Object.keys(createMemoryStore(document)).map((key) => [key, through(key)])
+			Object.keys(createMemoryStore(format)).map((key) => [key, through(key)])
 		) as unknown as SyncStore;
 	};
 
@@ -352,7 +353,7 @@ export const memoryDevice = ({
 				? {
 						state: 'live',
 						provider: 'dropbox',
-						documents: createMemoryStore(document),
+						documents: createMemoryStore(format),
 						lazy: new Set(),
 						importing: true,
 					}
@@ -397,16 +398,16 @@ export const memoryDevice = ({
 	return {
 		store,
 		app,
-		...(written === undefined ? {} : { written }),
+		...(documents === undefined ? {} : { written: documents.written }),
 		schedule: (options) => createSyncScheduler({ ...app, ...options, store }),
 		create: (connectionId, name, body) => {
 			made.current += 1;
 			const id = `doc-${String(made.current)}`;
-			const path = `${name}${document.extension}`;
+			const path = `${name}${format.extension}`;
 			rowOf(connectionId).documents.put({
 				id,
 				path,
-				content: asWritten(body, id),
+				content: written(body, id),
 				dirty: true,
 			});
 			queueWrite(connectionId, id, path, false);
@@ -414,19 +415,19 @@ export const memoryDevice = ({
 		},
 		edit: (connectionId, id, body, { lazy = false } = {}) => {
 			const { documents } = rowOf(connectionId);
-			const held = documents.notes().find((each) => each.id === id);
-			if (held === undefined) return Promise.reject(new Error(`no document ${id}`));
-			documents.put({ ...held, content: asWritten(body, id), dirty: true });
-			queueWrite(connectionId, id, held.path, lazy);
+			const found = documents.notes().find((each) => each.id === id);
+			if (found === undefined) return Promise.reject(new Error(`no document ${id}`));
+			documents.put({ ...found, content: written(body, id), dirty: true });
+			queueWrite(connectionId, id, found.path, lazy);
 			return Promise.resolve();
 		},
 		attach: (connectionId, documentId, name, bytes) => {
 			const { documents } = rowOf(connectionId);
-			const held = documents.notes().find((each) => each.id === documentId);
-			if (held === undefined) return Promise.reject(new Error(`no document ${documentId}`));
+			const found = documents.notes().find((each) => each.id === documentId);
+			if (found === undefined) return Promise.reject(new Error(`no document ${documentId}`));
 			made.current += 1;
 			const id = `file-${String(made.current)}`;
-			const path = `${held.path.slice(0, held.path.lastIndexOf('/') + 1)}${name}`;
+			const path = `${found.path.slice(0, found.path.lastIndexOf('/') + 1)}${name}`;
 			documents.putFile({ id, path, size: bytes.byteLength }, { bytes, pinned: true });
 			documents.queue({ op: 'upload', fileId: id, path });
 			tellQueue(connectionId);

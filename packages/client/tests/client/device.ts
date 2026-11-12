@@ -140,6 +140,19 @@ export interface ClientDevice {
 	readonly dropCredential: (connectionId: string) => Promise<void>;
 }
 
-/** A document's file holding `body`, as the device's app writes one (`ClientDevice.written`). */
-export const fileOf = (device: ClientDevice, body: string, id?: string): string =>
-	device.written?.(body, id) ?? body;
+/**
+ * A document's file holding `body`, as the device's app writes one
+ * (`ClientDevice.written`). Refused where the app would not read it as a
+ * document, so that a suite says what the device lacks rather than failing
+ * over a file the app passes over.
+ */
+export const fileOf = (device: ClientDevice, body: string, id?: string): string => {
+	const file = device.written?.(body, id) ?? body;
+	if (device.app.document.isDocumentText?.(file) === false)
+		throw new Error(
+			device.written === undefined
+				? "This app's documents are more than their text: give the device `written` (ClientDevice.written)."
+				: '`written` made a file this app does not read as a document (ClientDevice.written).'
+		);
+	return file;
+};

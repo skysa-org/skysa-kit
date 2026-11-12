@@ -13,9 +13,10 @@ const framed = (body: string, id?: string): string =>
 /**
  * Documents that are documents only inside a frame: an app's whose documents
  * are more than their words, as an image's are, so that plain text is no
- * document to it (`DocumentFormat.isDocumentText`). The suites run over it as
- * well as over the kit's own format, so that what they put on the remote
- * themselves goes through the device (`ClientDevice.written`).
+ * document to it (`DocumentFormat.isDocumentText`). The suites that put a
+ * document on the remote themselves run over it as well as over the kit's own
+ * format, so that what they put there goes through the device
+ * (`ClientDevice.written`).
  */
 const FRAMED: DocumentFormat = {
 	extension: '.framed',
@@ -27,4 +28,4 @@ const FRAMED: DocumentFormat = {
 };
 
 /** A device in memory whose documents are framed. */
-export const framedDevice = (): ClientDevice => memoryDevice({ document: FRAMED, written: framed });
+export const framedDevice = (): ClientDevice => memoryDevice({ format: FRAMED, written: framed });
