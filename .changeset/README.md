@@ -76,13 +76,14 @@ That writes a changeset with no packages in it, which is a real answer and leave
 
 The number makes one promise, to the developer of an app built on the kit: whether updating asks anything of the app.
 
-Before 1.0, read as npm reads a `0.x` range (`^0.2.0` takes `0.2.5` and not `0.3.0`):
+Read as npm reads a range (`^1.2.0` takes `1.3.0` and not `2.0.0`):
 
-- **patch** — a fix, a feature, anything an app can take without changing.
-- **minor** — anything an app must act on: an export removed or renamed, a port with a new member the app has to supply, an option that changes meaning or a new one with no default.
-- **major** — 1.0 itself, which is when skysa-notes runs on the kit in production ([skysa-notes' record 0018](https://github.com/skysa-org/skysa-notes/blob/main/docs/decisions/0018-the-shared-kit.md), step 3), not the size of a change.
+- **patch** — a fix.
+- **minor** — a feature, or anything else an app can take without changing.
+- **major** — anything an app must act on: an export removed or renamed, a port with a new member the app has to supply, an option that changes meaning or a new one with no default.
 
-From 1.0, the usual: a fix is a patch, a feature is a minor, and anything an app must act on is a major.
+Before 1.0, as npm reads a `0.x` range (`^0.2.0` takes `0.2.5` and not `0.3.0`), a minor carried what a major carries now, and a patch carried features too.
+1.0 itself was made once skysa-notes ran on the kit in production, with its 3.0.0 on 2026-11-12 ([skysa-notes' record 0018](https://github.com/skysa-org/skysa-notes/blob/main/docs/decisions/0018-the-shared-kit.md), step 3), not for the size of a change: nothing in it changed from 0.2.0.
 
 No bump is license to strand what people already have.
 A user's library and a deployment's database written by any earlier release keep working after an update: the marker, conflict and file names, and the D1 schema are user data, and a migration is never edited once released ([`CLAUDE.md`](../CLAUDE.md)).
