@@ -17,6 +17,10 @@ import { foldName, hasExtension } from './fold.js';
  * UTC rather than local time, so two devices in different zones that conflict
  * on the same note produce the same name rather than two copies a few hours
  * apart that look unrelated.
+ *
+ * The package exports it, for an app that says a copy's stamp beside its name,
+ * so its form is part of the names already in users' libraries: a change to
+ * it is a major version.
  */
 export const conflictStamp = (at: Date): string => at.toISOString().slice(0, 16).replace(':', '-');
 
