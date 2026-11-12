@@ -469,10 +469,11 @@ export const describeConnection = (
 				await reaches(h.scheduler, 'idle');
 
 				// What it imported is a document to the app, as its devices write one.
-				const imported = await device.store.syncStore('c1').allNotes();
-				expect(imported.map((row) => row.path)).toContain(
+				const documents = device.store.syncStore('c1');
+				expect((await documents.allNotes()).map((row) => row.path)).toContain(
 					`theirs${device.app.document.extension}`
 				);
+				expect(await documents.unreadable()).toEqual([]);
 				const shown = said.flatMap((status) =>
 					status.progress === undefined ? [] : [status]
 				);

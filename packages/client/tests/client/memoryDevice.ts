@@ -49,7 +49,7 @@ const appOf = (document: DocumentFormat): AppSchedulerOptions => ({
  * A device's documents where they are not the kit's own: their format, and
  * how a file of it is written (`ClientDevice.written`), which go together.
  */
-interface Documents {
+interface OwnDocuments {
 	readonly format: DocumentFormat;
 	readonly written: (body: string, id?: string) => string;
 }
@@ -70,12 +70,12 @@ const tell = <T>(watcher: Watcher<T>, value: T): void => {
  * A device whose ports are maps: the kit's own, for running the client's
  * suites with no app's database (`device.ts`). Each connection's documents and
  * queue are core's memory store, over the kit's own format unless it is
- * handed `documents` of another.
+ * handed its `own` documents of another.
  */
-export const memoryDevice = (documents?: Documents): ClientDevice => {
-	const format = documents?.format ?? TEST_FORMAT;
+export const memoryDevice = (own?: OwnDocuments): ClientDevice => {
+	const format = own?.format ?? TEST_FORMAT;
 	const app = appOf(format);
-	const written = documents?.written ?? ((body: string) => body);
+	const written = own?.written ?? ((body: string) => body);
 	const held = new Map<string, CredentialRecord>();
 	const rows = new Map<string, Row>();
 	const kept = new Map<string, AccessToken>();
@@ -398,7 +398,7 @@ export const memoryDevice = (documents?: Documents): ClientDevice => {
 	return {
 		store,
 		app,
-		...(documents === undefined ? {} : { written: documents.written }),
+		...(own === undefined ? {} : { written: own.written }),
 		schedule: (options) => createSyncScheduler({ ...app, ...options, store }),
 		create: (connectionId, name, body) => {
 			made.current += 1;

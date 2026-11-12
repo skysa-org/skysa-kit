@@ -23,6 +23,12 @@ describe('a file the suites put on the remote (fileOf)', () => {
 
 	it('is refused where the device writes a file that is no document to its app', () => {
 		const device = { ...framedDevice(), written: (body: string) => body };
-		expect(() => fileOf(device, 'plain\n')).toThrow(/`written` made a file/);
+		expect(() => fileOf(device, 'plain\n')).toThrow(/`written` made a file this app/);
+	});
+
+	it('is refused where the device writes a file that does not claim the id it is given', () => {
+		const device = { ...framedDevice(), written: (body: string) => `<doc>${body}</doc>\n` };
+		expect(() => fileOf(device, 'plain\n', 'doc-1')).toThrow(/does not claim doc-1/);
+		expect(fileOf(device, 'plain\n')).toBe('<doc>plain\n</doc>\n');
 	});
 });

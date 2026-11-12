@@ -857,15 +857,18 @@ export const describeFailures = (
 			const device = await bound();
 			const note = await device.create('c1', 'Plan', 'one\n');
 			// What the merge makes of the two is the app's, whatever its documents
-			// are; the scheduler's part is to hand it both and keep its answer.
-			// skysa-notes passes no merge (`SyncSchedulerOptions.merge`); memoriam's does.
+			// are; the scheduler's part is to hand it both and keep its answer. An
+			// app may pass no merge (`SyncSchedulerOptions.merge`).
 			const merged = fileOf(device, 'one\ntheirs\nmine\n', note.id);
 			const theirs = fileOf(device, 'one\ntheirs\n', note.id);
 			const mine = cell<string | undefined>(undefined);
-			// Its answer is the merge only for this note's two sides as they are,
-			// so that what both sides hold at the end says which call was kept.
+			// An answer only for this note's two sides as they are, and none, as a
+			// merge says it cannot make one, for anything else: both sides holding
+			// it at the end says the call that was kept had them.
 			const merge = vi.fn(({ path, local, remote }: MergeInput) =>
-				path === note.path && local === mine.current && remote === theirs ? merged : local
+				path === note.path && local === mine.current && remote === theirs
+					? merged
+					: undefined
 			);
 			const h = started(device, { merge });
 			const documents = device.store.syncStore('c1');
@@ -879,16 +882,10 @@ export const describeFailures = (
 
 			// Edited elsewhere, and here, before either syncs.
 			await h.remote.fake.write(note.path, theirs, { expectedVersion: version });
-			const synced = (await documents.noteById(note.id))?.content;
 			await device.edit('c1', note.id, 'one\nmine\n');
 			mine.current = (await documents.noteById(note.id))?.content;
-			expect(mine.current).not.toBe(synced);
 			await h.scheduler.syncNow();
 
-			// Asked at least once: a pull the store refuses asks again.
-			expect(merge).toHaveBeenCalledWith(
-				expect.objectContaining({ path: note.path, local: mine.current, remote: theirs })
-			);
 			expect(h.scheduler.status()).toMatchObject({ phase: 'idle', conflicts: [] });
 			expect(h.remote.fake.contentAt(note.path)).toBe(merged);
 			expect(await documents.noteById(note.id)).toMatchObject({
