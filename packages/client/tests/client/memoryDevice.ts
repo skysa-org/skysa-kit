@@ -1,5 +1,5 @@
 import type { ProviderKind } from '@skysa/protocol';
-import { cell, isNotFoundError } from '@skysa/storage';
+import { cell, type DocumentFormat, isNotFoundError } from '@skysa/storage';
 import { TEST_FORMAT } from '@skysa/storage/testing';
 import { outOfAttempts, type SyncStore } from '@skysa/sync';
 import { createMemoryStore, type MemoryStore } from '@skysa/sync/testing';
@@ -36,14 +36,20 @@ interface Watcher<T> {
 const MAX_ATTEMPTS = 5;
 
 /**
- * What the kit's own scheduler is handed: its format, no hidden path synced,
- * and a lock of its own.
+ * What the kit's own scheduler is handed: a format, the kit's own unless the
+ * device is made with another, no hidden path synced, and a lock of its own.
  */
-const APP: AppSchedulerOptions = {
+const appOf = (document: DocumentFormat): AppSchedulerOptions => ({
 	lockName: (connectionId) => `kit-test:sync:${connectionId}`,
-	document: TEST_FORMAT,
+	document,
 	syncsHidden: () => false,
-};
+});
+
+/** A device's documents, where they are not the kit's own (`ClientDevice.written`). */
+interface MemoryDeviceOptions {
+	readonly document?: DocumentFormat;
+	readonly written?: (body: string, id?: string) => string;
+}
 
 /** The store's writes, refused for a source the device does not sync, or not yet. */
 const WRITES = new Set<string>(['applyChanges', 'completeOp', 'failOp', 'resolveConflict']);
@@ -60,9 +66,15 @@ const tell = <T>(watcher: Watcher<T>, value: T): void => {
 /**
  * A device whose ports are maps: the kit's own, for running the client's
  * suites with no app's database (`device.ts`). Each connection's documents and
- * queue are core's memory store, over the kit's own format.
+ * queue are core's memory store, over the kit's own format unless `document`
+ * names another, whose files `written` makes from a body.
  */
-export const memoryDevice = (): ClientDevice => {
+export const memoryDevice = ({
+	document = TEST_FORMAT,
+	written,
+}: MemoryDeviceOptions = {}): ClientDevice => {
+	const app = appOf(document);
+	const asWritten = (body: string, id: string): string => written?.(body, id) ?? body;
 	const held = new Map<string, CredentialRecord>();
 	const rows = new Map<string, Row>();
 	const kept = new Map<string, AccessToken>();
@@ -179,7 +191,7 @@ export const memoryDevice = (): ClientDevice => {
 	 */
 	const syncStore = (connectionId: string): SyncStore => {
 		const documents = (): MemoryStore =>
-			rows.get(connectionId)?.documents ?? createMemoryStore(TEST_FORMAT);
+			rows.get(connectionId)?.documents ?? createMemoryStore(document);
 		const through =
 			(key: string) =>
 			async (...args: unknown[]): Promise<unknown> => {
@@ -197,7 +209,7 @@ export const memoryDevice = (): ClientDevice => {
 				}
 			};
 		return Object.fromEntries(
-			Object.keys(createMemoryStore(TEST_FORMAT)).map((key) => [key, through(key)])
+			Object.keys(createMemoryStore(document)).map((key) => [key, through(key)])
 		) as unknown as SyncStore;
 	};
 
@@ -340,7 +352,7 @@ export const memoryDevice = (): ClientDevice => {
 				? {
 						state: 'live',
 						provider: 'dropbox',
-						documents: createMemoryStore(TEST_FORMAT),
+						documents: createMemoryStore(document),
 						lazy: new Set(),
 						importing: true,
 					}
@@ -384,32 +396,37 @@ export const memoryDevice = (): ClientDevice => {
 
 	return {
 		store,
-		app: APP,
-		schedule: (options) => createSyncScheduler({ ...APP, ...options, store }),
+		app,
+		...(written === undefined ? {} : { written }),
+		schedule: (options) => createSyncScheduler({ ...app, ...options, store }),
 		create: (connectionId, name, body) => {
 			made.current += 1;
 			const id = `doc-${String(made.current)}`;
-			const path = `${name}${TEST_FORMAT.extension}`;
-			rowOf(connectionId).documents.put({ id, path, content: body, dirty: true });
+			const path = `${name}${document.extension}`;
+			rowOf(connectionId).documents.put({
+				id,
+				path,
+				content: asWritten(body, id),
+				dirty: true,
+			});
 			queueWrite(connectionId, id, path, false);
 			return Promise.resolve({ id, path });
 		},
 		edit: (connectionId, id, body, { lazy = false } = {}) => {
 			const { documents } = rowOf(connectionId);
-			const document = documents.notes().find((each) => each.id === id);
-			if (document === undefined) return Promise.reject(new Error(`no document ${id}`));
-			documents.put({ ...document, content: body, dirty: true });
-			queueWrite(connectionId, id, document.path, lazy);
+			const held = documents.notes().find((each) => each.id === id);
+			if (held === undefined) return Promise.reject(new Error(`no document ${id}`));
+			documents.put({ ...held, content: asWritten(body, id), dirty: true });
+			queueWrite(connectionId, id, held.path, lazy);
 			return Promise.resolve();
 		},
 		attach: (connectionId, documentId, name, bytes) => {
 			const { documents } = rowOf(connectionId);
-			const document = documents.notes().find((each) => each.id === documentId);
-			if (document === undefined)
-				return Promise.reject(new Error(`no document ${documentId}`));
+			const held = documents.notes().find((each) => each.id === documentId);
+			if (held === undefined) return Promise.reject(new Error(`no document ${documentId}`));
 			made.current += 1;
 			const id = `file-${String(made.current)}`;
-			const path = `${document.path.slice(0, document.path.lastIndexOf('/') + 1)}${name}`;
+			const path = `${held.path.slice(0, held.path.lastIndexOf('/') + 1)}${name}`;
 			documents.putFile({ id, path, size: bytes.byteLength }, { bytes, pinned: true });
 			documents.queue({ op: 'upload', fileId: id, path });
 			tellQueue(connectionId);

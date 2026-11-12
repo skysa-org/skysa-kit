@@ -1,3 +1,4 @@
+import { framedDevice } from './client/framed.js';
 import { memoryDevice } from './client/memoryDevice.js';
 import { describePushTiming } from './client/pushTiming.js';
 
@@ -5,3 +6,4 @@ import { describePushTiming } from './client/pushTiming.js';
 // (skysa-notes' record 0018). skysa-notes' own run is
 // `scheduler.timing.dexie.test.ts`.
 describePushTiming('over the ports in memory', memoryDevice);
+describePushTiming('over the ports in memory, in frames', framedDevice);

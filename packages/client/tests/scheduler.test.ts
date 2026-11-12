@@ -1,3 +1,4 @@
+import { framedDevice } from './client/framed.js';
 import { memoryDevice } from './client/memoryDevice.js';
 import { describeScheduling } from './client/scheduling.js';
 
@@ -5,3 +6,4 @@ import { describeScheduling } from './client/scheduling.js';
 // it (skysa-notes' record 0018). skysa-notes' own run, over its
 // database and with its own scheduler, is `scheduler.dexie.test.ts`.
 describeScheduling('over the ports in memory', memoryDevice);
+describeScheduling('over the ports in memory, in frames', framedDevice);

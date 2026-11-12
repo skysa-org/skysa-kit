@@ -70,13 +70,14 @@ export interface ClientDevice {
 	 */
 	readonly create: (connectionId: string, name: string, body: string) => Promise<DeviceDocument>;
 	/**
-	 * A document's file as another device writes one holding `body`, for a
-	 * suite that puts a document on the remote itself (`fileOf`). The body as
-	 * it is where not given, as a document of plain text is; an app whose
-	 * documents are more than their words hands its own (skysa-draw's are SVG,
-	 * and plain text is no drawing).
+	 * A document's file as another device of the app writes one holding
+	 * `body`, claiming `id` where one is given, as an edit elsewhere of a
+	 * document this device holds does: for a suite that puts a document on the
+	 * remote itself (`fileOf`). The body as it is where not given, as a
+	 * document of plain text is; an app whose documents are more than their
+	 * words, so that plain text is no document to it, hands its own.
 	 */
-	readonly written?: (body: string) => string;
+	readonly written?: (body: string, id?: string) => string;
 	/**
 	 * A document changed as the user changes one, its write queued by the app's
 	 * rule: one already waiting carries the change, except that an edit finding
@@ -140,5 +141,5 @@ export interface ClientDevice {
 }
 
 /** A document's file holding `body`, as the device's app writes one (`ClientDevice.written`). */
-export const fileOf = (device: ClientDevice, body: string): string =>
-	device.written?.(body) ?? body;
+export const fileOf = (device: ClientDevice, body: string, id?: string): string =>
+	device.written?.(body, id) ?? body;

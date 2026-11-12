@@ -835,7 +835,7 @@ export const describeFailures = (
 				.find((entry) => entry.path === note.path)?.version;
 
 			// Edited elsewhere, and here, before either syncs.
-			await h.remote.fake.write(note.path, fileOf(device, 'remote\n'), {
+			await h.remote.fake.write(note.path, fileOf(device, 'remote\n', note.id), {
 				expectedVersion: version,
 			});
 			await device.edit('c1', note.id, 'local\n');
@@ -859,7 +859,7 @@ export const describeFailures = (
 			// What the merge makes of the two is the app's, whatever its documents
 			// are; the scheduler's part is to hand it both and keep its answer.
 			// skysa-notes passes no merge (`SyncSchedulerOptions.merge`); memoriam's does.
-			const merged = fileOf(device, 'one\ntheirs\nmine\n');
+			const merged = fileOf(device, 'one\ntheirs\nmine\n', note.id);
 			const merge = vi.fn((_: MergeInput) => merged);
 			const h = started(device, { merge });
 			const documents = device.store.syncStore('c1');
@@ -872,13 +872,15 @@ export const describeFailures = (
 				.find((entry) => entry.path === note.path)?.version;
 
 			// Edited elsewhere, and here, before either syncs.
-			const theirs = fileOf(device, 'one\ntheirs\n');
+			const theirs = fileOf(device, 'one\ntheirs\n', note.id);
 			await h.remote.fake.write(note.path, theirs, { expectedVersion: version });
+			const synced = (await documents.noteById(note.id))?.content;
 			await device.edit('c1', note.id, 'one\nmine\n');
 			const mine = (await documents.noteById(note.id))?.content;
+			expect(mine).not.toBe(synced);
 			await h.scheduler.syncNow();
 
-			expect(merge).toHaveBeenCalledTimes(1);
+			// Asked at least once: a pull the store refuses asks again.
 			expect(merge).toHaveBeenCalledWith(
 				expect.objectContaining({ path: note.path, local: mine, remote: theirs })
 			);
