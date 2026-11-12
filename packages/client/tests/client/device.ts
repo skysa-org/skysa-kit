@@ -70,6 +70,15 @@ export interface ClientDevice {
 	 */
 	readonly create: (connectionId: string, name: string, body: string) => Promise<DeviceDocument>;
 	/**
+	 * A document's file as another device of the app writes one holding
+	 * `body`, claiming `id` where one is given, as an edit elsewhere of a
+	 * document this device holds does: for a suite that puts a document on the
+	 * remote itself (`fileOf`). The body as it is where not given, as a
+	 * document of plain text is; an app whose documents are more than their
+	 * words, so that plain text is no document to it, hands its own.
+	 */
+	readonly written?: (body: string, id?: string) => string;
+	/**
 	 * A document changed as the user changes one, its write queued by the app's
 	 * rule: one already waiting carries the change, except that an edit finding
 	 * only a write queued lazily puts one that is not in its place, at the back.
@@ -130,3 +139,32 @@ export interface ClientDevice {
 	/** The credential gone from under the client: revoked from another device. */
 	readonly dropCredential: (connectionId: string) => Promise<void>;
 }
+
+/**
+ * A document's file holding `body`, as the device's app writes one
+ * (`ClientDevice.written`). Refused where the app would not read it as a
+ * document, or where the device's own `written` drops the id it is given from
+ * a format whose documents claim one, so that a suite says what the device
+ * lacks rather than failing, or passing, over a file no device of the app
+ * writes.
+ */
+export const fileOf = (device: ClientDevice, body: string, id?: string): string => {
+	const { written, app } = device;
+	const format = app.document;
+	const file = written?.(body, id) ?? body;
+	if (format.isDocumentText?.(file) === false)
+		throw new Error(
+			written === undefined
+				? "This app's documents are more than their text: give the device `written` (ClientDevice.written)."
+				: '`written` made a file this app does not read as a document (ClientDevice.written).'
+		);
+	if (written === undefined || id === undefined) return file;
+	// Whether the format's documents claim an id at all: its conflict copy of
+	// a document claims the one it is handed where they do.
+	const claimsIds = format.claimedId(format.conflictContent(file, id)) === id;
+	if (claimsIds && format.claimedId(file) !== id)
+		throw new Error(
+			`\`written\` made a file that does not claim ${id} (ClientDevice.written).`
+		);
+	return file;
+};

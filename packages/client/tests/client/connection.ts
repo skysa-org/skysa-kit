@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { ProviderFactory, SchedulerStatus, SyncPhase } from '../../src/sync/scheduler.js';
 import { fakeEnvironment } from '../support/fakes/environment.js';
-import type { ClientDevice, ScheduleOptions } from './device.js';
+import { type ClientDevice, fileOf, type ScheduleOptions } from './device.js';
 import {
 	BACKOFF,
 	cleanups,
@@ -457,7 +457,7 @@ export const describeConnection = (
 				await theRemote.fake.ensureRoot();
 				await theRemote.fake.write(
 					`theirs${device.app.document.extension}`,
-					'theirs\n',
+					fileOf(device, 'theirs\n'),
 					{}
 				);
 				const h = started(device, {
@@ -468,6 +468,12 @@ export const describeConnection = (
 
 				await reaches(h.scheduler, 'idle');
 
+				// What it imported is a document to the app, as its devices write one.
+				const documents = device.store.syncStore('c1');
+				expect((await documents.allNotes()).map((row) => row.path)).toContain(
+					`theirs${device.app.document.extension}`
+				);
+				expect(await documents.unreadable()).toEqual([]);
 				const shown = said.flatMap((status) =>
 					status.progress === undefined ? [] : [status]
 				);
