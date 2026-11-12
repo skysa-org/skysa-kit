@@ -9,8 +9,9 @@ import { z } from 'zod';
  * The brand: what the app is called and how it looks, read when the app is
  * built (docs/ARCHITECTURE.md §8, "Brand").
  *
- * A deployment points `NOTES_BRAND` at its own `brand.json` and gets its own
- * name, colors, icons and fonts without changing anything in this repo.
+ * A deployment points the app's build input at its own `brand.json`
+ * (skysa-notes reads it from `NOTES_BRAND`) and gets its own name, colors,
+ * icons and fonts without changing anything in the app's repo.
  * Without it, the build uses the app's own, whose file the app hands to
  * `loadBrand`. It is a build input and not something `/api/config` answers,
  * because the manifest, the home-screen title and icon, the precache and the
@@ -345,7 +346,9 @@ export const brandAssets = (brand: Brand): ReadonlyMap<string, BrandAsset> =>
 export const brandPlugin = (brand: Brand): Plugin => {
 	const assets = brandAssets(brand);
 	return {
-		name: 'notes-brand',
+		// The package's name, not an app's: Vite puts it before anything the
+		// plugin throws, in every app's build.
+		name: '@skysa/pwa:brand',
 		transformIndexHtml: () => [...brandTags(brand)],
 		configureServer: (server) => {
 			server.middlewares.use((request, response, next) => {

@@ -242,4 +242,8 @@ describe('the build plugin', () => {
 		const transform = hook(plugin.transformIndexHtml as unknown as () => unknown);
 		expect(transform()).toEqual(brandTags(brand));
 	});
+
+	it('is named for its package, and no app', () => {
+		expect(plugin.name).toBe('@skysa/pwa:brand');
+	});
 });
