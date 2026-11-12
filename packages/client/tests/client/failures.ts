@@ -865,11 +865,10 @@ export const describeFailures = (
 			// An answer only for this note's two sides as they are, and none, as a
 			// merge says it cannot make one, for anything else: both sides holding
 			// it at the end says the call that was kept had them.
-			const merge = vi.fn(({ path, local, remote }: MergeInput) =>
+			const merge = ({ path, local, remote }: MergeInput) =>
 				path === note.path && local === mine.current && remote === theirs
 					? merged
-					: undefined
-			);
+					: undefined;
 			const h = started(device, { merge });
 			const documents = device.store.syncStore('c1');
 			await vi.waitFor(async () => {

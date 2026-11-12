@@ -150,9 +150,9 @@ export interface ClientDevice {
  */
 export const fileOf = (device: ClientDevice, body: string, id?: string): string => {
 	const { written, app } = device;
-	const { document } = app;
+	const format = app.document;
 	const file = written?.(body, id) ?? body;
-	if (document.isDocumentText?.(file) === false)
+	if (format.isDocumentText?.(file) === false)
 		throw new Error(
 			written === undefined
 				? "This app's documents are more than their text: give the device `written` (ClientDevice.written)."
@@ -161,8 +161,8 @@ export const fileOf = (device: ClientDevice, body: string, id?: string): string 
 	if (written === undefined || id === undefined) return file;
 	// Whether the format's documents claim an id at all: its conflict copy of
 	// a document claims the one it is handed where they do.
-	const claimsIds = document.claimedId(document.conflictContent(file, id)) === id;
-	if (claimsIds && document.claimedId(file) !== id)
+	const claimsIds = format.claimedId(format.conflictContent(file, id)) === id;
+	if (claimsIds && format.claimedId(file) !== id)
 		throw new Error(
 			`\`written\` made a file that does not claim ${id} (ClientDevice.written).`
 		);

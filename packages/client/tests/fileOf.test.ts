@@ -41,12 +41,7 @@ describe('a file the suites put on the remote (fileOf)', () => {
 			conflictContent: (localContent) => localContent,
 			isDocumentText: (content) => content.startsWith('['),
 		};
-		const plain = memoryDevice();
-		const device = {
-			...plain,
-			app: { ...plain.app, document: boxed },
-			written: (body: string) => `[${body}]\n`,
-		};
+		const device = memoryDevice({ format: boxed, written: (body) => `[${body}]\n` });
 		expect(fileOf(device, 'plain\n', 'doc-1')).toBe('[plain\n]\n');
 	});
 });
