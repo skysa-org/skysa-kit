@@ -1,3 +1,4 @@
+import type { DocumentFormat } from '@skysa/storage';
 import { describe, expect, it } from 'vitest';
 
 import { fileOf } from './client/device.js';
@@ -30,5 +31,22 @@ describe('a file the suites put on the remote (fileOf)', () => {
 		const device = { ...framedDevice(), written: (body: string) => `<doc>${body}</doc>\n` };
 		expect(() => fileOf(device, 'plain\n', 'doc-1')).toThrow(/does not claim doc-1/);
 		expect(fileOf(device, 'plain\n')).toBe('<doc>plain\n</doc>\n');
+	});
+
+	it('claims no id where the app’s documents claim none', () => {
+		const boxed: DocumentFormat = {
+			extension: '.box',
+			mediaType: 'text/plain',
+			claimedId: () => undefined,
+			conflictContent: (localContent) => localContent,
+			isDocumentText: (content) => content.startsWith('['),
+		};
+		const plain = memoryDevice();
+		const device = {
+			...plain,
+			app: { ...plain.app, document: boxed },
+			written: (body: string) => `[${body}]\n`,
+		};
+		expect(fileOf(device, 'plain\n', 'doc-1')).toBe('[plain\n]\n');
 	});
 });

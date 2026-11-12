@@ -143,20 +143,26 @@ export interface ClientDevice {
 /**
  * A document's file holding `body`, as the device's app writes one
  * (`ClientDevice.written`). Refused where the app would not read it as a
- * document, or where the device's own `written` drops the id it is given, so
- * that a suite says what the device lacks rather than failing, or passing,
- * over a file no device of the app writes.
+ * document, or where the device's own `written` drops the id it is given from
+ * a format whose documents claim one, so that a suite says what the device
+ * lacks rather than failing, or passing, over a file no device of the app
+ * writes.
  */
 export const fileOf = (device: ClientDevice, body: string, id?: string): string => {
 	const { written, app } = device;
+	const { document } = app;
 	const file = written?.(body, id) ?? body;
-	if (app.document.isDocumentText?.(file) === false)
+	if (document.isDocumentText?.(file) === false)
 		throw new Error(
 			written === undefined
 				? "This app's documents are more than their text: give the device `written` (ClientDevice.written)."
 				: '`written` made a file this app does not read as a document (ClientDevice.written).'
 		);
-	if (written !== undefined && id !== undefined && app.document.claimedId(file) !== id)
+	if (written === undefined || id === undefined) return file;
+	// Whether the format's documents claim an id at all: its conflict copy of
+	// a document claims the one it is handed where they do.
+	const claimsIds = document.claimedId(document.conflictContent(file, id)) === id;
+	if (claimsIds && document.claimedId(file) !== id)
 		throw new Error(
 			`\`written\` made a file that does not claim ${id} (ClientDevice.written).`
 		);
