@@ -1,6 +1,6 @@
 {
 	"name": "@skysa/client",
-	"version": "0.2.0",
+	"version": "1.0.0",
 	"description": "The API client, the token source, the provider factory and its request deadlines, the scheduler, the relay client, the connect code a device holds, a long run's count, and the stores a screen listens to.",
 	"license": "AGPL-3.0-only",
 	"repository": {
