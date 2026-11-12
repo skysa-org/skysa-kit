@@ -70,6 +70,14 @@ export interface ClientDevice {
 	 */
 	readonly create: (connectionId: string, name: string, body: string) => Promise<DeviceDocument>;
 	/**
+	 * A document's file as another device writes one holding `body`, for a
+	 * suite that puts a document on the remote itself (`fileOf`). The body as
+	 * it is where not given, as a document of plain text is; an app whose
+	 * documents are more than their words hands its own (skysa-draw's are SVG,
+	 * and plain text is no drawing).
+	 */
+	readonly written?: (body: string) => string;
+	/**
 	 * A document changed as the user changes one, its write queued by the app's
 	 * rule: one already waiting carries the change, except that an edit finding
 	 * only a write queued lazily puts one that is not in its place, at the back.
@@ -130,3 +138,7 @@ export interface ClientDevice {
 	/** The credential gone from under the client: revoked from another device. */
 	readonly dropCredential: (connectionId: string) => Promise<void>;
 }
+
+/** A document's file holding `body`, as the device's app writes one (`ClientDevice.written`). */
+export const fileOf = (device: ClientDevice, body: string): string =>
+	device.written?.(body) ?? body;

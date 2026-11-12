@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { ProviderFactory, SchedulerStatus, SyncPhase } from '../../src/sync/scheduler.js';
 import { fakeEnvironment } from '../support/fakes/environment.js';
-import type { ClientDevice, ScheduleOptions } from './device.js';
+import { type ClientDevice, fileOf, type ScheduleOptions } from './device.js';
 import {
 	BACKOFF,
 	cleanups,
@@ -457,7 +457,7 @@ export const describeConnection = (
 				await theRemote.fake.ensureRoot();
 				await theRemote.fake.write(
 					`theirs${device.app.document.extension}`,
-					'theirs\n',
+					fileOf(device, 'theirs\n'),
 					{}
 				);
 				const h = started(device, {

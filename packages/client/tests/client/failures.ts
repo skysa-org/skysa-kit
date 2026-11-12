@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { ApiClient } from '../../src/api/client.js';
 import type { SchedulerStatus, SyncPhase } from '../../src/sync/scheduler.js';
-import type { ClientDevice, ScheduleOptions } from './device.js';
+import { type ClientDevice, fileOf, type ScheduleOptions } from './device.js';
 import {
 	BACKOFF,
 	DEBOUNCE,
@@ -835,7 +835,9 @@ export const describeFailures = (
 				.find((entry) => entry.path === note.path)?.version;
 
 			// Edited elsewhere, and here, before either syncs.
-			await h.remote.fake.write(note.path, 'remote\n', { expectedVersion: version });
+			await h.remote.fake.write(note.path, fileOf(device, 'remote\n'), {
+				expectedVersion: version,
+			});
 			await device.edit('c1', note.id, 'local\n');
 			h.remote.fake.setFault((call) => (call.op === 'write' ? new Error('503') : undefined));
 			await h.scheduler.syncNow();
@@ -854,30 +856,36 @@ export const describeFailures = (
 		it('makes one note of edits here and elsewhere when it is handed a merge', async () => {
 			const device = await bound();
 			const note = await device.create('c1', 'Plan', 'one\n');
-			// The remote's text, then the last line written here. skysa-notes passes
-			// no merge (`SyncSchedulerOptions.merge`); memoriam's does.
-			const merge = ({ local, remote }: MergeInput) =>
-				`${remote}${local.trimEnd().split('\n').at(-1) ?? ''}\n`;
+			// What the merge makes of the two is the app's, whatever its documents
+			// are; the scheduler's part is to hand it both and keep its answer.
+			// skysa-notes passes no merge (`SyncSchedulerOptions.merge`); memoriam's does.
+			const merged = fileOf(device, 'one\ntheirs\nmine\n');
+			const merge = vi.fn((_: MergeInput) => merged);
 			const h = started(device, { merge });
 			const documents = device.store.syncStore('c1');
 			await vi.waitFor(async () => {
 				expect((await documents.noteById(note.id))?.dirty).toBe(false);
 			});
 			await reaches(h.scheduler, 'idle');
-			const synced = h.remote.fake.contentAt(note.path) ?? '';
 			const version = h.remote.fake
 				.snapshot()
 				.find((entry) => entry.path === note.path)?.version;
 
 			// Edited elsewhere, and here, before either syncs.
-			await h.remote.fake.write(note.path, `${synced}theirs\n`, { expectedVersion: version });
+			const theirs = fileOf(device, 'one\ntheirs\n');
+			await h.remote.fake.write(note.path, theirs, { expectedVersion: version });
 			await device.edit('c1', note.id, 'one\nmine\n');
+			const mine = (await documents.noteById(note.id))?.content;
 			await h.scheduler.syncNow();
 
+			expect(merge).toHaveBeenCalledTimes(1);
+			expect(merge).toHaveBeenCalledWith(
+				expect.objectContaining({ path: note.path, local: mine, remote: theirs })
+			);
 			expect(h.scheduler.status()).toMatchObject({ phase: 'idle', conflicts: [] });
-			expect(h.remote.fake.contentAt(note.path)).toBe(`${synced}theirs\nmine\n`);
+			expect(h.remote.fake.contentAt(note.path)).toBe(merged);
 			expect(await documents.noteById(note.id)).toMatchObject({
-				content: `${synced}theirs\nmine\n`,
+				content: merged,
 				dirty: false,
 			});
 			expect(await documents.allNotes()).toHaveLength(1);
