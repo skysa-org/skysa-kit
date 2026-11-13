@@ -285,7 +285,7 @@ Its `pageSize`, `folderChanges` and `setFault` options are what let the engine's
 ### 5.1 Google Drive
 - Scope: `https://www.googleapis.com/auth/drive.file` plus `openid email` for identity.
   Non-restricted; standard OAuth verification only.
-- Root: a folder `APP_FOLDER_NAME` (mimeType `application/vnd.google-apps.folder`) at the top of My Drive, tagged `appProperties: { notesapp: "root" }` and found by that tag, never by name, so a user who renames or moves it keeps their notes, whatever it is called.
+- Root: a folder named by the app (`AppFolderSpec`'s `name`, §3; skysa-notes' `APP_FOLDER_NAME`), of mimeType `application/vnd.google-apps.folder`, at the top of My Drive, tagged `appProperties: { <driveTag>: "root" }` and found by that tag, never by name, so a user who renames or moves it keeps their notes, whatever it is called.
   The key is the app's (`AppFolderSpec`'s `driveTag`, §3), and skysa-notes' is `notesapp`.
   **Only `ensureRoot` and a round from nothing make one**: a pull on a stored cursor, and every read and write, only look (a search that misses the folder for a moment is an error to retry, never a second folder).
   Where one is made, the search is asked again, and every tagged folder but the earliest is folded into it — what is inside moved across (the marker trashed instead where the earliest has one), and a folder put in the trash only when a fold finds it already empty, since a device whose last pull was against it may still be writing into it; that device's next pull resets and folds again.
@@ -474,8 +474,9 @@ Its `pageSize`, `folderChanges` and `setFault` options are what let the engine's
 ### 5.3 Dropbox
 - App type: **App folder** access.
   Scopes: `files.metadata.read files.metadata.write files.content.read files.content.write account_info.read`.
-- Root: with App folder access, the API root *is* `/Apps/<AppName>`, where `<AppName>` is the app name set in the Dropbox App Console (immutable after creation — create it as `skysa-notes`).
-  All paths are relative to it. ensureRoot just writes the app's marker file (skysa-notes' `.notesapp.json`) at `/`.
+- Root: with App folder access, the API root *is* `/Apps/<AppName>`, where `<AppName>` is the app name set in the Dropbox App Console (immutable after creation — create it under the app folder's name: skysa-notes created `skysa-notes`).
+  All paths are relative to it.
+  ensureRoot just writes the app's marker file (skysa-notes' `.notesapp.json`) at `/`.
 - Files: `POST content.dropboxapi.com/2/files/upload` with `mode: { ".tag": "update", update: rev }` for conflict-safe overwrite (Dropbox returns a conflict error rather than auto-renaming when `autorename: false`).
   `mode: add` for create.
   **`strict_conflict: true` is required**: without it an `update` whose rev no longer matches still succeeds when the file has since been deleted, which is exactly the case the expected version exists to catch.

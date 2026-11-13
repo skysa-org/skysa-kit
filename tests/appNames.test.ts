@@ -17,14 +17,15 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 /**
  * The apps the kit serves, by the ways their names are spelled in code: in
  * full (`skysa-notes`, `Skysa Notes`, `skysa.draw`), as their folders' tags
- * (`notesapp`, `.drawapp.json`), as a prefix (`notes-`, `NOTES_`,
- * `VITE_NOTES_`), by skysa-notes' own packages and paths (`@skysa/core`,
- * `apps/web/`), and, for draw, in a camel-cased name (`drawMarker`,
- * `DrawDatabase`). The kit's own words are not among them: a "note" is any
- * app's document (`upsert-note`, `notesUnderNow`, `notesApplied`,
- * `NOTE_KINDS`, `notes.md`, "3 notes: …"), so only the plural, an app's name,
- * counts, and only where it starts a word and a hyphen or an underscore
- * follows.
+ * (`notesapp`, `notesappLeft`, `.drawapp.json`), as a prefix (`notes-`,
+ * `NOTES_`, `VITE_NOTES_`, and draw's XML prefix, `draw:id`, `xmlns:draw`),
+ * by skysa-notes' own packages and paths (`@skysa/core`, `apps/web/`), and,
+ * for draw, in a camel-cased name (`drawMarker`, `DrawDatabase`), but for
+ * what the platform calls drawing (`drawImage`). The kit's own words are not
+ * among them: a "note" is any app's document (`upsert-note`,
+ * `notesUnderNow`, `notesApplied`, `NOTE_KINDS`, `notes.md`, "3 notes: …"),
+ * so only the plural, an app's name, counts, and only where it starts a word
+ * and a hyphen or an underscore follows.
  *
  * A pattern, and so a net with holes: it catches the ways the apps' names
  * have been spelled, and an app that comes to the kit adds its own here. A
@@ -32,16 +33,24 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
  * exception, with a reason.
  */
 const APP =
-	/skysa[\s_./:-]?(?:notes|draw)|memoriam|(?:notes|draw)app(?![a-z])|(?<![a-z-])(?:notes|draw(?:ings?)?)[-_]|@skysa\/core\b|apps\/(?:web|api)\//iu;
+	/skysa[\s_./:-]?(?:notes|draw)|memoriam|(?<![a-z-])(?:notes[-_]|draw(?:ings?)?[-_:])|xmlns:draw\b|@skysa\/core\b|apps\/(?:web|api)\//iu;
+/** The folders' tags, which run into a key's next word (`notesappLeft`). */
+const TAG = /(?:notes|draw)app(?![a-z])|(?:NOTES|DRAW)APP/u;
 const CAMEL = /\b[Dd]raw(?:ings?)?[A-Z]/u;
+/**
+ * What the platform calls drawing, which the kit cannot rename: the canvas's
+ * and WebGL's calls and constants.
+ */
+const PLATFORM =
+	/\b(?:drawImage|drawFocusIfNeeded|drawArrays\w*|drawElements\w*|drawRangeElements|drawBuffers\w*|DRAW_(?:FRAMEBUFFER\w*|BUFFER\d+))\b/gu;
 /**
  * A citation says whose a thing is, as a comment does: an issue in brackets,
  * as the lint messages give one (`(skysa-notes#449)`), or a link.
  */
 const CITED = /https:\/\/github\.com\/skysa-org\/[\w./#-]*|\(skysa-[\w-]+#\d+\)/gu;
 const names = (text: string): boolean => {
-	const uncited = text.replace(CITED, '');
-	return APP.test(uncited) || CAMEL.test(uncited);
+	const own = text.replace(CITED, '').replace(PLATFORM, '');
+	return APP.test(own) || TAG.test(own) || CAMEL.test(own);
 };
 
 const PACKAGES = readdirSync(join(ROOT, 'packages'), { withFileTypes: true })
@@ -155,6 +164,9 @@ describe("the kit's code", () => {
 			'apps/web/src/sync/account.ts',
 			'.notesapp.json',
 			'drawapp',
+			'notesappLeft',
+			'draw:id',
+			'xmlns:draw',
 			'drawMarker',
 			'DrawDatabase',
 			'memoriam',
@@ -169,6 +181,8 @@ describe("the kit's code", () => {
 			'NOTE_KINDS',
 			'notes.md',
 			'notesApplied',
+			'ctx.drawImage',
+			'gl.DRAW_FRAMEBUFFER',
 			'} notes: ${',
 			'./pull/notes.js',
 			'release-notes-x',
