@@ -1,0 +1,231 @@
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+import ts from 'typescript';
+import { describe, expect, it } from 'vitest';
+
+/**
+ * Nothing in the kit names an app (CLAUDE.md): what is an app's own is handed
+ * in. A comment may name one as the example, saying whose it is; the code may
+ * not, in a string, a name, a pattern or a JSX text. A name in a string
+ * reaches every app that uses the kit, as the brand plugin's `notes-brand`
+ * did, in Vite's messages from skysa-draw's build.
+ */
+const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
+
+/**
+ * The apps the kit serves, by the ways their names are spelled in code: in
+ * full (`skysa-notes`, `Skysa Notes`, `skysa.draw`), as their folders' tags
+ * (`notesapp`, `notesappLeft`, `.drawapp.json`), as a prefix (`notes-`,
+ * `NOTES_`, `VITE_NOTES_`, and draw's XML prefix, `draw:id`, `xmlns:draw`),
+ * by skysa-notes' own packages and paths (`@skysa/core`, `apps/web/`), and,
+ * for draw, in a camel-cased name (`drawMarker`, `DrawDatabase`), but for
+ * what the platform calls drawing (`drawImage`). The kit's own words are not
+ * among them: a "note" is any app's document (`upsert-note`,
+ * `notesUnderNow`, `notesApplied`, `NOTE_KINDS`, `notes.md`, "3 notes: …"),
+ * so only the plural, an app's name, counts, and only where it starts a word
+ * and a hyphen or an underscore follows.
+ *
+ * A pattern, and so a net with holes: it catches the ways the apps' names
+ * have been spelled, and an app that comes to the kit adds its own here. A
+ * kit word it catches by mistake is renamed, or the pattern takes the
+ * exception, with a reason.
+ */
+const APP =
+	/skysa[\s_./:-]?(?:notes|draw)|memoriam|(?<![a-z-])(?:notes[-_]|draw(?:ings?)?[-_:])|xmlns:draw\b|@skysa\/core\b|apps\/(?:web|api)\//iu;
+/** The folders' tags, which run into a key's next word (`notesappLeft`). */
+const TAG = /(?:notes|draw)app(?![a-z])|(?:NOTES|DRAW)APP/u;
+const CAMEL = /\b[Dd]raw(?:ings?)?[A-Z]/u;
+/**
+ * What the platform calls drawing, which the kit cannot rename: the canvas's
+ * and WebGL's calls and constants.
+ */
+const PLATFORM =
+	/\b(?:drawImage|drawFocusIfNeeded|drawArrays\w*|drawElements\w*|drawRangeElements|drawBuffers\w*|DRAW_(?:FRAMEBUFFER\w*|BUFFER\d+))\b/gu;
+/**
+ * A citation says whose a thing is, as a comment does: an issue in brackets,
+ * as the lint messages give one (`(skysa-notes#449)`), or a link.
+ */
+const CITED = /https:\/\/github\.com\/skysa-org\/[\w./#-]*|\(skysa-[\w-]+#\d+\)/gu;
+const names = (text: string): boolean => {
+	const own = text.replace(CITED, '').replace(PLATFORM, '');
+	return APP.test(own) || TAG.test(own) || CAMEL.test(own);
+};
+
+const PACKAGES = readdirSync(join(ROOT, 'packages'), { withFileTypes: true })
+	.filter(
+		(entry) =>
+			entry.isDirectory() && existsSync(join(ROOT, 'packages', entry.name, 'package.json'))
+	)
+	.map((entry) => join('packages', entry.name));
+const under = (folder: string): readonly string[] =>
+	existsSync(join(ROOT, folder))
+		? readdirSync(join(ROOT, folder), { recursive: true, encoding: 'utf8' }).map((file) =>
+				join(folder, file)
+			)
+		: [];
+/**
+ * Every module of every package: its `src/`, `tests/` and `scripts/`, and the
+ * files at its top (eslint-config's `index.js`, a `vitest.config.ts`).
+ */
+const CODE = PACKAGES.flatMap((folder) => [
+	...['src', 'tests', 'scripts'].flatMap((part) => under(join(folder, part))),
+	...readdirSync(join(ROOT, folder)).map((file) => join(folder, file)),
+]).filter((file) => /\.[cm]?[jt]sx?$/u.test(file) && statSync(join(ROOT, file)).isFile());
+/** The server's migrations, which every app's database takes as they are. */
+const MIGRATIONS = under(join('packages', 'server', 'migrations')).filter((file) =>
+	file.endsWith('.sql')
+);
+
+const SPELLED = new Set([
+	ts.SyntaxKind.StringLiteral,
+	ts.SyntaxKind.NoSubstitutionTemplateLiteral,
+	ts.SyntaxKind.TemplateHead,
+	ts.SyntaxKind.TemplateMiddle,
+	ts.SyntaxKind.TemplateTail,
+	ts.SyntaxKind.RegularExpressionLiteral,
+	ts.SyntaxKind.JsxText,
+	ts.SyntaxKind.Identifier,
+	ts.SyntaxKind.PrivateIdentifier,
+]);
+
+/**
+ * Every string, pattern, JSX text and name in a module, by a parse. A comment
+ * is no node, and a doc comment's (`{@link …}`, `@param`) is left out, so
+ * that no comment is read as code.
+ */
+const spelled = (file: string, text: string): readonly string[] => {
+	const source = ts.createSourceFile(
+		file,
+		text,
+		ts.ScriptTarget.Latest,
+		true,
+		/x$/u.test(file) ? ts.ScriptKind.TSX : ts.ScriptKind.TS
+	);
+	const walk = (node: ts.Node): readonly ts.Node[] => [
+		node,
+		...node
+			.getChildren(source)
+			.filter((child) => !ts.isJSDoc(child))
+			.flatMap(walk),
+	];
+	return walk(source)
+		.filter((node) => SPELLED.has(node.kind))
+		.map((node) => node.getText(source));
+};
+const spelledIn = (file: string): readonly string[] =>
+	spelled(file, readFileSync(join(ROOT, file), 'utf8'));
+
+describe("the kit's code", () => {
+	it('finds what it is meant to look at', () => {
+		expect(CODE).toContain(join('packages', 'pwa', 'src', 'brand.ts'));
+		expect(CODE).toContain(join('packages', 'pwa', 'scripts', 'bundleBudget.mjs'));
+		expect(CODE).toContain(join('packages', 'pwa', 'tests', 'testing.ts'));
+		expect(CODE).toContain(join('packages', 'eslint-config', 'index.js'));
+		expect(CODE).toContain(join('packages', 'server', 'vitest.config.ts'));
+		expect(MIGRATIONS).toContain(join('packages', 'server', 'migrations', '0000_init.sql'));
+		expect(spelledIn(join('packages', 'pwa', 'src', 'brand.ts'))).toContain('brandPlugin');
+	});
+
+	it('reads strings, patterns, JSX text and names, and no comment', () => {
+		const found = spelled(
+			'probe.tsx',
+			[
+				'/** Read from {@link NOTES_BRAND}. @param NOTES_X the one */',
+				'// skysa-notes',
+				'const p = <p>Made here</p>;',
+				'const r = /a-pattern/u;',
+				'const s = `a ${p} b`;',
+			].join('\n')
+		);
+		expect(found).toEqual(
+			expect.arrayContaining(['Made here', '/a-pattern/u', '`a ${', '} b`'])
+		);
+		expect(found.filter((text) => text.includes('NOTES') || text.includes('skysa'))).toEqual(
+			[]
+		);
+	});
+
+	it("knows an app's name from the kit's own words", () => {
+		[
+			'notes-brand',
+			'skysa-draw:sync:',
+			'NOTES_BRAND',
+			'VITE_NOTES_RELAY',
+			'DRAW_FORMAT',
+			'drawing-row',
+			'Skysa Notes',
+			'skysaDraw',
+			'skysa.notes.prefs',
+			'skysa-org/skysa-notes:sync',
+			'skysa-notes-db#1',
+			'import it from @skysa/core',
+			'apps/web/src/sync/account.ts',
+			'.notesapp.json',
+			'drawapp',
+			'notesappLeft',
+			'draw:id',
+			'xmlns:draw',
+			'drawMarker',
+			'DrawDatabase',
+			'memoriam',
+		].forEach((name) => {
+			expect(names(name), name).toBe(true);
+		});
+		[
+			'upsert-note',
+			'note-added',
+			'notesUnderNow',
+			'PullNotes',
+			'NOTE_KINDS',
+			'notes.md',
+			'notesApplied',
+			'ctx.drawImage',
+			'gl.DRAW_FRAMEBUFFER',
+			'} notes: ${',
+			'./pull/notes.js',
+			'release-notes-x',
+			'withdrawn',
+			'skysa-update',
+			'@skysa/pwa:brand',
+			'from a test (skysa-notes#449).',
+			'(skysa-notes-cloud#12)',
+			'https://github.com/skysa-org/skysa-notes/blob/main/docs/ARCHITECTURE.md',
+		].forEach((word) => {
+			expect(names(word), word).toBe(false);
+		});
+	});
+
+	it('names no app', () => {
+		const named = CODE.flatMap((file) =>
+			spelledIn(file)
+				.filter(names)
+				.map((text) => `${file}: ${text}`)
+		);
+		expect(named).toEqual([]);
+	});
+
+	it('makes no table, column or key that names an app', () => {
+		// The SQL, without its comments, which may name an app as the example.
+		const named = MIGRATIONS.flatMap((file) =>
+			readFileSync(join(ROOT, file), 'utf8')
+				.replace(/\/\*[\s\S]*?\*\//gu, '')
+				.split('\n')
+				.map((line) => line.replace(/--.*$/u, ''))
+				.filter(names)
+				.map((line) => `${file}: ${line}`)
+		);
+		expect(named).toEqual([]);
+	});
+
+	it("describes no package as an app's", () => {
+		const named = PACKAGES.flatMap((folder) => {
+			const { description = '', keywords = [] } = JSON.parse(
+				readFileSync(join(ROOT, folder, 'package.json'), 'utf8')
+			) as { description?: string; keywords?: readonly string[] };
+			return [description, ...keywords].filter(names).map((text) => `${folder}: ${text}`);
+		});
+		expect(named).toEqual([]);
+	});
+});

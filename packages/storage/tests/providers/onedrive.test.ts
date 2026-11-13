@@ -266,7 +266,7 @@ describe('the app folder', () => {
 		// Graph answers the app folder by its id like any other item, and would
 		// take a PATCH or a DELETE of it, so nothing is to be sent at all.
 		const { doFetch, seen } = scripted((_url, init) => {
-			const root = { id: 'root', name: 'Skysa Notes', folder: {}, eTag: 'e0' };
+			const root = { id: 'root', name: TEST_FOLDER.name, folder: {}, eTag: 'e0' };
 			if (init.method === 'GET') return Response.json(root);
 			if (init.method === 'PATCH') return Response.json({ ...root, name: 'Archive' });
 			if (init.method === 'DELETE') return new Response(null, { status: 204 });

@@ -19,7 +19,7 @@ import {
 
 /**
  * The brand: the one way a deployment names and colors the app without
- * changing this repo (docs/ARCHITECTURE.md §8, "Brand"). A mistake in a brand
+ * changing the app's repo (docs/ARCHITECTURE.md §8, "Brand"). A mistake in a brand
  * file shows up nowhere in a build that goes ahead, only as an app that will
  * not install or installs without its icon, so each one has to stop the build.
  */
@@ -182,7 +182,8 @@ describe('a brand of its own', () => {
 			'/apple-touch-icon.png',
 			brandCssUrl(brand),
 		]);
-		// The Content-Security-Policy allows no inline script (public/_headers).
+		// An app's Content-Security-Policy allows no inline script (skysa-notes'
+		// `apps/web/public/_headers`).
 		expect(tags.some((tag) => tag.tag === 'script')).toBe(false);
 	});
 });
@@ -241,5 +242,12 @@ describe('the build plugin', () => {
 	it('puts the tags into the page', () => {
 		const transform = hook(plugin.transformIndexHtml as unknown as () => unknown);
 		expect(transform()).toEqual(brandTags(brand));
+	});
+
+	it('is named for its package, and no app', () => {
+		const { name } = JSON.parse(readFileSync(join(here, '../package.json'), 'utf8')) as {
+			name: string;
+		};
+		expect(plugin.name).toBe(`${name}:brand`);
 	});
 });
