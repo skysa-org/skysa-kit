@@ -1,5 +1,13 @@
 # @skysa/server
 
+## 1.1.0
+
+### Patch Changes
+
+- Updated dependencies [fb46ba0]
+  - @skysa/storage@1.1.0
+  - @skysa/protocol@1.1.0
+
 ## 1.0.0
 
 ### Major Changes

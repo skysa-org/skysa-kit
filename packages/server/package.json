@@ -1,6 +1,6 @@
 {
 	"name": "@skysa/server",
-	"version": "1.0.0",
+	"version": "1.1.0",
 	"description": "The Worker as a library, one connect flow per provider, and the D1 migrations.",
 	"license": "AGPL-3.0-only",
 	"repository": {
