@@ -297,7 +297,7 @@ export const brandTags = (brand: Brand): readonly HtmlTagDescriptor[] => {
 	// page. A tag's children it writes as given, so the title is escaped here.
 	const tag = (name: string, attrs: Readonly<Record<string, string>>): HtmlTagDescriptor => ({
 		tag: name,
-		attrs: { ...attrs },
+		attrs,
 		injectTo: 'head',
 	});
 	return [

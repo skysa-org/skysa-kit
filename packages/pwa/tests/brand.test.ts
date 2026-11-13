@@ -250,18 +250,23 @@ describe('the build plugin', () => {
 		const said = loadBrand(
 			brandFile({ ...plain, name: 'Notes & <Co>', description: 'Notes & "to-dos" <here>' })
 		);
+		// A server that only transforms: no HMR socket, no watcher, no optimizer
+		// writing beside the package.
 		const server = await createServer({
 			configFile: false,
 			root: dirname(FIXTURE),
+			cacheDir: mkdtempSync(join(tmpdir(), 'vite-')),
 			logLevel: 'silent',
-			server: { middlewareMode: true },
+			server: { middlewareMode: true, ws: false, watch: null },
+			optimizeDeps: { noDiscovery: true },
 			plugins: [brandPlugin(said)],
 		});
-		const page = await server.transformIndexHtml(
-			'/index.html',
-			'<!doctype html><html><head></head><body></body></html>'
-		);
-		await server.close();
+		const page = await server
+			.transformIndexHtml(
+				'/index.html',
+				'<!doctype html><html><head></head><body></body></html>'
+			)
+			.finally(() => server.close());
 		expect(page).toContain('<title>Notes &amp; &lt;Co&gt;</title>');
 		expect(page).toContain(
 			'<meta name="description" content="Notes &amp; &quot;to-dos&quot; &lt;here&gt;">'
