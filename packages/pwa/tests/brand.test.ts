@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import type { ViteDevServer } from 'vite';
+import { createServer, type ViteDevServer } from 'vite';
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -242,6 +242,30 @@ describe('the build plugin', () => {
 	it('puts the tags into the page', () => {
 		const transform = hook(plugin.transformIndexHtml as unknown as () => unknown);
 		expect(transform()).toEqual(brandTags(brand));
+	});
+
+	it("writes the brand's words into the page as they are, through Vite", async () => {
+		// Vite escapes attribute values itself and writes children as given, so
+		// what reaches the page is checked where Vite writes it, not in the tags.
+		const said = loadBrand(
+			brandFile({ ...plain, name: 'Notes & <Co>', description: 'Notes & "to-dos" <here>' })
+		);
+		const server = await createServer({
+			configFile: false,
+			root: dirname(FIXTURE),
+			logLevel: 'silent',
+			server: { middlewareMode: true },
+			plugins: [brandPlugin(said)],
+		});
+		const page = await server.transformIndexHtml(
+			'/index.html',
+			'<!doctype html><html><head></head><body></body></html>'
+		);
+		await server.close();
+		expect(page).toContain('<title>Notes &amp; &lt;Co&gt;</title>');
+		expect(page).toContain(
+			'<meta name="description" content="Notes &amp; &quot;to-dos&quot; &lt;here&gt;">'
+		);
 	});
 
 	it('is named for its package, and no app', () => {
