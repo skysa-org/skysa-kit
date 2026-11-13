@@ -291,11 +291,13 @@ const escapeHtml = (text: string): string =>
 
 /** The tags the page's head gets from the brand. No script: the CSP allows none inline. */
 export const brandTags = (brand: Brand): readonly HtmlTagDescriptor[] => {
-	const attrs = (given: Readonly<Record<string, string>>): Record<string, string> =>
-		Object.fromEntries(Object.entries(given).map(([key, value]) => [key, escapeHtml(value)]));
-	const tag = (name: string, given: Readonly<Record<string, string>>): HtmlTagDescriptor => ({
+	// Vite escapes an attribute's value as it writes the tag (`serializeAttrs`,
+	// through escape-html), so a value goes in as the brand has it: escaped here
+	// too, a description of "Notes & to-dos" read "Notes &amp; to-dos" on the
+	// page. A tag's children it writes as given, so the title is escaped here.
+	const tag = (name: string, attrs: Readonly<Record<string, string>>): HtmlTagDescriptor => ({
 		tag: name,
-		attrs: attrs(given),
+		attrs,
 		injectTo: 'head',
 	});
 	return [
