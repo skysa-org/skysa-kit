@@ -1,6 +1,6 @@
 {
 	"name": "@skysa/pwa",
-	"version": "1.0.0",
+	"version": "1.1.0",
 	"description": "The brand's Vite plugin, the web app manifest and the service worker's options, and the bundle budget.",
 	"license": "AGPL-3.0-only",
 	"repository": {
