@@ -1129,9 +1129,12 @@ The two-device suite (`overProviders.test.ts`) does the same at rest, and checks
      It lasts until the user asks again — a sync now, or a re-scan — or the source is shown again after another, or the app is opened again: in memory only, so a reload never leaves a device unsyncing without its user there to see it.
    - **What stands against syncing is said until something answers it (2026-11-15).**
      The status's `refusal`, with its `denial`, is the server's last refusal from when it was given until a token is had again from anywhere (`TokenSource.standing` in `packages/client/src/sync/tokens.ts`), or `reauthorize_required` where the provider refused even a fresh token, until a run gets through.
-     It is said whatever the phase: a run that asks again, going offline, a backoff and a pause all leave it standing, and the phase says how syncing is going meanwhile.
+     It is said whatever the phase: a run that asks again, going offline, a backoff, a pause and another source shown in between all leave it standing, and the phase says how syncing is going meanwhile.
+     The scheduler keeps it for each connection (`standings`), and each session's token source keeps what it is refused there, so a session made again for the connection says it still.
      Until then each run cleared it as it started, and going offline cleared it too, so an app that offered "Connect again" under a refusal took it away on every focus, and whoever went to fetch an operator's code came back to an empty field (skysa-kit#22, item 3; memoriam kept it in its view meanwhile, memoriam#48).
-     A token had mid-run lets it go then and there (`onStanding`), not at whatever the run says next.
+     A token had mid-run lets it go then and there (`onStanding`, told in a microtask of its own so that nothing it does can stop a token being had), not at whatever the run says next.
+     One had outside a run, by a file read as it is opened, where syncing had stopped for the refusal, starts a run, as focus would.
+     The provider's refusal is told from the server's by what the run's last renewal came to (`renewed`): a fresh token minted, and the run still paused, is the provider's.
      `needsReconnect(status)` says when connecting again is the answer: the device holds no credential for the connection, the server knows none, or the provider's grant is gone.
      It is the rule each app had copied, which asked it of `attention` alone.
      The token source's `refusal()` keeps its meaning, the server's last answer, which no answer at all clears: so a server that could not be reached is still retried, rather than waited on for a refusal it may since have lifted.

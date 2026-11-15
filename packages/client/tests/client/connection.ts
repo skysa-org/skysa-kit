@@ -267,7 +267,8 @@ export const describeConnection = (
 				await vi.waitFor(() => {
 					expect(h.remote.gated()).toBe(arrived + 1);
 				});
-				expect(h.scheduler.status().progress?.stage).toBe('scanning');
+				const old = h.scheduler.status().progress;
+				expect(old?.stage).toBe('scanning');
 				const said: SchedulerStatus[] = [];
 				h.scheduler.subscribe((status) => {
 					said.push(status);
@@ -281,7 +282,9 @@ export const describeConnection = (
 				await running;
 				await reaches(h.scheduler, 'idle');
 
-				// The sync done again starts from nothing, and counts for itself.
+				// The sync done again starts from nothing, and counts for itself:
+				// the old count is never said again.
+				expect(said.filter((status) => status.progress === old)).toEqual([]);
 				expect(
 					said.filter(
 						(status) => status.phase === 'syncing' && status.progress === undefined

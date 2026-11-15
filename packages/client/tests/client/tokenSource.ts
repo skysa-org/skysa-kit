@@ -1,8 +1,8 @@
-import { isAuthError } from '@skysa/storage';
+import { cell, isAuthError } from '@skysa/storage';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { ApiClient } from '../../src/api/client.js';
-import { createTokenSource } from '../../src/sync/tokens.js';
+import { createTokenSource, type Refused } from '../../src/sync/tokens.js';
 import type { ClientDevice } from './device.js';
 
 const CREDENTIAL = 'sk1_the-credential-this-device-holds';
@@ -238,12 +238,15 @@ export const describeTokenSource = (
 
 			await tokens.get().catch(() => undefined);
 			expect(tokens.refusal()).toBe('not_entitled');
-			expect(tokens.denial()).toEqual({ code: 'lapsed', reason: 'Your plan ended.' });
+			expect(tokens.standing()).toEqual({
+				refusal: 'not_entitled',
+				denial: { code: 'lapsed', reason: 'Your plan ended.' },
+			});
 
 			// A different refusal is not the same denial.
 			await tokens.refresh().catch(() => undefined);
 			expect(tokens.refusal()).toBe('reauthorize_required');
-			expect(tokens.denial()).toBeUndefined();
+			expect(tokens.standing()?.denial).toBeUndefined();
 		});
 
 		it('forgets a refusal when another tab has minted a token since', async () => {
@@ -320,6 +323,18 @@ export const describeTokenSource = (
 					refusal: 'not_entitled',
 					denial: { code: 'lapsed', reason: 'Your plan ended.' },
 				})
+				// The same again, which is no change.
+				.mockResolvedValueOnce({
+					ok: false,
+					refusal: 'not_entitled',
+					denial: { code: 'lapsed', reason: 'Your plan ended.' },
+				})
+				// The same refusal for another reason, which is one.
+				.mockResolvedValueOnce({
+					ok: false,
+					refusal: 'not_entitled',
+					denial: { code: 'lapsed', reason: 'Your trial ended.' },
+				})
 				.mockRejectedValueOnce(new TypeError('Failed to fetch'))
 				.mockImplementation(ok.token);
 			const changes: unknown[] = [];
@@ -334,14 +349,48 @@ export const describeTokenSource = (
 			});
 
 			await tokens.get().catch(() => undefined);
+			await tokens.refresh().catch(() => undefined);
+			await tokens.refresh().catch(() => undefined);
 			await tokens.get().catch(() => undefined);
 			await tokens.get();
 			await tokens.get();
+			await Promise.resolve();
 
 			expect(changes).toEqual([
 				{ refusal: 'not_entitled', denial: { code: 'lapsed', reason: 'Your plan ended.' } },
+				{
+					refusal: 'not_entitled',
+					denial: { code: 'lapsed', reason: 'Your trial ended.' },
+				},
 				undefined,
 			]);
+		});
+
+		it('keeps what stands where it is told to, for whoever comes after', async () => {
+			const device = await bound();
+			const token = vi
+				.fn<ApiClient['token']>()
+				.mockResolvedValue({ ok: false, refusal: 'credential_revoked' });
+			const standing = cell<Refused | undefined>(undefined);
+			await createTokenSource({
+				...over(device),
+				client: presenting(token),
+				connectionId: 'c1',
+				standing,
+			})
+				.get()
+				.catch(() => undefined);
+
+			const after = createTokenSource({
+				...over(device),
+				client: presenting(token),
+				connectionId: 'c1',
+				standing,
+			});
+
+			expect(after.standing()).toEqual({ refusal: 'credential_revoked' });
+			// What it was refused is not its own answer: the server is asked.
+			expect(after.refusal()).toBeUndefined();
 		});
 
 		it('does not bring back the row of a connection let go while minting', async () => {
