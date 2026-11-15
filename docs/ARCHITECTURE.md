@@ -1127,6 +1127,15 @@ The two-device suite (`overProviders.test.ts`) does the same at rest, and checks
      The session is a whole one, so a file beside a document is still read when it is opened.
      A batch the run was already writing is written whole with its cursor, so nothing is half-applied, and an op whose request was aborted is given back the attempt that counted against it once the run lets go.
      It lasts until the user asks again — a sync now, or a re-scan — or the source is shown again after another, or the app is opened again: in memory only, so a reload never leaves a device unsyncing without its user there to see it.
+   - **What stands against syncing is said until something answers it (2026-11-15).**
+     The status's `refusal`, with its `denial`, is the server's last refusal from when it was given until a token is had again from anywhere (`TokenSource.standing` in `packages/client/src/sync/tokens.ts`), or `reauthorize_required` where the provider refused even a fresh token, until a run gets through.
+     It is said whatever the phase: a run that asks again, going offline, a backoff and a pause all leave it standing, and the phase says how syncing is going meanwhile.
+     Until then each run cleared it as it started, and going offline cleared it too, so an app that offered "Connect again" under a refusal took it away on every focus, and whoever went to fetch an operator's code came back to an empty field (skysa-kit#22, item 3; memoriam kept it in its view meanwhile, memoriam#48).
+     A token had mid-run lets it go then and there (`onStanding`), not at whatever the run says next.
+     `needsReconnect(status)` says when connecting again is the answer: the device holds no credential for the connection, the server knows none, or the provider's grant is gone.
+     It is the rule each app had copied, which asked it of `attention` alone.
+     The token source's `refusal()` keeps its meaning, the server's last answer, which no answer at all clears: so a server that could not be reached is still retried, rather than waited on for a refusal it may since have lifted.
+     A run superseded part-way leaves no count behind either: the run after it starts with none (`progress`), where it said the old run's count until it had one of its own (skysa-kit#20, item 4).
 2. **Push**: drain `opQueue` in order — except that where the provider takes more than one at a time (`StorageProvider.writesAtOnce`, 2026-10-05), the writes of notes at its front go that many at once (`together` in the engine).
    That is four on Google Drive, where a new note is three or four requests end to end and, one at a time, an import of a thousand took most of half an hour; four is well inside its limits (a user has 325,000 quota units a minute, a note costs a few hundred: https://developers.google.com/workspace/drive/api/guides/limits).
    Dropbox stays at one: it locks the namespace for each write, and enough at once are answered `429 too_many_write_operations` (https://docs.dropboxapi.com/dropbox-api/docs/performance), a rate limit that backs the whole sync off.

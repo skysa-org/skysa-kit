@@ -3,7 +3,7 @@ import type { MergeInput } from '@skysa/sync';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { ApiClient } from '../../src/api/client.js';
-import type { SchedulerStatus, SyncPhase } from '../../src/sync/scheduler.js';
+import { needsReconnect, type SchedulerStatus, type SyncPhase } from '../../src/sync/scheduler.js';
 import { type ClientDevice, fileOf, type ScheduleOptions } from './device.js';
 import {
 	BACKOFF,
@@ -229,11 +229,12 @@ export const describeFailures = (
 			await reaches(h.scheduler, 'attention');
 
 			expect(h.scheduler.status().refusal).toBe('reauthorize_required');
+			expect(needsReconnect(h.scheduler.status())).toBe(true);
 			expect(h.env.pending()).toEqual([]);
 			expect(h.remote.fake.callLog()).toEqual([]);
 		});
 
-		it("says what the operator's policy said, beside a not_entitled, and stops saying it once a token is had", async () => {
+		it("says what the operator's policy said, beside a not_entitled, until a token is had", async () => {
 			const device = await bound();
 			const token = vi
 				.fn<ApiClient['token']>()
@@ -261,9 +262,19 @@ export const describeFailures = (
 			h.env.fire('focus');
 			await reaches(h.scheduler, 'idle');
 			expect(h.scheduler.status().denial).toBeUndefined();
-			// Nor while it tries: cleared with the refusal, never after it.
-			expect(syncing.length).toBeGreaterThan(0);
-			expect(syncing.filter((status) => status.denial !== undefined)).toEqual([]);
+			expect(needsReconnect(h.scheduler.status())).toBe(false);
+			// Through the run that asks again, until it is answered: cleared with
+			// the refusal, never before it or after it.
+			expect(syncing[0]).toMatchObject({
+				refusal: 'not_entitled',
+				denial: { code: 'limit_reached', reason: 'This plan syncs two accounts.' },
+			});
+			expect(syncing.at(-1)?.refusal).toBeUndefined();
+			expect(
+				syncing.filter(
+					(status) => (status.refusal === undefined) !== (status.denial === undefined)
+				)
+			).toEqual([]);
 		});
 
 		it('asks for attention when even a fresh token is refused', async () => {
@@ -277,13 +288,39 @@ export const describeFailures = (
 
 			expect(h.scheduler.status()).toMatchObject({
 				phase: 'attention',
-				refusal: undefined,
+				refusal: 'reauthorize_required',
 				error: 'authorization required',
 			});
+			expect(needsReconnect(h.scheduler.status())).toBe(true);
 			expect(h.env.pending()).toEqual([]);
 		});
 
-		it('clears the refusal once a token is minted again', async () => {
+		it('keeps a provider refusing a fresh token standing until a run gets through', async () => {
+			const device = await bound();
+			const h = started(device);
+			await reaches(h.scheduler, 'idle');
+			h.remote.rejected.add('t1');
+			h.remote.rejected.add('t2');
+			await h.scheduler.syncNow();
+			expect(h.scheduler.status().refusal).toBe('reauthorize_required');
+
+			// A token the provider takes, and then the provider out of reach.
+			h.remote.fake.setFault((call) =>
+				call.op === 'changes' ? new Error('503 Service Unavailable') : undefined
+			);
+			await h.scheduler.syncNow();
+			expect(h.scheduler.status()).toMatchObject({
+				phase: 'retrying',
+				refusal: 'reauthorize_required',
+			});
+
+			h.remote.fake.setFault(undefined);
+			h.env.advance(BACKOFF);
+			await reaches(h.scheduler, 'idle');
+			expect(h.scheduler.status().refusal).toBeUndefined();
+		});
+
+		it('keeps a refusal through the run that asks again, and lets it go the moment a token is minted', async () => {
 			const device = await bound();
 			const token = vi
 				.fn<ApiClient['token']>()
@@ -294,18 +331,145 @@ export const describeFailures = (
 				});
 			const h = started(device, { client: presenting(token) });
 			await reaches(h.scheduler, 'attention');
+			const held = deferred();
+			h.remote.gate.set('changes', held.promise);
 			const syncing: SchedulerStatus[] = [];
 			h.scheduler.subscribe((status) => {
 				if (status.phase === 'syncing') syncing.push(status);
 			});
 
+			const arrived = h.remote.gated();
 			h.env.fire('focus');
+			await vi.waitFor(() => {
+				expect(h.remote.gated()).toBe(arrived + 1);
+			});
 
+			// What went wrong last time is not news, and stands until something
+			// answers it: here, a token minted, which answers it then and there.
+			expect(syncing[0]).toMatchObject({ error: undefined, refusal: 'credential_revoked' });
+			expect(h.scheduler.status().phase).toBe('syncing');
+			expect(h.scheduler.status().refusal).toBeUndefined();
+			h.remote.gate.delete('changes');
+			held.resolve();
 			await reaches(h.scheduler, 'idle');
 			expect(h.scheduler.status().refusal).toBeUndefined();
-			// Not even while it tries: what went wrong last time is not news yet.
-			expect(syncing.length).toBeGreaterThan(0);
-			expect(syncing.filter((status) => status.error ?? status.refusal)).toEqual([]);
+		});
+
+		it('keeps a refusal through going offline, and a run while offline', async () => {
+			const device = await bound();
+			const token = vi.fn<ApiClient['token']>(() =>
+				Promise.resolve({ ok: false, refusal: 'credential_revoked' })
+			);
+			const h = started(device, { client: presenting(token) });
+			await reaches(h.scheduler, 'attention');
+
+			h.env.state.online = false;
+			h.env.fire('offline');
+			expect(h.scheduler.status()).toMatchObject({
+				phase: 'offline',
+				refusal: 'credential_revoked',
+			});
+			expect(needsReconnect(h.scheduler.status())).toBe(true);
+
+			await h.scheduler.syncNow();
+			expect(h.scheduler.status()).toMatchObject({
+				phase: 'offline',
+				refusal: 'credential_revoked',
+			});
+		});
+
+		it('keeps a refusal through a pause', async () => {
+			const device = await bound();
+			const token = vi.fn<ApiClient['token']>(() =>
+				Promise.resolve({ ok: false, refusal: 'credential_revoked' })
+			);
+			const h = started(device, { client: presenting(token) });
+			await reaches(h.scheduler, 'attention');
+
+			h.scheduler.pause();
+
+			expect(h.scheduler.status()).toMatchObject({
+				phase: 'paused',
+				refusal: 'credential_revoked',
+			});
+			await h.scheduler.syncNow();
+			expect(h.scheduler.status()).toMatchObject({
+				phase: 'attention',
+				refusal: 'credential_revoked',
+			});
+		});
+
+		it('keeps a provider refusing a fresh token standing through a pause', async () => {
+			const device = await bound();
+			const h = started(device);
+			await reaches(h.scheduler, 'idle');
+			h.remote.rejected.add('t1');
+			h.remote.rejected.add('t2');
+			await h.scheduler.syncNow();
+
+			h.scheduler.pause();
+
+			expect(h.scheduler.status()).toMatchObject({
+				phase: 'paused',
+				refusal: 'reauthorize_required',
+			});
+		});
+
+		it('says nothing of what stood against one connection about the next', async () => {
+			const device = await bound();
+			const token = vi
+				.fn<ApiClient['token']>()
+				.mockResolvedValueOnce({ ok: false, refusal: 'credential_revoked' })
+				.mockResolvedValue({
+					ok: true,
+					value: { accessToken: 'ok', expiresAt: Date.now() + HOUR },
+				});
+			const h = started(device, { client: presenting(token) });
+			await reaches(h.scheduler, 'attention');
+			const said: SchedulerStatus[] = [];
+			h.scheduler.subscribe((status) => {
+				said.push(status);
+			});
+
+			await device.bind('c2');
+
+			await reaches(h.scheduler, 'idle');
+			expect(said.filter((status) => status.refusal !== undefined)).toEqual([]);
+		});
+
+		it('says nothing more of a connection no longer shown, whatever its server answers', async () => {
+			const device = await bound();
+			const held = deferred();
+			const minted = {
+				ok: true,
+				value: { accessToken: 'ok', expiresAt: Date.now() + HOUR },
+			} as const;
+			const token = vi
+				.fn<ApiClient['token']>()
+				.mockResolvedValueOnce({ ok: false, refusal: 'credential_revoked' })
+				// The one asked again, which answers once another connection is shown.
+				.mockImplementationOnce(async () => {
+					await held.promise;
+					return minted;
+				})
+				.mockResolvedValue(minted);
+			const h = started(device, { client: presenting(token) });
+			await reaches(h.scheduler, 'attention');
+			h.env.fire('focus');
+			await vi.waitFor(() => {
+				expect(token).toHaveBeenCalledTimes(2);
+			});
+			await device.bind('c2');
+			await reaches(h.scheduler, 'idle');
+			const said: SchedulerStatus[] = [];
+			h.scheduler.subscribe((status) => {
+				said.push(status);
+			});
+
+			held.resolve();
+			await quiet();
+
+			expect(said).toEqual([]);
 		});
 
 		it('retries when the token server cannot be reached', async () => {
@@ -905,7 +1069,11 @@ export const describeFailures = (
 
 			await focused(h);
 
-			expect(h.scheduler.status()).toMatchObject({ phase: 'retrying', refusal: undefined });
+			// Retried, and still refused: the server has said nothing new.
+			expect(h.scheduler.status()).toMatchObject({
+				phase: 'retrying',
+				refusal: 'reauthorize_required',
+			});
 			expect(h.env.pending()).toEqual([BACKOFF]);
 		});
 
@@ -931,7 +1099,8 @@ export const describeFailures = (
 				call.op === 'changes' ? new Error('503') : undefined
 			);
 			await h.scheduler.syncNow();
-			expect(h.scheduler.status()).toMatchObject({ phase: 'retrying', refusal: undefined });
+			expect(h.scheduler.status().phase).toBe('retrying');
+			expect(h.scheduler.status().refusal).toBeUndefined();
 			expect(h.env.pending()).toEqual([BACKOFF]);
 
 			h.remote.fake.setFault(undefined);

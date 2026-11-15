@@ -252,6 +252,43 @@ export const describeConnection = (
 				expect(h.remote.fake.contentAt(document.path)).toContain('written in since');
 			});
 
+			it('does not carry the count of a sync re-bound mid-way into the one it does again', async () => {
+				const device = await bound();
+				const document = await device.create('c1', 'Linked', 'linked\n');
+				const h = started(device);
+				await vi.waitFor(() => {
+					expect(h.remote.fake.contentAt(document.path)).toBeDefined();
+				});
+				await reaches(h.scheduler, 'idle');
+				const held = deferred();
+				h.remote.gate.set('changes', held.promise);
+				const arrived = h.remote.gated();
+				const running = h.scheduler.resync();
+				await vi.waitFor(() => {
+					expect(h.remote.gated()).toBe(arrived + 1);
+				});
+				expect(h.scheduler.status().progress?.stage).toBe('scanning');
+				const said: SchedulerStatus[] = [];
+				h.scheduler.subscribe((status) => {
+					said.push(status);
+				});
+
+				// Something unsent, which a disconnect keeps the source for.
+				await device.edit('c1', document.id, 'linked, and written in since\n');
+				await device.reconnect('c1');
+				h.remote.gate.delete('changes');
+				held.resolve();
+				await running;
+				await reaches(h.scheduler, 'idle');
+
+				// The sync done again starts from nothing, and counts for itself.
+				expect(
+					said.filter(
+						(status) => status.phase === 'syncing' && status.progress === undefined
+					)
+				).not.toEqual([]);
+			});
+
 			it('picks up a new connection with a provider of its own', async () => {
 				const device = await bound();
 				const factory = vi.fn<ProviderFactory>(remote().factory);

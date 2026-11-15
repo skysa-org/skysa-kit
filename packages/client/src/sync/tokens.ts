@@ -47,7 +47,15 @@ export interface TokenSourceOptions {
 	client: Pick<ApiClient, 'withCredential'>;
 	connectionId: string;
 	now?: () => number;
+	/**
+	 * Told each time what `standing` answers changes, so whoever shows it can
+	 * say so then rather than at whatever it says next.
+	 */
+	onStanding?: () => void;
 }
+
+/** A refusal from the server, and what the operator's policy said beside it. */
+export type Refused = Readonly<{ refusal: Refusal; denial?: Denial | undefined }>;
 
 export interface TokenSource {
 	readonly get: () => Promise<string>;
@@ -62,20 +70,37 @@ export interface TokenSource {
 	readonly refusal: () => Refusal | undefined;
 	/** What the operator's policy said beside that refusal, when it was `not_entitled`. */
 	readonly denial: () => Denial | undefined;
+	/**
+	 * The server's last refusal, with its denial, until a token is had again
+	 * from anywhere. Unlike `refusal`, a request that gets no answer leaves it
+	 * standing: an account the server would not sync is not one it syncs for
+	 * being out of reach, and what it said is still the last word on it
+	 * (`SchedulerStatus.refusal`).
+	 */
+	readonly standing: () => Refused | undefined;
 }
 
 export const createTokenSource = (options: TokenSourceOptions): TokenSource => {
 	const { credentials, states, client, connectionId } = options;
 	const now = options.now ?? Date.now;
 	const cached = cell<AccessToken | undefined>(undefined);
-	const refused = cell<{ refusal: Refusal; denial?: Denial | undefined } | undefined>(undefined);
+	const refused = cell<Refused | undefined>(undefined);
+	const standing = cell<Refused | undefined>(undefined);
+
+	/** The server has answered with a refusal, or a token is had: either is news. */
+	const stand = (next: Refused | undefined) => {
+		refused.current = next;
+		if (next === undefined && standing.current === undefined) return;
+		standing.current = next;
+		options.onStanding?.();
+	};
 
 	const usable = (token: AccessToken | undefined): token is AccessToken =>
 		token !== undefined && token.expiresAt - EXPIRY_MARGIN_MS > now();
 
 	/** A token in hand, from wherever: whatever the server said before is no longer so. */
 	const using = (token: AccessToken): string => {
-		refused.current = undefined;
+		stand(undefined);
 		cached.current = token;
 		return token.accessToken;
 	};
@@ -86,7 +111,7 @@ export const createTokenSource = (options: TokenSourceOptions): TokenSource => {
 		// stop minting rather than go on presenting a credential that is gone.
 		const held = await credentialFor(credentials, connectionId);
 		if (held === undefined) {
-			refused.current = { refusal: 'credential_required' };
+			stand({ refusal: 'credential_required' });
 			cached.current = undefined;
 			throw new AuthError('This device holds no credential for that connection');
 		}
@@ -96,12 +121,13 @@ export const createTokenSource = (options: TokenSourceOptions): TokenSource => {
 			.token()
 			.catch((error: unknown) => {
 				// Not an answer: the server may since have changed its mind, and a
-				// refusal kept past this would read as one it gave just now.
+				// refusal kept past this would read as one it gave just now. It
+				// still stands: nothing has said otherwise.
 				refused.current = undefined;
 				throw error;
 			});
 		if (!result.ok) {
-			refused.current = { refusal: result.refusal, denial: result.denial };
+			stand({ refusal: result.refusal, denial: result.denial });
 			cached.current = undefined;
 			// An `AuthError`, so the provider call it was for fails as one.
 			throw new AuthError(`The server would not mint a token: ${result.refusal}`);
@@ -138,7 +164,7 @@ export const createTokenSource = (options: TokenSourceOptions): TokenSource => {
 			// one, so this is for a run that was already going when it was let go:
 			// it stops here rather than at the server.
 			if (state.detached) {
-				refused.current = { refusal: 'credential_required' };
+				stand({ refusal: 'credential_required' });
 				cached.current = undefined;
 				throw new AuthError('This device no longer syncs that connection');
 			}
@@ -157,5 +183,6 @@ export const createTokenSource = (options: TokenSourceOptions): TokenSource => {
 
 		refusal: () => refused.current?.refusal,
 		denial: () => refused.current?.denial,
+		standing: () => standing.current,
 	};
 };

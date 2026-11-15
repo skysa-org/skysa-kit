@@ -23,7 +23,7 @@ import {
 import type { ApiClient, Denial, Refusal } from '../api/client.js';
 import type { CredentialStore } from '../store/credentials.js';
 import type { RelayFactory, RelayLink } from './relay.js';
-import { createTokenSource, type TokenSource, type TokenStates } from './tokens.js';
+import { createTokenSource, type Refused, type TokenSource, type TokenStates } from './tokens.js';
 
 /**
  * When to sync, and what the last attempt came to. The engine decides nothing
@@ -98,7 +98,16 @@ export interface SchedulerStatus {
 	readonly lastSyncAt?: number;
 	/** Why, for `retrying` and `attention`. */
 	readonly error?: string;
-	/** Why the server would not mint a token, when that is the problem. */
+	/**
+	 * What stands against syncing the connection, whatever the phase: why the
+	 * server would not mint a token, from its refusal until a token is had
+	 * again (`TokenSource.standing`), or `reauthorize_required` where the
+	 * provider refused even a fresh one, until a run gets through. A run
+	 * meanwhile, going offline, a backoff or a pause leaves it standing, and
+	 * the phase says how syncing is going as it is: what was refused is not
+	 * news again with each run that asks. `needsReconnect` says when
+	 * connecting the account again is the answer.
+	 */
 	readonly refusal?: Refusal;
 	/**
 	 * What the operator's policy said, beside a `not_entitled` refusal: which
@@ -122,6 +131,18 @@ export interface SchedulerStatus {
 	 */
 	readonly waiting?: true;
 }
+
+/**
+ * Whether connecting the account again is what syncing waits on: the server
+ * has no credential from this device, or none it takes, or the provider's
+ * grant is gone. Whatever the phase, since a refusal stands through the runs
+ * that go on meanwhile (`SchedulerStatus.refusal`). Not a refusal by the
+ * operator's policy, which connecting again does not answer.
+ */
+export const needsReconnect = (status: SchedulerStatus): boolean =>
+	status.refusal === 'credential_required' ||
+	status.refusal === 'credential_revoked' ||
+	status.refusal === 'reauthorize_required';
 
 export type SchedulerEvent = 'focus' | 'visibilitychange' | 'online' | 'offline';
 
@@ -445,6 +466,11 @@ interface Session {
 	/** When a sync first came back `blocked`, since it last did not. */
 	readonly blockedSince: Cell<number | undefined>;
 	/**
+	 * The provider refused even a fresh token, and no run has got through
+	 * since: a refusal that stands as the server's does (`standingFor`).
+	 */
+	readonly unauthorized: Cell<boolean>;
+	/**
 	 * The op this connection's last completed run found out of attempts. Session
 	 * state rather than the scheduler's, so a run or a re-scan that finishes
 	 * after the user has switched accounts cannot clear — or answer for — the
@@ -536,21 +562,46 @@ export const createSyncScheduler = (options: SyncSchedulerOptions): SyncSchedule
 	const status = (): SchedulerStatus => statusBox.current;
 
 	/**
+	 * What stands against syncing the session's connection: the server's
+	 * refusal, or else the provider's.
+	 */
+	const standingFor = (session: Session | undefined): Refused | undefined => {
+		if (session === undefined) return undefined;
+		const refused = session.tokens.standing();
+		if (refused !== undefined) return refused;
+		return session.unauthorized.current ? { refusal: 'reauthorize_required' } : undefined;
+	};
+
+	/**
 	 * `stuck` comes from the bound session and nowhere else. Every other field is
 	 * carried forward by the `{ ...status() }` most callers publish, and this one
 	 * must not be: it describes a queue that is out of attempts *now*. Carried,
 	 * it would still be showing "couldn't send the rename of Work/Plan.md" while
-	 * the app says `syncing`, or after the op went through.
+	 * the app says `syncing`, or after the op went through. `refusal` and
+	 * `denial` the same, from what stands against the connection bound now
+	 * (`standingFor`): carried, a refusal a run's token had just answered
+	 * would come back with the next thing said, and one stood against the
+	 * account before it would be said of the one after it.
 	 */
 	const publish = (next: SchedulerStatus) => {
-		const { stuck: _carried, progress, waiting, ...rest } = next;
+		const {
+			stuck: _carried,
+			refusal: _refusal,
+			denial: _denial,
+			progress,
+			waiting,
+			...rest
+		} = next;
 		const stuck = bound.current?.stuck.current;
+		const standing = standingFor(bound.current);
 		// Progress is about the run under way and nothing else: carried into
 		// `idle` by a `{ ...status() }`, the dialog would go on saying "318
 		// downloaded" about a run that has finished.
 		const full: SchedulerStatus = {
 			...rest,
 			...(stuck === undefined ? {} : { stuck }),
+			...(standing === undefined ? {} : { refusal: standing.refusal }),
+			...(standing?.denial === undefined ? {} : { denial: standing.denial }),
 			...(progress === undefined || rest.phase !== 'syncing' ? {} : { progress }),
 			// The same: a wait is the run's, and ends with it.
 			...(waiting === undefined || rest.phase !== 'syncing' ? {} : { waiting }),
@@ -747,40 +798,20 @@ export const createSyncScheduler = (options: SyncSchedulerOptions): SyncSchedule
 		conflicts: readonly string[] = [],
 		retryAfterMs?: number
 	) => {
-		const refusal = session.tokens.refusal();
 		const seen = together(status().conflicts, conflicts);
-		if (refusal !== undefined) {
+		// The server's answer this time, not what stands from before: one it
+		// could not give is worth retrying.
+		if (session.tokens.refusal() !== undefined) {
 			// Nothing to retry until the account is connected again, which comes
 			// back through a reload; focus and edits still try.
-			publish({
-				...status(),
-				phase: 'attention',
-				error,
-				refusal,
-				denial: session.tokens.denial(),
-				conflicts: seen,
-			});
+			publish({ ...status(), phase: 'attention', error, conflicts: seen });
 			return;
 		}
 		if (!environment.isOnline()) {
-			publish({
-				...status(),
-				phase: 'offline',
-				error: undefined,
-				refusal: undefined,
-				denial: undefined,
-				conflicts: seen,
-			});
+			publish({ ...status(), phase: 'offline', error: undefined, conflicts: seen });
 			return;
 		}
-		publish({
-			...status(),
-			phase: 'retrying',
-			error,
-			refusal: undefined,
-			denial: undefined,
-			conflicts: seen,
-		});
+		publish({ ...status(), phase: 'retrying', error, conflicts: seen });
 		// Edits and focus wait for this too. Each failed push is an attempt
 		// against its op, so running on every keystroke's debounce would spend
 		// all of them in seconds and block the queue behind an outage the
@@ -844,18 +875,15 @@ export const createSyncScheduler = (options: SyncSchedulerOptions): SyncSchedule
 		}
 		const conflicts = together(status().conflicts, outcome.conflicts);
 		if (outcome.status === 'paused') {
-			publish({
-				...status(),
-				phase: 'attention',
-				error: outcome.error,
-				refusal: session.tokens.refusal(),
-				denial: session.tokens.denial(),
-				conflicts,
-			});
+			// Not the server refusing, which stands of itself: the provider,
+			// which only a run that gets through answers.
+			if (session.tokens.standing() === undefined) session.unauthorized.current = true;
+			publish({ ...status(), phase: 'attention', error: outcome.error, conflicts });
 			return;
 		}
 		// Nothing left failing that time will fix: the backoff starts over.
 		session.failures.current = 0;
+		session.unauthorized.current = false;
 		if (outcome.status === 'blocked') await blocked(session);
 		else session.blockedSince.current = undefined;
 		// Asked for after `blocked`, which may have just given the queue its
@@ -875,13 +903,7 @@ export const createSyncScheduler = (options: SyncSchedulerOptions): SyncSchedule
 
 	const settle = async (session: Session, result: RunResult) => {
 		if (result.kind === 'offline') {
-			publish({
-				...status(),
-				phase: 'offline',
-				error: undefined,
-				refusal: undefined,
-				denial: undefined,
-			});
+			publish({ ...status(), phase: 'offline', error: undefined });
 			return;
 		}
 		if (result.kind === 'superseded') {
@@ -940,13 +962,9 @@ export const createSyncScheduler = (options: SyncSchedulerOptions): SyncSchedule
 		cancel('lazy');
 		// Whatever started this run, the backoff it was waiting on is over.
 		session.flags.delete('backingOff');
-		publish({
-			...status(),
-			phase: 'syncing',
-			error: undefined,
-			refusal: undefined,
-			denial: undefined,
-		});
+		// A run superseded before this one had got as far as it got: its count
+		// is not this run's. (Its wait was let go as it ended: `watchWaits`.)
+		publish({ ...status(), phase: 'syncing', error: undefined, progress: undefined });
 		// To the end of what it writes after, which can be held up as well.
 		const stopWatching = watchWaits(session);
 		// One engine at a time per connection, across sessions and tabs: a
@@ -1201,7 +1219,34 @@ export const createSyncScheduler = (options: SyncSchedulerOptions): SyncSchedule
 		sessionUnsubscribers.add(stop);
 	};
 
-	const follow = (showing: ShownSource | undefined) => {
+	/**
+	 * A new session's tokens, and what stands against its connection: those of
+	 * `keep`, the session a pause is ending, where it is the same connection.
+	 */
+	const tokensFor = (
+		connectionId: string,
+		keep: Session | undefined
+	): Pick<Session, 'tokens' | 'unauthorized'> => {
+		if (keep?.connectionId === connectionId) {
+			return { tokens: keep.tokens, unauthorized: keep.unauthorized };
+		}
+		const tokens = createTokenSource({
+			credentials: store.credentials,
+			states: store.tokens,
+			client,
+			connectionId,
+			now: environment.now,
+			// A refusal a token answers mid-run is not left standing until
+			// whatever the run says next.
+			onStanding: () => {
+				if (bound.current?.connectionId === connectionId) publish({ ...status() });
+			},
+		});
+		return { tokens, unauthorized: cell(false) };
+	};
+
+	/** `keep`: the session a pause is ending (`tokensFor`). */
+	const follow = (showing: ShownSource | undefined, keep?: Session) => {
 		// A detached source is shown and is not synced: it has no credential to
 		// mint a token with and no cursor to pull from, and the rows it holds are
 		// waiting for the user, not for the network. So it gets no session — not
@@ -1226,13 +1271,7 @@ export const createSyncScheduler = (options: SyncSchedulerOptions): SyncSchedule
 		const generation = generations.current + 1;
 		generations.current = generation;
 		const { connectionId } = state;
-		const tokens = createTokenSource({
-			credentials: store.credentials,
-			states: store.tokens,
-			client,
-			connectionId,
-			now: environment.now,
-		});
+		const { tokens, unauthorized } = tokensFor(connectionId, keep);
 		const abort = new AbortController();
 		const provider =
 			state.provider === undefined
@@ -1270,6 +1309,7 @@ export const createSyncScheduler = (options: SyncSchedulerOptions): SyncSchedule
 			lastSeq: cell<number | undefined>(undefined),
 			inFlight: cell<Promise<void> | undefined>(undefined),
 			blockedSince: cell<number | undefined>(undefined),
+			unauthorized,
 			stuck: cell<StuckOp | undefined>(undefined),
 			abort,
 			relay:
@@ -1382,13 +1422,7 @@ export const createSyncScheduler = (options: SyncSchedulerOptions): SyncSchedule
 					// say it again, since it starts no run.
 					if (isPaused(session.connectionId)) return;
 					cancel('next');
-					publish({
-						...status(),
-						phase: 'offline',
-						error: undefined,
-						refusal: undefined,
-						denial: undefined,
-					});
+					publish({ ...status(), phase: 'offline', error: undefined });
 				})
 			);
 		},
@@ -1444,9 +1478,9 @@ export const createSyncScheduler = (options: SyncSchedulerOptions): SyncSchedule
 			// A session of its own, as `halt` makes one: ending this one aborts
 			// every request the run has out, and the next is made paused, so
 			// it runs nothing and still reads a file beside a note when it is
-			// opened.
+			// opened. A refusal stands through a pause.
 			endSession();
-			follow(shown.current);
+			follow(shown.current, session);
 			const paused = bound.current;
 			if (paused === undefined) return;
 			// The copies the last sync wrote are still on the device to be seen.

@@ -265,9 +265,10 @@ export const describeTokenSource = (
 
 			expect(await tokens.get()).toBe('from-another-tab');
 			expect(tokens.refusal()).toBeUndefined();
+			expect(tokens.standing()).toBeUndefined();
 		});
 
-		it('forgets a refusal when the server cannot be asked again', async () => {
+		it('forgets a refusal when the server cannot be asked again, and keeps it standing', async () => {
 			const device = await bound();
 			const token = vi
 				.fn<ApiClient['token']>()
@@ -283,6 +284,8 @@ export const describeTokenSource = (
 			await expect(tokens.get()).rejects.toThrow('Failed to fetch');
 
 			expect(tokens.refusal()).toBeUndefined();
+			// No answer is not a different one.
+			expect(tokens.standing()).toEqual({ refusal: 'reauthorize_required' });
 		});
 
 		it('forgets a refusal once a token is minted again', async () => {
@@ -303,6 +306,42 @@ export const describeTokenSource = (
 			await tokens.get();
 
 			expect(tokens.refusal()).toBeUndefined();
+			expect(tokens.standing()).toBeUndefined();
+		});
+
+		it('says when what stands changes, and only then', async () => {
+			const device = await bound();
+			const clock = { now: 0 };
+			const ok = minting(clock);
+			const token = vi
+				.fn<ApiClient['token']>()
+				.mockResolvedValueOnce({
+					ok: false,
+					refusal: 'not_entitled',
+					denial: { code: 'lapsed', reason: 'Your plan ended.' },
+				})
+				.mockRejectedValueOnce(new TypeError('Failed to fetch'))
+				.mockImplementation(ok.token);
+			const changes: unknown[] = [];
+			const tokens = createTokenSource({
+				...over(device),
+				client: presenting(token),
+				connectionId: 'c1',
+				now: () => clock.now,
+				onStanding: () => {
+					changes.push(tokens.standing());
+				},
+			});
+
+			await tokens.get().catch(() => undefined);
+			await tokens.get().catch(() => undefined);
+			await tokens.get();
+			await tokens.get();
+
+			expect(changes).toEqual([
+				{ refusal: 'not_entitled', denial: { code: 'lapsed', reason: 'Your plan ended.' } },
+				undefined,
+			]);
 		});
 
 		it('does not bring back the row of a connection let go while minting', async () => {
@@ -346,6 +385,7 @@ export const describeTokenSource = (
 
 			expect(token).not.toHaveBeenCalled();
 			expect(tokens.refusal()).toBe('credential_required');
+			expect(tokens.standing()).toEqual({ refusal: 'credential_required' });
 		});
 
 		it('will not mint once this device holds no credential for the connection', async () => {
@@ -362,6 +402,7 @@ export const describeTokenSource = (
 			const failure = await tokens.refresh().catch((error: unknown) => error);
 			expect(isAuthError(failure)).toBe(true);
 			expect(tokens.refusal()).toBe('credential_required');
+			expect(tokens.standing()).toEqual({ refusal: 'credential_required' });
 			expect(client.withCredential).toHaveBeenCalledTimes(1);
 		});
 	});
