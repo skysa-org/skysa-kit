@@ -523,6 +523,49 @@ export const describeFailures = (
 			expect(h.scheduler.status().refusal).toBe('credential_revoked');
 		});
 
+		it("asks a connection afresh where another source was synced during a cancel's hold", async () => {
+			const device = await bound();
+			const token = vi
+				.fn<ApiClient['token']>()
+				.mockResolvedValueOnce({ ok: false, refusal: 'credential_revoked' })
+				.mockResolvedValue({
+					ok: true,
+					value: { accessToken: 'ok', expiresAt: Date.now() + HOUR },
+				});
+			const h = started(device, { client: presenting(token) });
+			await reaches(h.scheduler, 'attention');
+			const release = await h.scheduler.halt('c1');
+			await device.bind('c2');
+			await reaches(h.scheduler, 'idle');
+			release();
+
+			h.env.state.online = false;
+			await device.show('c1');
+
+			await reaches(h.scheduler, 'offline');
+			expect(h.scheduler.status().refusal).toBeUndefined();
+		});
+
+		it('asks a connection afresh once the scheduler is started again', async () => {
+			const device = await bound();
+			const token = vi
+				.fn<ApiClient['token']>()
+				.mockResolvedValueOnce({ ok: false, refusal: 'credential_revoked' })
+				.mockResolvedValue({
+					ok: true,
+					value: { accessToken: 'ok', expiresAt: Date.now() + HOUR },
+				});
+			const h = started(device, { client: presenting(token) });
+			await reaches(h.scheduler, 'attention');
+			h.scheduler.stop();
+
+			h.env.state.online = false;
+			h.scheduler.start();
+
+			await reaches(h.scheduler, 'offline');
+			expect(h.scheduler.status().refusal).toBeUndefined();
+		});
+
 		it('asks a connection afresh once another source has been synced in between', async () => {
 			const device = await bound();
 			const token = vi

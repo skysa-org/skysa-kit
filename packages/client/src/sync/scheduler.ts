@@ -102,10 +102,13 @@ export interface SchedulerStatus {
 	 * What stands against syncing the connection, whatever the phase: why the
 	 * server would not mint a token, from its refusal until a token is had
 	 * again (`TokenSource.standing`), or `reauthorize_required` where the
-	 * provider refused even a fresh one, until a run gets through. A run
-	 * meanwhile, going offline, a backoff, a pause or another source shown in
-	 * between leaves it standing, and the phase says how syncing is going as
-	 * it is: what was refused is not news again with each run that asks.
+	 * provider refused even a fresh one, until a run's pull gets through. A
+	 * run meanwhile, going offline, a backoff, a pause or a cancel's hold
+	 * leaves it standing, and the phase says how syncing is going as it is:
+	 * what was refused is not news again with each run that asks. (During the
+	 * hold the phase is `local`, which says nothing of a connection.) Another
+	 * source synced in between lets it go: shown again, the connection is
+	 * asked afresh, as a new binding is.
 	 * `needsReconnect` says when connecting the account again is the answer.
 	 */
 	readonly refusal?: Refusal;
@@ -912,10 +915,9 @@ export const createSyncScheduler = (options: SyncSchedulerOptions): SyncSchedule
 		}
 		const conflicts = together(status().conflicts, outcome.conflicts);
 		if (outcome.status === 'paused') {
-			// The provider, which only a run that gets through answers. The
-			// server's own refusal stands of itself, and one answered since the
-			// run met it is tried again, as time may fix any other failure.
-			if (session.renewed.current) session.account.unauthorized.current = true;
+			// The provider's refusal stands from `settle`, and the server's of
+			// itself. One answered since the run met it is tried again, as time
+			// may fix any other failure.
 			if (standingFor(session) === undefined) {
 				failed(session, outcome.error, outcome.conflicts);
 				return;
@@ -959,14 +961,15 @@ export const createSyncScheduler = (options: SyncSchedulerOptions): SyncSchedule
 			failed(session, messageOf(result.error), [], wait);
 			return;
 		}
-		if (result.pulledAt !== undefined) {
-			// The provider took the run's token for a whole pull: it is not
-			// refusing it, whatever the push came to, short of its refusing a
-			// fresh one there as well (`synced`).
-			const refused = result.outcome.status === 'paused' && session.renewed.current;
-			if (!refused) session.account.unauthorized.current = false;
-			publish({ ...status(), lastSyncAt: result.pulledAt });
+		// The provider refusing even a fresh token, which only a run that gets
+		// through answers: paused after its last renewal minted one
+		// (`renewed`). Any other run whose pull it served took its token,
+		// whatever the push came to.
+		const refusedFresh = result.outcome.status === 'paused' && session.renewed.current;
+		if (refusedFresh || result.pulledAt !== undefined) {
+			session.account.unauthorized.current = refusedFresh;
 		}
+		if (result.pulledAt !== undefined) publish({ ...status(), lastSyncAt: result.pulledAt });
 		// Whatever the rest of the round came to: what was pushed is there for
 		// the connection's other devices to pull.
 		if (result.outcome.pushed > 0) session.relay?.pushed();
@@ -1523,6 +1526,8 @@ export const createSyncScheduler = (options: SyncSchedulerOptions): SyncSchedule
 			});
 			unsubscribers.clear();
 			endSession();
+			// Each connection's account with it: started again, it asks afresh.
+			accounts.clear();
 		},
 
 		resync: async () => {
@@ -1595,6 +1600,9 @@ export const createSyncScheduler = (options: SyncSchedulerOptions): SyncSchedule
 			return () => {
 				if (!halted.delete(connectionId)) return;
 				follow(shown.current);
+				// Let go of, where another source came to be synced while it was
+				// held, as it would have been then.
+				forgetOthers(bound.current?.connectionId);
 			};
 		},
 
