@@ -407,7 +407,8 @@ export const describeTokenSource = (
 
 			expect(token).not.toHaveBeenCalled();
 			expect(tokens.refusal()).toBe('credential_required');
-			expect(tokens.standing()).toEqual({ refusal: 'credential_required' });
+			// The source says it is let go: nothing stands to say "connect again".
+			expect(tokens.standing()).toBeUndefined();
 		});
 
 		it('will not mint once this device holds no credential for the connection', async () => {

@@ -168,9 +168,11 @@ export const createTokenSource = (options: TokenSourceOptions): TokenSource => {
 			const state = await states.read(connectionId);
 			// A detached source is never minted for. Nothing starts a session for
 			// one, so this is for a run that was already going when it was let go:
-			// it stops here rather than at the server.
+			// it stops here rather than at the server. Not said to stand: it is
+			// no answer of the server's, and the source already says it is let
+			// go, which a "connect again" said meanwhile would contradict.
 			if (state.detached) {
-				stand({ refusal: 'credential_required' });
+				refused.current = 'credential_required';
 				cached.current = undefined;
 				throw new AuthError('This device no longer syncs that connection');
 			}

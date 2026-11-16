@@ -1,4 +1,4 @@
-import { cell, RateLimitError } from '@skysa/storage';
+import { AuthError, cell, RateLimitError } from '@skysa/storage';
 import type { MergeInput } from '@skysa/sync';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -321,6 +321,51 @@ export const describeFailures = (
 			expect(h.scheduler.status().refusal).toBeUndefined();
 		});
 
+		it("keeps the provider's refusal through a run whose pull it took and whose push it refused", async () => {
+			const device = await bound();
+			const note = await device.create('c1', 'Plan', '');
+			const h = started(device);
+			await reaches(h.scheduler, 'idle');
+			h.remote.rejected.add('t1');
+			h.remote.rejected.add('t2');
+			await h.scheduler.syncNow();
+			const said: SchedulerStatus[] = [];
+			h.scheduler.subscribe((status) => {
+				said.push(status);
+			});
+
+			// Read with a fresh token, and not written with one.
+			await device.edit('c1', note.id, 'more\n');
+			h.remote.fake.setFault((call) =>
+				call.op === 'write' ? new AuthError('expired') : undefined
+			);
+			await h.scheduler.syncNow();
+
+			expect(h.scheduler.status().phase).toBe('attention');
+			expect(said.length).toBeGreaterThan(0);
+			expect(said.filter((status) => status.refusal !== 'reauthorize_required')).toEqual([]);
+		});
+
+		it("lets the provider's refusal go once a run's pull gets through, whatever its push comes to", async () => {
+			const device = await bound();
+			const note = await device.create('c1', 'Plan', '');
+			const h = started(device);
+			await reaches(h.scheduler, 'idle');
+			h.remote.rejected.add('t1');
+			h.remote.rejected.add('t2');
+			await h.scheduler.syncNow();
+			expect(h.scheduler.status().refusal).toBe('reauthorize_required');
+
+			// A token the provider takes for a whole pull, and then cannot write with.
+			await device.edit('c1', note.id, 'more\n');
+			h.remote.fake.setFault((call) => (call.op === 'write' ? new Error('503') : undefined));
+			await h.scheduler.syncNow();
+
+			expect(h.scheduler.status().phase).toBe('retrying');
+			expect(h.scheduler.status().refusal).toBeUndefined();
+			expect(needsReconnect(h.scheduler.status())).toBe(false);
+		});
+
 		it('keeps a refusal through the run that asks again, and lets it go the moment a token is minted', async () => {
 			const device = await bound();
 			const token = vi
@@ -539,15 +584,20 @@ export const describeFailures = (
 			expect(token).toHaveBeenCalledTimes(2);
 		});
 
-		it('lets what stood against a connection go once it is let go', async () => {
+		it.each([
+			['kept detached', true],
+			// Never seen detached: the source is gone in one step.
+			['with nothing kept', false],
+		])('lets what stood against a connection go once it is let go, %s', async (_, unsent) => {
 			const device = await bound();
 			const token = vi.fn<ApiClient['token']>(() =>
 				Promise.resolve({ ok: false, refusal: 'credential_revoked' })
 			);
 			const h = started(device, { client: presenting(token) });
 			await reaches(h.scheduler, 'attention');
-			await device.letGo('c1', { unsent: true });
+			await device.letGo('c1', { unsent });
 			await reaches(h.scheduler, 'local');
+			await quiet();
 
 			// Connected again, and offline before its server is asked.
 			h.env.state.online = false;
@@ -577,6 +627,32 @@ export const describeFailures = (
 				expect(h.remote.pulls()).toBe(before + 2);
 			});
 			await reaches(h.scheduler, 'idle');
+		});
+
+		it('leaves a provider asking for room its wait, after a run in which a refusal was answered', async () => {
+			const device = await bound();
+			const token = vi
+				.fn<ApiClient['token']>()
+				.mockResolvedValueOnce({ ok: false, refusal: 'credential_revoked' })
+				.mockResolvedValue({
+					ok: true,
+					value: { accessToken: 'ok', expiresAt: Date.now() + HOUR },
+				});
+			const h = started(device, { client: presenting(token) });
+			await reaches(h.scheduler, 'attention');
+			const asked = cell(0);
+			h.remote.fake.setFault((call) => {
+				if (call.op !== 'changes') return undefined;
+				asked.current += 1;
+				return new RateLimitError('slow down', 30_000);
+			});
+
+			h.env.fire('focus');
+			await reaches(h.scheduler, 'retrying');
+			await quiet();
+
+			expect(asked.current).toBe(1);
+			expect(h.env.pending()).toEqual([30_000]);
 		});
 
 		it('says nothing of what stood against one connection about the next', async () => {
@@ -634,6 +710,45 @@ export const describeFailures = (
 			await quiet();
 
 			expect(said).toEqual([]);
+		});
+
+		it('says nothing more of a connection let go, whatever its server answers once it is connected again', async () => {
+			const device = await bound();
+			const held = deferred();
+			const minted = {
+				ok: true,
+				value: { accessToken: 'ok', expiresAt: Date.now() + HOUR },
+			} as const;
+			const token = vi
+				.fn<ApiClient['token']>()
+				.mockResolvedValueOnce({ ok: false, refusal: 'credential_revoked' })
+				// The one asked again, which answers once it is connected again.
+				.mockImplementationOnce(async () => {
+					await held.promise;
+					return minted;
+				})
+				.mockResolvedValue(minted);
+			const h = started(device, { client: presenting(token) });
+			await reaches(h.scheduler, 'attention');
+			h.env.fire('focus');
+			await vi.waitFor(() => {
+				expect(token).toHaveBeenCalledTimes(2);
+			});
+			await device.letGo('c1');
+			await reaches(h.scheduler, 'local');
+			await quiet();
+			const pulls = h.remote.pulls();
+			// Its run waits on the lock the one let go still holds, until it
+			// has its answer.
+			await device.bind('c1');
+
+			held.resolve();
+			await reaches(h.scheduler, 'idle');
+			await quiet();
+
+			// The run let go, which goes on with its answer as far as its aborted
+			// pull, and the one connected again: nothing after them.
+			expect(h.remote.pulls()).toBe(pulls + 2);
 		});
 
 		it('retries when the token server cannot be reached', async () => {
