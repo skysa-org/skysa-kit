@@ -4,9 +4,11 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
 	connectCodeAskedAt,
 	connectCodeHeldUntil,
+	connectCodeTried,
 	dropConnectCode,
 	forgetLapsedConnectCode,
 	heldConnectCode,
+	heldConnectCodeRecord,
 	heldConnectCodeShown,
 	holdAcceptedCode,
 	holdConnectCode,
@@ -72,6 +74,14 @@ describe('the connect code held for as long as it is good', () => {
 		await Promise.resolve();
 		stop();
 		expect(told).toHaveBeenCalledOnce();
+	});
+
+	it("is not let go of by a read at a time ahead of this device's clock", async () => {
+		holdConnectCode('K7QM-2XRD', 900);
+
+		expect(heldConnectCode(Date.now() + 900_000)).toBeUndefined();
+		await Promise.resolve();
+		expect(heldConnectCode()).toBe('K7QM-2XRD');
 	});
 
 	it('is let go of where its time has come, and only then, telling whoever is watching', () => {
@@ -182,6 +192,7 @@ describe('what the policy gives to hold in place of a code', () => {
 		expect(heldConnectCode(NOW)).toBe('K7QM-2XRD');
 		expect(heldConnectCodeShown(NOW)).toBe(true);
 		expect(connectCodeAskedAt(NOW)).toBe(0);
+		expect(heldConnectCodeRecord(NOW)?.tried).toBe(0);
 	});
 
 	it('remembers when the policy last answered about it', () => {
@@ -189,6 +200,30 @@ describe('what the policy gives to hold in place of a code', () => {
 		holdAcceptedCode(PASS, { expiresIn: 60 }, NOW + 30_000);
 
 		expect(connectCodeAskedAt(NOW + 30_000)).toBe(NOW + 30_000);
+	});
+
+	it('remembers when this device asked about it again, answered or not, and keeps that through the answer', () => {
+		holdAcceptedCode('K7QM-2XRD', { expiresIn: 60, hold: PASS }, NOW);
+		expect(heldConnectCodeRecord(NOW)?.tried).toBe(0);
+
+		connectCodeTried('W3TB-9HQP', NOW + 10_000);
+		expect(heldConnectCodeRecord(NOW)?.tried).toBe(0);
+		connectCodeTried(PASS, NOW + 10_000);
+		expect(heldConnectCodeRecord(NOW)).toEqual({
+			code: PASS,
+			until: NOW + 60_000,
+			shown: false,
+			asked: NOW,
+			tried: NOW + 10_000,
+		});
+
+		holdAcceptedCode(PASS, { expiresIn: 60 }, NOW + 20_000);
+		expect(heldConnectCodeRecord(NOW + 20_000)?.tried).toBe(NOW + 10_000);
+		holdAcceptedCode(PASS, { expiresIn: 60, hold: `${PASS}2` }, NOW + 30_000);
+		expect(heldConnectCodeRecord(NOW + 30_000)?.tried).toBe(NOW + 10_000);
+
+		holdAcceptedCode('W3TB-9HQP', { expiresIn: 900 }, NOW + 40_000);
+		expect(heldConnectCodeRecord(NOW + 40_000)?.tried).toBe(0);
 	});
 
 	it('tells whoever is watching when another tab changes it', () => {

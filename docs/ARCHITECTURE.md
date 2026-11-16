@@ -681,9 +681,12 @@ Keep it boring.
     They are `@skysa/client`'s now (`packages/client/src/connect/gate.ts`), and each app says what happened in its own words.
     `askAboutConnectCode` answers with an outcome: `accepted`, `refused` with the policy's reason, `tooMany` or `unchecked`.
     `askHeldCodeAgain` takes whether the gate asks for a code as a function, asked only once a value is held and due, so an app that must ask `/config` for it asks only then.
-    It joins an asking under way, asks after a refused connect only where the policy has not answered in the last minute, takes a clock set back as due, and asks nothing where the value changed while `asksForCode` was answering: each asking spends a guess the address shares.
+    Each asking spends a guess the address shares, so it is guarded.
+    The store keeps when this device last asked about the value again, answered or not, and no tab asks within a minute of that: one load asking twice asks once, and no answer does not become a request on every render.
+    After a refused connect it asks at once otherwise, even just after the policy gave the pass; a clock set back counts as due; and where what is held changed while `asksForCode` was answering, nothing is asked.
     `codeWasRefused` takes the refusal and its code from the connect's answer.
-    `useConnectCodeHeldUntil` follows the store (`useSyncExternalStore`) and tells `onLapse` which code ran out, however the end is seen: its own timer, another tab's, or a render after the end.
+    `useConnectCodeHeldUntil` follows the store (`useSyncExternalStore`) and tells `onLapse` which typed code ran out, however the end is seen: its own timer, another tab's, or a render after the end.
+    It is never told a value the policy gave to hold, which is never shown.
 - **Rate-limit seam:** `createApp({ rateLimiter })`, defaulting to `neverLimited`, consulted by `POST /api/auth/connect/:provider/start`, the callback, and `POST /api/token` — the three endpoints that spend an outbound provider call — and by `POST /api/connect-code`, which spends none but answers a question worth guessing at.
   Also by the change relay's ticket and upgrade (`relay-ticket:<connectionId>`, `relay:<connectionId>`), which spend none either but would otherwise let one device open sockets without limit.
   A seam and not a Cloudflare binding, for the same reason as the entitlement one: a binding would be deployment-specific code in a repo that forbids it.

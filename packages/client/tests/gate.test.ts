@@ -16,6 +16,7 @@ import {
 	heldConnectCodeShown,
 	holdAcceptedCode,
 	holdConnectCode,
+	watchConnectCode,
 } from '../src/store/connectCode.js';
 
 /**
@@ -42,6 +43,7 @@ const passFrom = (ago: number) => {
 
 afterEach(() => {
 	vi.useRealTimers();
+	vi.restoreAllMocks();
 	dropConnectCode();
 });
 
@@ -135,6 +137,14 @@ describe('a held value, asked about again as the app loads', () => {
 		expect(client.checkConnectCode).toHaveBeenCalledTimes(2);
 	});
 
+	it('asks at once after a refused connect, even just after the policy gave the pass', async () => {
+		const client = policy();
+		passFrom(0);
+		await askHeldCodeAgain(client, { asksForCode: asks(), refused: true });
+
+		expect(client.checkConnectCode).toHaveBeenCalledWith('PASS-1');
+	});
+
 	it('takes the hour from the clock it is given', async () => {
 		const client = policy();
 		const at = passFrom(0);
@@ -167,19 +177,43 @@ describe('a held value, asked about again as the app loads', () => {
 		expect(heldConnectCode()).toBeUndefined();
 	});
 
-	it('keeps a pass it could not ask about, or got no answer about', async () => {
+	it('keeps a pass it could not ask about, or got no answer about, and asks no more for a minute', async () => {
 		const client = policy();
 		passFrom(2 * ASK_AGAIN_MS);
+		const at = Date.now();
 		client.checkConnectCode.mockResolvedValueOnce({ ok: false, refusal: 'forbidden_origin' });
-		await askHeldCodeAgain(client, { asksForCode: asks() });
+		await askHeldCodeAgain(client, { asksForCode: asks(), now: at });
+		await askHeldCodeAgain(client, { asksForCode: asks(), now: at + 59_999 });
+		expect(client.checkConnectCode).toHaveBeenCalledOnce();
+
 		client.checkConnectCode.mockRejectedValueOnce(new ApiError('too many', 429));
-		await askHeldCodeAgain(client, { asksForCode: asks() });
+		await askHeldCodeAgain(client, { asksForCode: asks(), now: at + 60_000 });
 		await askHeldCodeAgain(client, {
 			asksForCode: () => Promise.reject(new TypeError('Failed to fetch')),
+			now: at + 120_000,
 		});
 
 		expect(client.checkConnectCode).toHaveBeenCalledTimes(2);
 		expect(heldConnectCode()).toBe('PASS-1');
+	});
+
+	it('lets a fault that is not about the answer be seen', async () => {
+		const client = policy();
+		passFrom(2 * ASK_AGAIN_MS);
+		// Told first that the pass is being asked about, and then of the answer.
+		const stop = watchConnectCode(
+			vi
+				.fn()
+				.mockImplementationOnce(() => undefined)
+				.mockImplementation(() => {
+					throw new Error('a watcher that throws');
+				})
+		);
+
+		await expect(askHeldCodeAgain(client, { asksForCode: asks() })).rejects.toThrow(
+			'a watcher that throws'
+		);
+		stop();
 	});
 
 	it('asks whether the gate takes a code only once a pass is held and due, and nothing where it does not', async () => {
@@ -219,7 +253,16 @@ describe('a held value, asked about again as the app loads', () => {
 		passFrom(2 * ASK_AGAIN_MS);
 		await askHeldCodeAgain(client, {
 			asksForCode: () => {
-				// Another tab, loading too, has had its answer.
+				// Another tab, loading too, has had its answer: the same pass, renewed.
+				holdAcceptedCode('PASS-1', { expiresIn: YEAR_S });
+				return true;
+			},
+		});
+		dropConnectCode();
+		passFrom(2 * ASK_AGAIN_MS);
+		await askHeldCodeAgain(client, {
+			asksForCode: () => {
+				// Or a fresh one in its place.
 				holdAcceptedCode('PASS-1', { expiresIn: YEAR_S, hold: 'PASS-2' });
 				return true;
 			},
@@ -244,7 +287,7 @@ describe('a held value, asked about again as the app loads', () => {
 		expect(heldConnectCode()).toBe('INVITE-8');
 	});
 
-	it('joins an asking under way, and asks again after a refused connect only once the policy has not answered for a minute', async () => {
+	it('asks once where two ask together, and after a refused connect not again within a minute of asking', async () => {
 		const client = policy();
 		passFrom(2 * ASK_AGAIN_MS);
 		const refused = { asksForCode: asks(), refused: true };
@@ -349,6 +392,21 @@ describe('until when a gate shows the code held', () => {
 		});
 
 		expect(lapsed).toHaveBeenCalledExactlyOnceWith('INVITE-7');
+	});
+
+	it('is never told of a value the policy gave to hold, which is never shown', () => {
+		vi.useFakeTimers({ now: NOW });
+		holdAcceptedCode('INVITE-7', { expiresIn: 600, hold: 'PASS-1' }, NOW);
+		const lapsed = vi.fn();
+		const { result } = renderHook(() => useConnectCodeHeldUntil(lapsed));
+		expect(result.current).toBe(NOW + 600_000);
+
+		act(() => {
+			vi.advanceTimersByTime(600_000 + 50);
+		});
+
+		expect(result.current).toBeUndefined();
+		expect(lapsed).not.toHaveBeenCalled();
 	});
 
 	it('is not told of a lapse where the same code is taken again before it is seen', () => {

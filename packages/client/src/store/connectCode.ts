@@ -44,7 +44,7 @@ import { createEmitter } from './emitter.js';
 
 const KEY = 'skysa.connectCode';
 
-interface Held {
+export interface HeldConnectCode {
 	readonly code: string;
 	/** When it stops being good, by this device's clock. */
 	readonly until: number;
@@ -52,7 +52,14 @@ interface Held {
 	readonly shown: boolean;
 	/** When the policy last said it would take it, by this device's clock. */
 	readonly asked: number;
+	/**
+	 * When this device last asked the policy about it again, answered or not,
+	 * by this device's clock: 0 where it has not.
+	 */
+	readonly tried: number;
 }
+
+type Held = HeldConnectCode;
 
 /** Told after every change to what is held, so a gate showing it can follow. */
 const watchers = createEmitter();
@@ -66,7 +73,7 @@ const parse = (raw: string | null): Held | undefined => {
 	try {
 		const value: unknown = JSON.parse(raw);
 		if (typeof value !== 'object' || value === null) return undefined;
-		const { code, until, shown, asked } = value as Record<string, unknown>;
+		const { code, until, shown, asked, tried } = value as Record<string, unknown>;
 		return typeof code === 'string' &&
 			code !== '' &&
 			code.length <= MAX_CONNECT_CODE &&
@@ -79,6 +86,7 @@ const parse = (raw: string | null): Held | undefined => {
 					until,
 					shown: shown !== false,
 					asked: typeof asked === 'number' && Number.isFinite(asked) ? asked : 0,
+					tried: typeof tried === 'number' && Number.isFinite(tried) ? tried : 0,
 				}
 			: undefined;
 	} catch {
@@ -117,17 +125,22 @@ export const forgetLapsedConnectCode = (now = Date.now()): void => {
 /**
  * The code while it is good, and its end. One past its end is let go of just
  * after it is read, never during: the read itself writes nothing and tells
- * no one.
+ * no one. What is let go of then is what has run out by this device's clock,
+ * not by `now`, which a caller may have set ahead.
  */
 const current = (now: number): Held | undefined => {
 	const held = read();
 	if (held === undefined) return undefined;
 	if (held.until > now) return held;
 	queueMicrotask(() => {
-		forgetLapsedConnectCode(now);
+		forgetLapsedConnectCode();
 	});
 	return undefined;
 };
+
+/** What is held, read once, for a rule that needs several of its parts as they were together. */
+export const heldConnectCodeRecord = (now = Date.now()): HeldConnectCode | undefined =>
+	current(now);
 
 export const heldConnectCode = (now = Date.now()): string | undefined => current(now)?.code;
 
@@ -157,12 +170,17 @@ export const watchConnectCode = (watcher: () => void): (() => void) => {
 	};
 };
 
-const hold = (value: string, expiresIn: number, shown: boolean, now: number): void => {
+const hold = (
+	value: string,
+	expiresIn: number,
+	{ shown, tried }: Pick<Held, 'shown' | 'tried'>,
+	now: number
+): void => {
 	const code = value.trim().slice(0, MAX_CONNECT_CODE);
 	write(
 		code === '' || !(expiresIn > 0)
 			? undefined
-			: { code, until: now + expiresIn * 1000, shown, asked: now }
+			: { code, until: now + expiresIn * 1000, shown, asked: now, tried }
 	);
 };
 
@@ -172,26 +190,37 @@ const hold = (value: string, expiresIn: number, shown: boolean, now: number): vo
  * good for no time at all, is none.
  */
 export const holdConnectCode = (typed: string, expiresIn: number, now = Date.now()): void => {
-	hold(typed, expiresIn, true, now);
+	hold(typed, expiresIn, { shown: true, tried: 0 }, now);
 };
 
 /**
  * What the policy said, accepting `sent`, held as it said: its `hold` in place
  * of what was sent where it gave one, never shown; otherwise `sent` itself,
  * shown as it was if it is what is held already (a value asked about again as
- * the app loads) and as typed if not.
+ * the app loads) and as typed if not. A value asked about again keeps when it
+ * was, so the answer does not make it due again at once.
  */
 export const holdAcceptedCode = (
 	sent: string,
 	answer: Readonly<{ expiresIn: number; hold?: string }>,
 	now = Date.now()
 ): void => {
-	if (answer.hold !== undefined) {
-		hold(answer.hold, answer.expiresIn, false, now);
-		return;
-	}
 	const held = current(now);
-	hold(sent, answer.expiresIn, held?.code === sent.trim() ? held.shown : true, now);
+	const again = held?.code === sent.trim() ? held : undefined;
+	const tried = again?.tried ?? 0;
+	if (answer.hold === undefined)
+		hold(sent, answer.expiresIn, { shown: again?.shown ?? true, tried }, now);
+	else hold(answer.hold, answer.expiresIn, { shown: false, tried }, now);
+};
+
+/**
+ * That this device is asking the policy about `code` again, at `now`, where
+ * it is still what is held: so neither this tab nor another asks about it
+ * again straight after, answered or not.
+ */
+export const connectCodeTried = (code: string, now = Date.now()): void => {
+	const held = current(now);
+	if (held?.code === code) write({ ...held, tried: now });
 };
 
 export const dropConnectCode = (): void => {
