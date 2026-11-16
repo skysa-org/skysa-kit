@@ -231,6 +231,26 @@ describe('pushing a file', () => {
 		expect(world.store.ops()).toEqual([expect.objectContaining({ op: 'upload', attempts: 1 })]);
 	});
 
+	it('counts nothing against an upload it was let go of, and sends nothing behind it', async () => {
+		const abort = new AbortController();
+		added('a.png');
+		noteBehind();
+		world.provider.setFault((call) => {
+			if (call.op !== 'createFile') return undefined;
+			abort.abort();
+			return new DOMException('The operation was aborted.', 'AbortError');
+		});
+
+		const result = await engineWith({ signal: abort.signal }).push();
+
+		expect(result.status).toBe('retry');
+		expect(world.provider.contentAt('a.md')).toBeUndefined();
+		expect(world.store.ops().map((op) => [op.op, op.attempts])).toEqual([
+			['upload', 0],
+			['write', 0],
+		]);
+	});
+
 	it('steps over an upload out of attempts, keeps it, and says it is stuck', async () => {
 		// The only copy of the file: never completed for having failed.
 		added('a.png', 5);

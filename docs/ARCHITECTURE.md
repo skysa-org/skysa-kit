@@ -1012,7 +1012,7 @@ Three ops, each in `packages/sync/src/push/files.ts`:
 
 **Uploads do not hold up the queue.**
 This is the second exception to the ordered queue, after `rmdir`.
-An upload that fails is counted against its attempts and stepped over, and one out of attempts is stepped over and kept.
+An upload that fails is counted against its attempts and stepped over, and one out of attempts is stepped over and kept; one whose request the run's letting go aborted is neither, and nothing behind it goes (`SyncEngineOptions.signal`).
 It is never completed: it is the only copy of the file.
 A note that links the file goes without it, and other devices show the file as not there until it lands, which heals itself.
 - **Order.**
@@ -1150,7 +1150,11 @@ The two-device suite (`overProviders.test.ts`) does the same at rest, and checks
      Asked for on a phone, after minutes of "Syncing…" with nothing to say what it was doing and no way to stop it; how an app shows the run and offers the pause is its own (skysa-notes §7, "A sync can be looked into, and paused").
      Pausing (`pause` in the scheduler) ends the session as a cancel does (`halt`), which aborts every request the run has out, and makes the next one paused: it publishes `paused` and runs nothing, and every trigger — the minute, an edit, focus, the network back, another device's notice — goes through `run`, which refuses while paused; going offline does not say `offline` over it.
      The session is a whole one, so a file beside a document is still read when it is opened.
-     A batch the run was already writing is written whole with its cursor, so nothing is half-applied, and an op whose request was aborted is given back the attempt that counted against it once the run lets go.
+     A batch the run was already writing is written whole with its cursor, so nothing is half-applied.
+     An op whose request was aborted counts no attempt: the engine is given the session's signal (`SyncEngineOptions.signal`), and a failure once it is aborted is no evidence against the op, so its push starts no further op.
+     An op given up on for a reason of its own stays so through the pause, though the paused status names no op, as before: a run after the pause names it again where it is still out of attempts.
+     The network coming back still gives every op its attempts back, paused or not.
+     Until 2026-11-16 the pause gave every op its attempts back once the run let go, which wiped one given up on for a reason of its own, and could wipe what a run resumed meanwhile had counted (skysa-kit#20, item 3).
      It lasts until the user asks again — a sync now, or a re-scan — or the source is shown again after another, or the app is opened again: in memory only, so a reload never leaves a device unsyncing without its user there to see it.
    - **What stands against syncing is said until something answers it (2026-11-15).**
      The status's `refusal`, with its `denial`, is the server's last refusal from when it was given until a token is had again from anywhere (`TokenSource.standing` in `packages/client/src/sync/tokens.ts`), or `reauthorize_required` where the provider refused even a fresh token, until a run's pull gets through, whatever its push then comes to, short of the provider refusing a fresh token there too.
@@ -1614,6 +1618,7 @@ They live in `packages/sync/src/engine.ts` and, for the push, in `packages/sync/
   An op stops being tried after five failures, and a provider refusing every request while a quota resets would spend all five in half a minute on an op there is nothing wrong with — the user's note, blocked, with every op behind it waiting.
   A `RateLimitError` says nothing about the request, so the engine reports it as a retry without counting it, on the pull side as well as the push side.
   Everything else is counted, including a 5xx: it may be the request.
+  Except a failure once the caller has let the engine go (`SyncEngineOptions.signal`), which is the abort's and not the request's.
   The same goes for a rate limit met while *resolving* a push conflict — reading the remote entry the conflict rule needs is a request like any other — so the resolution's own error, not the conflict that led to it, decides which branch the failure takes.
 - **Known gap: a rate limit that never ends is never *named*.**
   Nothing counts an uncounted retry, so a provider that answers 429 forever leaves the op retrying forever — every five minutes at the least, since the wait is the longer of the backoff (capped at five) and the provider's own answer (capped at fifteen) — and the status says `retrying` with the provider's message rather than naming the op that is stuck behind it.

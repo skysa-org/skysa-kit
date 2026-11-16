@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { SYNC_WAIT_MS } from '../../src/sync/scheduler.js';
-import type { ClientDevice } from './device.js';
+import { type ClientDevice, fileOf } from './device.js';
 import {
 	DEBOUNCE,
 	deferred,
@@ -135,7 +135,62 @@ export const describePausing = (
 				await reaches(h.scheduler, 'idle');
 			});
 
-			it('gives back the attempt a send it aborted was counted', async () => {
+			it('leaves an op given up on for a reason of its own as it was', async () => {
+				const device = await bound();
+				await device.create('c1', 'Stuck', 'refused\n');
+				const documents = device.store.syncStore('c1');
+				const [op] = await documents.pendingOps();
+				if (op === undefined) throw new Error('nothing was queued');
+				await documents.failOp(op.seq, 'refused');
+				await documents.failOp(op.seq, 'refused');
+				// Paused while a run is out, as a run so often is.
+				const theRemote = remote();
+				const held = deferred();
+				theRemote.gate.set('changes', held.promise);
+				const h = started(device, { maxAttempts: 2, createProvider: theRemote.factory });
+				await vi.waitFor(() => {
+					expect(theRemote.gated()).toBe(1);
+				});
+
+				h.scheduler.pause();
+				theRemote.gate.delete('changes');
+				held.resolve();
+				await quiet();
+
+				expect((await documents.pendingOps()).map((queued) => queued.attempts)).toEqual([
+					2,
+				]);
+				expect(h.scheduler.status().phase).toBe('paused');
+			});
+
+			it('still shows the conflict copies the last sync wrote', async () => {
+				const device = await bound();
+				const note = await device.create('c1', 'Plan', 'one\n');
+				const h = started(device);
+				const documents = device.store.syncStore('c1');
+				await vi.waitFor(async () => {
+					expect((await documents.noteById(note.id))?.dirty).toBe(false);
+				});
+				await reaches(h.scheduler, 'idle');
+				const version = h.remote.fake
+					.snapshot()
+					.find((entry) => entry.path === note.path)?.version;
+				await h.remote.fake.write(note.path, fileOf(device, 'remote\n', note.id), {
+					expectedVersion: version,
+				});
+				await device.edit('c1', note.id, 'local\n');
+				await h.scheduler.syncNow();
+				const copies = (await documents.allNotes())
+					.filter((row) => row.path.includes('(conflict'))
+					.map((row) => row.path);
+				expect(copies).toHaveLength(1);
+
+				h.scheduler.pause();
+
+				expect(h.scheduler.status()).toMatchObject({ phase: 'paused', conflicts: copies });
+			});
+
+			it('counts no attempt against a send it aborted', async () => {
 				const device = await bound();
 				const theRemote = remote();
 				const held = deferred();

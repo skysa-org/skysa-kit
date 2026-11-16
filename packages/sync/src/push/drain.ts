@@ -27,7 +27,7 @@ import { createNotePush } from './notes.js';
  */
 
 export const createPush = (context: EngineContext, { fileState, resolutionFor }: FromPull) => {
-	const { provider, store, maxAttempts, writesAtOnce, renew, meter } = context;
+	const { provider, store, maxAttempts, writesAtOnce, aborted, renew, meter } = context;
 
 	// The remote's folders, made and removed (`push/folders.ts`).
 	const { ensureRemoteFolder, startTurn, runRmdir } = createFolderPush(context);
@@ -196,6 +196,20 @@ export const createPush = (context: EngineContext, { fileState, resolutionFor }:
 	};
 
 	/**
+	 * Stopped short, to be tried again: an op's request failed, and the outcome
+	 * says why (`failed`), with the wait a rate limit asked for, or the caller
+	 * let go of the run (`aborted`) before the next op went, when nothing is
+	 * counted against it.
+	 */
+	const retrying = (progress: PushProgress, failed?: { reason: unknown }): SyncOutcome => ({
+		...drained(progress),
+		status: 'retry',
+		...(failed === undefined
+			? {}
+			: { error: messageOf(failed.reason), ...waitFor(failed.reason) }),
+	});
+
+	/**
 	 * The writes at the front of the queue that can be sent at once: notes,
 	 * each at its own path, none out of attempts, at most as many as the
 	 * provider takes (`writesAtOnce`). Nothing else goes with them. A notebook
@@ -298,6 +312,8 @@ export const createPush = (context: EngineContext, { fileState, resolutionFor }:
 		const batch = together(ops);
 		const ready = batch.length > 1 ? await stillTogether(batch) : undefined;
 		if (ready !== undefined) {
+			// Let go of while they were read: none of them goes.
+			if (aborted()) return retrying(progress);
 			return sendTogether(ready, ops.slice(batch.length), progress, retriedAuth);
 		}
 		// The queue was read once, and the user has gone on since: a restore
@@ -306,6 +322,9 @@ export const createPush = (context: EngineContext, { fileState, resolutionFor }:
 		// has just asked to keep. So each op is asked for again just before it
 		// goes, and one that is gone is passed over.
 		const op = await store.opBySeq(held.seq);
+		// Asked after the read, the last wait before the op goes: let go of, the
+		// run does nothing more, starts no op, and asks for no token to send one.
+		if (aborted()) return retrying(progress);
 		if (op === undefined) return drainOps(rest, progress, retriedAuth);
 		if (awaitsCopy(op, progress)) return drainOps(rest, holdBack(progress, op), retriedAuth);
 
@@ -349,6 +368,10 @@ export const createPush = (context: EngineContext, { fileState, resolutionFor }:
 		progress: PushProgress,
 		retriedAuth: boolean
 	): Promise<SyncOutcome> => {
+		// Let go of already — a write sent beside the one that failed was
+		// aborted — and no resolution is asked of the provider.
+		if (aborted()) return retrying(progress, { reason: error });
+
 		// The resolution reads the remote and writes to the store, either of
 		// which can fail in its own right — and a failure there must land in the
 		// same place as any other, or the op's `attempts` never moves and it can
@@ -384,6 +407,10 @@ export const createPush = (context: EngineContext, { fileState, resolutionFor }:
 			);
 		}
 		const reason = resolved !== undefined && 'failure' in resolved ? resolved.failure : error;
+		// Let go of, and the request with it — the op's own, or one its
+		// resolution made: what failed says nothing of the op, so it keeps its
+		// attempts.
+		if (aborted()) return retrying(progress, { reason });
 
 		if (isAuthError(reason)) {
 			if (retriedAuth || !(await renew())) return paused(drained(progress));
@@ -396,12 +423,7 @@ export const createPush = (context: EngineContext, { fileState, resolutionFor }:
 		// told their note cannot be sent. So the op keeps its attempts and the
 		// wait the provider asked for goes back to the scheduler.
 		if (isRateLimitError(reason)) {
-			return {
-				...drained(progress),
-				status: 'retry',
-				error: messageOf(reason),
-				...waitFor(reason),
-			};
+			return retrying(progress, { reason });
 		}
 
 		await store.failOp(op.seq, messageOf(reason));
@@ -414,7 +436,7 @@ export const createPush = (context: EngineContext, { fileState, resolutionFor }:
 				retriedAuth
 			);
 		}
-		return { ...drained(progress), status: 'retry', error: messageOf(reason) };
+		return retrying(progress, { reason });
 	};
 
 	const runPush = async (): Promise<SyncOutcome> => {
