@@ -472,10 +472,10 @@ describe('the relay link', () => {
 		expect(h.ticket).toHaveBeenCalledTimes(RELAY_GIVE_UP);
 	});
 
-	it('gives up the same way where the browser will not open the socket at all', async () => {
+	it('gives up the same way on a URL the browser will not open', async () => {
 		const h = linked({
 			open: () => {
-				throw new DOMException('Refused by the page’s policy.', 'SecurityError');
+				throw new SyntaxError('bad URL');
 			},
 		});
 		for (const _attempt of Array.from({ length: RELAY_GIVE_UP })) {
@@ -488,7 +488,19 @@ describe('the relay link', () => {
 		expect(h.env.pending()).toEqual([]);
 	});
 
-	it('counts again from nothing once a socket has opened', async () => {
+	it('gives up at once where the page’s policy refuses the socket', async () => {
+		const h = linked({
+			open: () => {
+				throw new DOMException('Refused by the page’s policy.', 'SecurityError');
+			},
+		});
+		await settled();
+
+		expect(h.ticket).toHaveBeenCalledOnce();
+		expect(h.env.pending()).toEqual([]);
+	});
+
+	it('never gives up once a socket has opened in this session, heard or not', async () => {
 		const h = linked();
 		const refused = async (times: number) => {
 			for (const _attempt of Array.from({ length: times })) {
@@ -503,24 +515,31 @@ describe('the relay link', () => {
 		h.last().events.opened();
 		h.last().events.closed(1006);
 		h.env.advance(Math.max(0, ...h.env.pending()));
-		await refused(RELAY_GIVE_UP - 1);
+		await refused(2 * RELAY_GIVE_UP);
 		await settled();
 
 		// Each socket lost asked for the next.
-		expect(h.sockets).toHaveLength(2 * RELAY_GIVE_UP);
+		expect(h.sockets).toHaveLength(3 * RELAY_GIVE_UP + 1);
 	});
 
-	it('never gives up once it has heard the relay in this session', async () => {
+	it('counts sockets in a row across hiding, showing and a ticket it could not have', async () => {
 		const h = linked();
-		const socket = await working(h);
-		socket.events.closed(1006);
-		for (const _attempt of Array.from({ length: 2 * RELAY_GIVE_UP })) {
-			h.env.advance(Math.max(0, ...h.env.pending()));
+		for (const _attempt of Array.from({ length: RELAY_GIVE_UP - 1 })) {
 			await settled();
 			h.last().events.closed(1006);
+			h.env.advance(Math.max(0, ...h.env.pending()));
 		}
+		await settled();
+		h.env.set({ visible: false });
+		h.ticket.mockRejectedValueOnce(new Error('down'));
+		h.env.set({ visible: true });
+		await settled();
+		h.env.advance(Math.max(0, ...h.env.pending()));
+		await settled();
+		h.last().events.closed(1006);
 
-		expect(h.env.pending()).toHaveLength(1);
+		expect(h.ticket).toHaveBeenCalledTimes(RELAY_GIVE_UP + 2);
+		expect(h.env.pending()).toEqual([]);
 	});
 
 	it('tries again when the browser will not open the socket at all', async () => {

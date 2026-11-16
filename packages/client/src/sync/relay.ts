@@ -19,7 +19,9 @@ import { credentialFor, type CredentialStore } from '../store/credentials.js';
  * Only ever a hint. Polling goes on as it is: the relay never hears of an edit
  * made in the storage folder by anything else, and a socket that is down, or an
  * instance that runs none, must never be a reason a note does not arrive. So
- * nothing here reports a failure to anyone; it waits, and tries again.
+ * nothing here reports a failure to anyone; it waits, and tries again, unless
+ * the browser plainly will not let a socket through, when it stops for the
+ * session.
  *
  * Open only while the app is in front of the user and online. A hidden tab
  * gives its socket up — the poll it goes back to on coming forward covers
@@ -93,11 +95,17 @@ export const RELAY_RETRY_MS = 1000;
 export const RELAY_MAX_RETRY_MS = 60_000;
 /**
  * Sockets in a row that closed, or would not be opened, before opening, at
- * which a link that has never heard the relay stops for the session: about
+ * which a link none of whose sockets has opened stops for the session: about
  * half a minute of the backoff. A browser that refuses the socket — one
  * before CSP Level 3, where `connect-src 'self'` does not cover a same-origin
  * `wss:` — would otherwise ask for a ticket every minute for as long as the
  * app is in view. Polling goes on as it is.
+ *
+ * A server refusing the upgrade closes the socket before it opens too, and
+ * the page cannot tell the two apart. So a session begun while the upgrade
+ * fails for that long gives up as well, and the next session tries again. One
+ * whose socket has opened once has a browser that lets it through, and never
+ * gives up: a deploy closes open sockets.
  */
 export const RELAY_GIVE_UP = 6;
 /**
@@ -113,8 +121,8 @@ type Timer = 'retry' | 'ping' | 'pong' | 'tell';
  * `closed`: the session is over. `stopped`: told there is nothing to connect
  * to, or given up on. `connecting`: a ticket is being asked for. `open`: the
  * socket has opened. `heard`: the server has said something on it. `reached`:
- * it has said something on one in this session. `owed`: a push it has not yet
- * been told of.
+ * one has opened in this session, so the browser lets it through. `owed`: a
+ * push it has not yet been told of.
  */
 type Flag = 'closed' | 'stopped' | 'connecting' | 'open' | 'heard' | 'reached' | 'owed';
 
@@ -131,7 +139,7 @@ export const createRelayLink = (options: RelayLinkOptions): RelayLink => {
 	const socket = cell<RelaySocket | undefined>(undefined);
 	/** Failures in a row since the server last said anything, for the backoff. */
 	const failures = cell(0);
-	/** Sockets in a row that never opened, for giving up. */
+	/** Sockets that never opened, while none has, for giving up. */
 	const unopened = cell(0);
 	/**
 	 * Which attempt is current. A ticket that arrives, or a socket that speaks,
@@ -203,7 +211,7 @@ export const createRelayLink = (options: RelayLinkOptions): RelayLink => {
 		});
 	};
 
-	/** A socket that never opened: tried again, unless none has and the relay has never been heard. */
+	/** A socket that never opened: tried again, unless it is the last of `RELAY_GIVE_UP` and none ever has. */
 	const refused = () => {
 		unopened.current += 1;
 		if (unopened.current >= RELAY_GIVE_UP && !flags.has('reached')) {
@@ -237,7 +245,7 @@ export const createRelayLink = (options: RelayLinkOptions): RelayLink => {
 
 	const opened = () => {
 		flags.add('open');
-		unopened.current = 0;
+		flags.add('reached');
 		// At once, not in 45 seconds: the answer is how the link knows the way
 		// through to the relay works, and so that its backoff can start over.
 		ping();
@@ -246,7 +254,6 @@ export const createRelayLink = (options: RelayLinkOptions): RelayLink => {
 
 	const heard = (data: unknown) => {
 		flags.add('heard');
-		flags.add('reached');
 		failures.current = 0;
 		if (data === RELAY_PONG) {
 			cancel('pong');
@@ -316,9 +323,11 @@ export const createRelayLink = (options: RelayLinkOptions): RelayLink => {
 					if (mine()) lost(code);
 				},
 			});
-		} catch {
-			// A URL the browser would not open, or a socket its policy refuses.
-			refused();
+		} catch (error) {
+			// The page's policy refuses the socket, as it will for as long as the
+			// page is open; or the browser would not open the URL.
+			if (error instanceof DOMException && error.name === 'SecurityError') stop();
+			else refused();
 		}
 	};
 
