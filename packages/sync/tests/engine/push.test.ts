@@ -516,6 +516,35 @@ describe('push', () => {
 			]);
 		});
 
+		it('sends no writes together once let go of, though the op before them landed', async () => {
+			const abort = new AbortController();
+			const engine = engineWith({ signal: abort.signal });
+			const entry = await remoteFile('gone.md', 'old\n');
+			world.store.put({ id: 'n0', path: 'gone.md', content: 'old\n', ...boundTo(entry) });
+			world.store.put({ id: 'n1', path: 'a.md', content: 'a\n', dirty: true });
+			world.store.put({ id: 'n2', path: 'b.md', content: 'b\n', dirty: true });
+			world.store.queue({ op: 'delete', noteId: 'n0', path: 'gone.md' });
+			world.store.queue({ op: 'write', noteId: 'n1', path: 'a.md' });
+			world.store.queue({ op: 'write', noteId: 'n2', path: 'b.md' });
+			const sent: string[] = [];
+			world.provider.setFault((call) => {
+				if (call.op !== 'write' && call.op !== 'delete') return undefined;
+				sent.push(`${call.op} ${call.path ?? ''}`);
+				// Its answer was on its way back as the run was let go of.
+				if (call.op === 'delete') abort.abort();
+				return undefined;
+			});
+
+			const result = await engine.push();
+
+			expect(result.status).toBe('retry');
+			expect(sent).toEqual(['delete gone.md']);
+			expect(world.store.ops().map((op) => [op.path, op.attempts])).toEqual([
+				['a.md', 0],
+				['b.md', 0],
+			]);
+		});
+
 		it('resolves nothing beside a write sent with it that was let go of', async () => {
 			// The first meets a conflict, and the write sent beside it is aborted.
 			const abort = new AbortController();

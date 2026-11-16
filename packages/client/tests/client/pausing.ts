@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { type SchedulerStatus, SYNC_WAIT_MS } from '../../src/sync/scheduler.js';
-import type { ClientDevice } from './device.js';
+import { type ClientDevice, fileOf } from './device.js';
 import {
 	DEBOUNCE,
 	deferred,
@@ -175,6 +175,8 @@ export const describePausing = (
 				await vi.waitFor(() => {
 					expect(h.scheduler.status().stuck).toMatchObject({ attempts: 2 });
 				});
+				const said: SchedulerStatus[] = [];
+				h.scheduler.subscribe((next) => said.push(next));
 
 				h.scheduler.pause();
 
@@ -182,6 +184,91 @@ export const describePausing = (
 					phase: 'paused',
 					stuck: { attempts: 2, error: 'refused' },
 				});
+				// Said once, whole: not `paused` first and the op after.
+				expect(said.filter((next) => next.stuck === undefined)).toEqual([]);
+			});
+
+			it('names no op once the network back has given it its attempts back', async () => {
+				const device = await bound();
+				await device.create('c1', 'Stuck', 'refused\n');
+				const documents = device.store.syncStore('c1');
+				const [op] = await documents.pendingOps();
+				if (op === undefined) throw new Error('nothing was queued');
+				await documents.failOp(op.seq, 'refused');
+				await documents.failOp(op.seq, 'refused');
+				const h = started(device, { maxAttempts: 2 });
+				await vi.waitFor(() => {
+					expect(h.scheduler.status().stuck).toMatchObject({ attempts: 2 });
+				});
+				h.scheduler.pause();
+
+				h.env.fire('online');
+
+				await vi.waitFor(async () => {
+					expect((await documents.pendingOps()).map((queued) => queued.attempts)).toEqual(
+						[0]
+					);
+				});
+				await quiet();
+				expect(h.scheduler.status().phase).toBe('paused');
+				expect(h.scheduler.status().stuck).toBeUndefined();
+			});
+
+			it('carries no op that Sync now is giving its attempts back', async () => {
+				const device = await bound();
+				await device.create('c1', 'Stuck', 'refused\n');
+				const documents = device.store.syncStore('c1');
+				const [op] = await documents.pendingOps();
+				if (op === undefined) throw new Error('nothing was queued');
+				await documents.failOp(op.seq, 'refused');
+				await documents.failOp(op.seq, 'refused');
+				const h = started(device, { maxAttempts: 2 });
+				await vi.waitFor(() => {
+					expect(h.scheduler.status().stuck).toMatchObject({ attempts: 2 });
+				});
+
+				// Paused while the store is still giving them back.
+				const asked = h.scheduler.syncNow();
+				h.scheduler.pause();
+				await asked;
+				await quiet();
+
+				expect((await documents.pendingOps()).map((queued) => queued.attempts)).toEqual([
+					0,
+				]);
+				expect(h.scheduler.status().phase).toBe('paused');
+				expect(h.scheduler.status().stuck).toBeUndefined();
+			});
+
+			it('still shows the conflict copies the last sync wrote, said once', async () => {
+				const device = await bound();
+				const note = await device.create('c1', 'Plan', 'one\n');
+				const h = started(device);
+				const documents = device.store.syncStore('c1');
+				await vi.waitFor(async () => {
+					expect((await documents.noteById(note.id))?.dirty).toBe(false);
+				});
+				await reaches(h.scheduler, 'idle');
+				const version = h.remote.fake
+					.snapshot()
+					.find((entry) => entry.path === note.path)?.version;
+				await h.remote.fake.write(note.path, fileOf(device, 'remote\n', note.id), {
+					expectedVersion: version,
+				});
+				await device.edit('c1', note.id, 'local\n');
+				await h.scheduler.syncNow();
+				const copies = (await documents.allNotes())
+					.filter((row) => row.path.includes('(conflict'))
+					.map((row) => row.path);
+				expect(copies).toHaveLength(1);
+				const said: SchedulerStatus[] = [];
+				h.scheduler.subscribe((next) => said.push(next));
+
+				h.scheduler.pause();
+
+				expect(said.map((next) => [next.phase, next.conflicts])).toEqual([
+					['paused', copies],
+				]);
 			});
 
 			it('names no op given up on once Sync now has given it its attempts back', async () => {
