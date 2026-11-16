@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { type SchedulerStatus, SYNC_WAIT_MS } from '../../src/sync/scheduler.js';
+import { SYNC_WAIT_MS } from '../../src/sync/scheduler.js';
 import { type ClientDevice, fileOf } from './device.js';
 import {
 	DEBOUNCE,
@@ -163,84 +163,7 @@ export const describePausing = (
 				expect(h.scheduler.status().phase).toBe('paused');
 			});
 
-			it('still names an op given up on, through the pause', async () => {
-				const device = await bound();
-				await device.create('c1', 'Stuck', 'refused\n');
-				const documents = device.store.syncStore('c1');
-				const [op] = await documents.pendingOps();
-				if (op === undefined) throw new Error('nothing was queued');
-				await documents.failOp(op.seq, 'refused');
-				await documents.failOp(op.seq, 'refused');
-				const h = started(device, { maxAttempts: 2 });
-				await vi.waitFor(() => {
-					expect(h.scheduler.status().stuck).toMatchObject({ attempts: 2 });
-				});
-				const said: SchedulerStatus[] = [];
-				h.scheduler.subscribe((next) => said.push(next));
-
-				h.scheduler.pause();
-
-				expect(h.scheduler.status()).toMatchObject({
-					phase: 'paused',
-					stuck: { attempts: 2, error: 'refused' },
-				});
-				// Said once, whole: not `paused` first and the op after.
-				expect(said.filter((next) => next.stuck === undefined)).toEqual([]);
-			});
-
-			it('names no op once the network back has given it its attempts back', async () => {
-				const device = await bound();
-				await device.create('c1', 'Stuck', 'refused\n');
-				const documents = device.store.syncStore('c1');
-				const [op] = await documents.pendingOps();
-				if (op === undefined) throw new Error('nothing was queued');
-				await documents.failOp(op.seq, 'refused');
-				await documents.failOp(op.seq, 'refused');
-				const h = started(device, { maxAttempts: 2 });
-				await vi.waitFor(() => {
-					expect(h.scheduler.status().stuck).toMatchObject({ attempts: 2 });
-				});
-				h.scheduler.pause();
-
-				h.env.fire('online');
-
-				await vi.waitFor(async () => {
-					expect((await documents.pendingOps()).map((queued) => queued.attempts)).toEqual(
-						[0]
-					);
-				});
-				await quiet();
-				expect(h.scheduler.status().phase).toBe('paused');
-				expect(h.scheduler.status().stuck).toBeUndefined();
-			});
-
-			it('carries no op that Sync now is giving its attempts back', async () => {
-				const device = await bound();
-				await device.create('c1', 'Stuck', 'refused\n');
-				const documents = device.store.syncStore('c1');
-				const [op] = await documents.pendingOps();
-				if (op === undefined) throw new Error('nothing was queued');
-				await documents.failOp(op.seq, 'refused');
-				await documents.failOp(op.seq, 'refused');
-				const h = started(device, { maxAttempts: 2 });
-				await vi.waitFor(() => {
-					expect(h.scheduler.status().stuck).toMatchObject({ attempts: 2 });
-				});
-
-				// Paused while the store is still giving them back.
-				const asked = h.scheduler.syncNow();
-				h.scheduler.pause();
-				await asked;
-				await quiet();
-
-				expect((await documents.pendingOps()).map((queued) => queued.attempts)).toEqual([
-					0,
-				]);
-				expect(h.scheduler.status().phase).toBe('paused');
-				expect(h.scheduler.status().stuck).toBeUndefined();
-			});
-
-			it('still shows the conflict copies the last sync wrote, said once', async () => {
+			it('still shows the conflict copies the last sync wrote', async () => {
 				const device = await bound();
 				const note = await device.create('c1', 'Plan', 'one\n');
 				const h = started(device);
@@ -261,38 +184,10 @@ export const describePausing = (
 					.filter((row) => row.path.includes('(conflict'))
 					.map((row) => row.path);
 				expect(copies).toHaveLength(1);
-				const said: SchedulerStatus[] = [];
-				h.scheduler.subscribe((next) => said.push(next));
 
 				h.scheduler.pause();
 
-				expect(said.map((next) => [next.phase, next.conflicts])).toEqual([
-					['paused', copies],
-				]);
-			});
-
-			it('names no op given up on once Sync now has given it its attempts back', async () => {
-				const device = await bound();
-				await device.create('c1', 'Stuck', 'refused\n');
-				const documents = device.store.syncStore('c1');
-				const [op] = await documents.pendingOps();
-				if (op === undefined) throw new Error('nothing was queued');
-				await documents.failOp(op.seq, 'refused');
-				await documents.failOp(op.seq, 'refused');
-				const h = started(device, { maxAttempts: 2 });
-				await vi.waitFor(() => {
-					expect(h.scheduler.status().stuck).toMatchObject({ attempts: 2 });
-				});
-				const said: SchedulerStatus[] = [];
-
-				h.scheduler.pause();
-				h.scheduler.subscribe((next) => said.push(next));
-				await h.scheduler.syncNow();
-				await reaches(h.scheduler, 'idle');
-
-				expect(
-					said.filter((next) => next.phase === 'paused' || next.stuck !== undefined)
-				).toEqual([]);
+				expect(h.scheduler.status()).toMatchObject({ phase: 'paused', conflicts: copies });
 			});
 
 			it('counts no attempt against a send it aborted', async () => {

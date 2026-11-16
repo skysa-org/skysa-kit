@@ -545,6 +545,31 @@ describe('push', () => {
 			]);
 		});
 
+		it('sends no writes together that it was let go of while reading', async () => {
+			const abort = new AbortController();
+			world.store.put({ id: 'n1', path: 'a.md', content: 'a\n', dirty: true });
+			world.store.put({ id: 'n2', path: 'b.md', content: 'b\n', dirty: true });
+			world.store.queue({ op: 'write', noteId: 'n1', path: 'a.md' });
+			world.store.queue({ op: 'write', noteId: 'n2', path: 'b.md' });
+			const engine = engineWith({
+				signal: abort.signal,
+				store: {
+					...world.store,
+					// Let go of while the writes are read again, just before they go.
+					opBySeq: async (seq) => {
+						abort.abort();
+						return world.store.opBySeq(seq);
+					},
+				},
+			});
+
+			const result = await engine.push();
+
+			expect(result.status).toBe('retry');
+			expect(world.provider.contentAt('a.md')).toBeUndefined();
+			expect(world.provider.contentAt('b.md')).toBeUndefined();
+		});
+
 		it('resolves nothing beside a write sent with it that was let go of', async () => {
 			// The first meets a conflict, and the write sent beside it is aborted.
 			const abort = new AbortController();
@@ -889,6 +914,44 @@ describe('push', () => {
 		expect(result.status).toBe('retry');
 		expect(asked).toEqual(['a.md']);
 		expect(world.store.ops().map((op) => op.path)).toEqual(['b.md']);
+	});
+
+	it('does nothing once let go of, not even what it would give up on', async () => {
+		const abort = new AbortController();
+		const engine = engineWith({ signal: abort.signal });
+		world.store.put({ id: 'n1', path: 'a.md', content: 'a\n', dirty: true });
+		world.store.queue({ op: 'rmdir', path: 'Old', attempts: 5 });
+		world.store.queue({ op: 'write', noteId: 'n1', path: 'a.md' });
+		abort.abort();
+
+		const result = await engine.push();
+
+		expect(result.status).toBe('retry');
+		expect(world.store.ops().map((op) => op.op)).toEqual(['rmdir', 'write']);
+		expect(world.provider.contentAt('a.md')).toBeUndefined();
+	});
+
+	it('starts no op it was let go of while reading', async () => {
+		const abort = new AbortController();
+		world.store.put({ id: 'n1', path: 'a.md', content: 'a\n', dirty: true });
+		world.store.queue({ op: 'write', noteId: 'n1', path: 'a.md' });
+		const engine = engineWith({
+			signal: abort.signal,
+			store: {
+				...world.store,
+				// Let go of while the op is read, just before it would go.
+				opBySeq: async (seq) => {
+					abort.abort();
+					return world.store.opBySeq(seq);
+				},
+			},
+		});
+
+		const result = await engine.push();
+
+		expect(result.status).toBe('retry');
+		expect(world.provider.contentAt('a.md')).toBeUndefined();
+		expect(world.store.ops().map((op) => op.attempts)).toEqual([0]);
 	});
 
 	it('records the failure against the op it belongs to', async () => {

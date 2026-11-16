@@ -1152,8 +1152,8 @@ The two-device suite (`overProviders.test.ts`) does the same at rest, and checks
      The session is a whole one, so a file beside a document is still read when it is opened.
      A batch the run was already writing is written whole with its cursor, so nothing is half-applied.
      An op whose request was aborted counts no attempt: the engine is given the session's signal (`SyncEngineOptions.signal`), and a failure once it is aborted is no evidence against the op, so its push starts no further op.
-     An op given up on for a reason of its own stays so through the pause, and a sync paused while it was stuck still names the op (`stuck`).
-     The network coming back gives every op its attempts back, paused or not, and the paused status then names none.
+     An op given up on for a reason of its own stays so through the pause, though the paused status names no op, as before: a run after the pause names it again where it is still out of attempts.
+     The network coming back still gives every op its attempts back, paused or not.
      Until 2026-11-16 the pause gave every op its attempts back once the run let go, which wiped one given up on for a reason of its own, and could wipe what a run resumed meanwhile had counted (skysa-kit#20, item 3).
      It lasts until the user asks again — a sync now, or a re-scan — or the source is shown again after another, or the app is opened again: in memory only, so a reload never leaves a device unsyncing without its user there to see it.
    - **What stands against syncing is said until something answers it (2026-11-15).**

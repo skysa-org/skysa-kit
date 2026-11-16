@@ -306,6 +306,8 @@ export const createPush = (context: EngineContext, { fileState, resolutionFor }:
 		const [held, ...rest] = ops;
 		meter.pushLeft(ops.length, held);
 		if (held === undefined) return drained(progress);
+		// Let go of, it does nothing more, here or at the provider.
+		if (aborted()) return retrying(progress);
 		const batch = together(ops);
 		const ready = batch.length > 1 ? await stillTogether(batch) : undefined;
 		if (ready !== undefined) {
@@ -344,8 +346,9 @@ export const createPush = (context: EngineContext, { fileState, resolutionFor }:
 			return { ...drained(progress), status: 'blocked', error };
 		}
 
-		// Asked last thing before it goes, after every read above: let go of,
-		// the run starts no further op, and asks for no token to send one.
+		// Asked again last thing before it goes, after every read above: let go
+		// of meanwhile, the run starts no further op, and asks for no token to
+		// send one.
 		if (aborted()) return retrying(progress);
 		const failure = await runOp(op)
 			.then(() => undefined)

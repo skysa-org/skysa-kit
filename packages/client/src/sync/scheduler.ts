@@ -68,8 +68,8 @@ export type SyncPhase =
 	| 'paused';
 
 /**
- * The op a `blocked` sync is about, or a sync paused while it was blocked:
- * the first one out of attempts, which is also the one holding the queue up. Enough for the UI to name it and to link
+ * The op a `blocked` sync is about: the first one out of attempts, which is
+ * also the one holding the queue up. Enough for the UI to name it and to link
  * to the note it is about, without reading the queue itself.
  */
 export interface StuckOp {
@@ -119,11 +119,7 @@ export interface SchedulerStatus {
 	readonly denial?: Denial;
 	/** Conflict copies the last sync wrote, for the banner in §7. */
 	readonly conflicts: readonly string[];
-	/**
-	 * Which op is stuck, when one is: `attention` without this is about a token.
-	 * A pause made while the sync was stuck goes on naming the op, so `paused`
-	 * can carry it too.
-	 */
+	/** Which op is stuck, when one is: `attention` without this is about a token. */
 	readonly stuck?: StuckOp;
 	/**
 	 * How far a long run has got — a full scan, a push — while it is `syncing`,
@@ -435,10 +431,8 @@ export interface SyncScheduler {
 	 * opened again: the status says `paused` meanwhile. The run's requests are
 	 * aborted, and count no attempt against the ops they were for; a batch it
 	 * was already writing is written whole, its cursor with it, so nothing is
-	 * lost and nothing is applied in part. A sync stuck on an op goes on naming
-	 * it (`stuck`), until the network coming back gives every op its attempts
-	 * back, as it does unpaused. Files beside notes are still read when they
-	 * are opened.
+	 * lost and nothing is applied in part. Files beside notes are still read
+	 * when they are opened.
 	 */
 	readonly pause: () => void;
 	readonly status: () => SchedulerStatus;
@@ -504,8 +498,7 @@ interface Session {
 	 */
 	readonly renewed: Cell<boolean>;
 	/**
-	 * The op this connection's last completed run found out of attempts, or, in
-	 * a session made paused, the one the session before it was stuck on. Session
+	 * The op this connection's last completed run found out of attempts. Session
 	 * state rather than the scheduler's, so a run or a re-scan that finishes
 	 * after the user has switched accounts cannot clear — or answer for — the
 	 * connection that is bound now.
@@ -776,9 +769,8 @@ export const createSyncScheduler = (options: SyncSchedulerOptions): SyncSchedule
 
 	/** Attempts given back: nothing is out of them, so nothing is stuck. */
 	const released = async (session: Session): Promise<void> => {
-		// Said first, so a pause made while the store gives them back carries none.
-		session.stuck.current = undefined;
 		await store.releaseOps(session.connectionId);
+		session.stuck.current = undefined;
 	};
 
 	/**
@@ -1346,10 +1338,7 @@ export const createSyncScheduler = (options: SyncSchedulerOptions): SyncSchedule
 			? undefined
 			: showing;
 
-	const follow = (
-		showing: ShownSource | undefined,
-		carried: Pick<SchedulerStatus, 'conflicts' | 'stuck'> = { conflicts: [] }
-	) => {
+	const follow = (showing: ShownSource | undefined) => {
 		// A detached source is shown and is not synced: it has no credential to
 		// mint a token with and no cursor to pull from, and the rows it holds are
 		// waiting for the user, not for the network. So it gets no session — not
@@ -1416,7 +1405,7 @@ export const createSyncScheduler = (options: SyncSchedulerOptions): SyncSchedule
 			blockedSince: cell<number | undefined>(undefined),
 			account,
 			renewed: cell(false),
-			stuck: cell<StuckOp | undefined>(carried.stuck),
+			stuck: cell<StuckOp | undefined>(undefined),
 			abort,
 			relay:
 				provider === undefined
@@ -1435,11 +1424,7 @@ export const createSyncScheduler = (options: SyncSchedulerOptions): SyncSchedule
 		const { relay } = session;
 		if (relay !== undefined) sessionUnsubscribers.add(relay.close);
 		const paused = isPaused(connectionId);
-		publish({
-			phase: paused ? 'paused' : 'idle',
-			lastSyncAt: state.lastSyncAt,
-			conflicts: carried.conflicts,
-		});
+		publish({ phase: paused ? 'paused' : 'idle', lastSyncAt: state.lastSyncAt, conflicts: [] });
 		watchEdits(session);
 		if (paused) return;
 		void run(session);
@@ -1523,11 +1508,7 @@ export const createSyncScheduler = (options: SyncSchedulerOptions): SyncSchedule
 				environment.listen('online', () => {
 					const session = bound.current;
 					if (session === undefined) return;
-					void released(session).then(() => {
-						// Paused, no run comes to say the op it named has its attempts back.
-						if (isPaused(session.connectionId)) publish(status());
-						return run(session);
-					});
+					void released(session).then(() => run(session));
 				})
 			);
 			unsubscribers.add(
@@ -1592,19 +1573,19 @@ export const createSyncScheduler = (options: SyncSchedulerOptions): SyncSchedule
 			if (session === undefined) return;
 			pausedFor.current = session.connectionId;
 			const { conflicts } = status();
-			const stuck = session.stuck.current;
 			// A session of its own, as `halt` makes one: ending this one aborts
 			// every request the run has out, and the next is made paused, so
 			// it runs nothing and still reads a file beside a note when it is
 			// opened. What stands against the connection stands through it
 			// (`accounts`).
 			endSession();
+			follow(shown.current);
+			if (bound.current === undefined) return;
 			// The copies the last sync wrote are still on the device to be seen.
-			// And a send the pause aborted counted nothing against its op (the
-			// engine's `signal`), so an op given up on for a reason of its own
-			// stays so, and the status goes on naming the one it named. Both go
-			// into the paused session as it is made, so its status says them.
-			follow(shown.current, { conflicts, ...(stuck === undefined ? {} : { stuck }) });
+			// No attempt is given back: a send the pause aborted counted none
+			// against its op (the engine's `signal`), and an op given up on for
+			// a reason of its own stays so.
+			if (conflicts.length > 0) publish({ ...status(), conflicts });
 		},
 		status,
 
