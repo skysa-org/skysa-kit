@@ -46,6 +46,7 @@ export {
 	type ClientStore,
 	type Companion,
 	createSyncScheduler,
+	needsReconnect,
 	type SchedulerEnvironment,
 	type SchedulerStatus,
 	type StuckOp,

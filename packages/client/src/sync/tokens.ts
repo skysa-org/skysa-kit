@@ -1,6 +1,6 @@
 import { AuthError, cell } from '@skysa/storage';
 
-import type { AccessToken, ApiClient, Denial, Refusal } from '../api/client.js';
+import type { AccessToken, ApiClient, Refusal, Result } from '../api/client.js';
 import { credentialFor, type CredentialStore } from '../store/credentials.js';
 
 /**
@@ -47,7 +47,21 @@ export interface TokenSourceOptions {
 	client: Pick<ApiClient, 'withCredential'>;
 	connectionId: string;
 	now?: () => number;
+	/**
+	 * Told each time what `standing` answers changes, so whoever shows it can
+	 * say so then rather than at whatever it says next. In a microtask of its
+	 * own: whatever it does, a token is had or refused the same.
+	 */
+	onStanding?: () => void;
 }
+
+/** A refusal from the server, and what the operator's policy said beside it. */
+export type Refused = Readonly<Omit<Extract<Result<never>, { ok: false }>, 'ok'>>;
+
+const same = (a: Refused | undefined, b: Refused | undefined): boolean =>
+	a?.refusal === b?.refusal &&
+	a?.denial?.code === b?.denial?.code &&
+	a?.denial?.reason === b?.denial?.reason;
 
 export interface TokenSource {
 	readonly get: () => Promise<string>;
@@ -60,22 +74,39 @@ export interface TokenSource {
 	 * how the scheduler says "reconnect" rather than "retrying".
 	 */
 	readonly refusal: () => Refusal | undefined;
-	/** What the operator's policy said beside that refusal, when it was `not_entitled`. */
-	readonly denial: () => Denial | undefined;
+	/**
+	 * The server's last refusal, with what the operator's policy said beside
+	 * it where it was `not_entitled`, until a token is had again from
+	 * anywhere. Unlike `refusal`, a request that gets no answer leaves it
+	 * standing: an account the server would not sync is not one it syncs for
+	 * being out of reach, and what it said is still the last word on it
+	 * (`SchedulerStatus.refusal`).
+	 */
+	readonly standing: () => Refused | undefined;
 }
 
 export const createTokenSource = (options: TokenSourceOptions): TokenSource => {
 	const { credentials, states, client, connectionId } = options;
 	const now = options.now ?? Date.now;
 	const cached = cell<AccessToken | undefined>(undefined);
-	const refused = cell<{ refusal: Refusal; denial?: Denial | undefined } | undefined>(undefined);
+	const refused = cell<Refusal | undefined>(undefined);
+	const standing = cell<Refused | undefined>(undefined);
+
+	/** The server has answered with a refusal, or a token is had. */
+	const stand = (next: Refused | undefined) => {
+		refused.current = next?.refusal;
+		if (same(standing.current, next)) return;
+		standing.current = next;
+		const { onStanding } = options;
+		if (onStanding !== undefined) queueMicrotask(onStanding);
+	};
 
 	const usable = (token: AccessToken | undefined): token is AccessToken =>
 		token !== undefined && token.expiresAt - EXPIRY_MARGIN_MS > now();
 
 	/** A token in hand, from wherever: whatever the server said before is no longer so. */
 	const using = (token: AccessToken): string => {
-		refused.current = undefined;
+		stand(undefined);
 		cached.current = token;
 		return token.accessToken;
 	};
@@ -86,7 +117,7 @@ export const createTokenSource = (options: TokenSourceOptions): TokenSource => {
 		// stop minting rather than go on presenting a credential that is gone.
 		const held = await credentialFor(credentials, connectionId);
 		if (held === undefined) {
-			refused.current = { refusal: 'credential_required' };
+			stand({ refusal: 'credential_required' });
 			cached.current = undefined;
 			throw new AuthError('This device holds no credential for that connection');
 		}
@@ -96,12 +127,13 @@ export const createTokenSource = (options: TokenSourceOptions): TokenSource => {
 			.token()
 			.catch((error: unknown) => {
 				// Not an answer: the server may since have changed its mind, and a
-				// refusal kept past this would read as one it gave just now.
+				// refusal kept past this would read as one it gave just now. It
+				// still stands: nothing has said otherwise.
 				refused.current = undefined;
 				throw error;
 			});
 		if (!result.ok) {
-			refused.current = { refusal: result.refusal, denial: result.denial };
+			stand({ refusal: result.refusal, denial: result.denial });
 			cached.current = undefined;
 			// An `AuthError`, so the provider call it was for fails as one.
 			throw new AuthError(`The server would not mint a token: ${result.refusal}`);
@@ -136,9 +168,11 @@ export const createTokenSource = (options: TokenSourceOptions): TokenSource => {
 			const state = await states.read(connectionId);
 			// A detached source is never minted for. Nothing starts a session for
 			// one, so this is for a run that was already going when it was let go:
-			// it stops here rather than at the server.
+			// it stops here rather than at the server. Not said to stand: it is
+			// no answer of the server's, and the source already says it is let
+			// go, which a "connect again" said meanwhile would contradict.
 			if (state.detached) {
-				refused.current = { refusal: 'credential_required' };
+				refused.current = 'credential_required';
 				cached.current = undefined;
 				throw new AuthError('This device no longer syncs that connection');
 			}
@@ -155,7 +189,7 @@ export const createTokenSource = (options: TokenSourceOptions): TokenSource => {
 			await mint();
 		},
 
-		refusal: () => refused.current?.refusal,
-		denial: () => refused.current?.denial,
+		refusal: () => refused.current,
+		standing: () => standing.current,
 	};
 };
