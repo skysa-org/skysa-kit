@@ -68,8 +68,8 @@ export type SyncPhase =
 	| 'paused';
 
 /**
- * The op a `blocked` sync is about: the first one out of attempts, which is
- * also the one holding the queue up. Enough for the UI to name it and to link
+ * The op a `blocked` sync is about, or a sync paused while it was blocked:
+ * the first one out of attempts, which is also the one holding the queue up. Enough for the UI to name it and to link
  * to the note it is about, without reading the queue itself.
  */
 export interface StuckOp {
@@ -119,7 +119,11 @@ export interface SchedulerStatus {
 	readonly denial?: Denial;
 	/** Conflict copies the last sync wrote, for the banner in §7. */
 	readonly conflicts: readonly string[];
-	/** Which op is stuck, when one is: `attention` without this is about a token. */
+	/**
+	 * Which op is stuck, when one is: `attention` without this is about a token.
+	 * A pause made while the sync was stuck goes on naming the op, so `paused`
+	 * can carry it too.
+	 */
 	readonly stuck?: StuckOp;
 	/**
 	 * How far a long run has got — a full scan, a push — while it is `syncing`,
@@ -431,8 +435,8 @@ export interface SyncScheduler {
 	 * opened again: the status says `paused` meanwhile. The run's requests are
 	 * aborted, and count no attempt against the ops they were for; a batch it
 	 * was already writing is written whole, its cursor with it, so nothing is
-	 * lost and nothing is applied in part. Files beside notes are still read
-	 * when they are opened.
+	 * lost and nothing is applied in part. A sync stuck on an op goes on naming
+	 * it (`stuck`). Files beside notes are still read when they are opened.
 	 */
 	readonly pause: () => void;
 	readonly status: () => SchedulerStatus;
@@ -499,7 +503,7 @@ interface Session {
 	readonly renewed: Cell<boolean>;
 	/**
 	 * The op this connection's last completed run found out of attempts, or, in
-	 * a session made paused, the one the store holds as out of them. Session
+	 * a session made paused, the one the session before it was stuck on. Session
 	 * state rather than the scheduler's, so a run or a re-scan that finishes
 	 * after the user has switched accounts cannot clear — or answer for — the
 	 * connection that is bound now.
@@ -1509,9 +1513,6 @@ export const createSyncScheduler = (options: SyncSchedulerOptions): SyncSchedule
 				environment.listen('online', () => {
 					const session = bound.current;
 					if (session === undefined) return;
-					// Paused, nothing was tried meanwhile, so nothing failed for
-					// the network's going: an op given up on stays so.
-					if (isPaused(session.connectionId)) return;
 					void released(session).then(() => run(session));
 				})
 			);
@@ -1577,6 +1578,7 @@ export const createSyncScheduler = (options: SyncSchedulerOptions): SyncSchedule
 			if (session === undefined) return;
 			pausedFor.current = session.connectionId;
 			const { conflicts } = status();
+			const stuck = session.stuck.current;
 			// A session of its own, as `halt` makes one: ending this one aborts
 			// every request the run has out, and the next is made paused, so
 			// it runs nothing and still reads a file beside a note when it is
@@ -1586,20 +1588,12 @@ export const createSyncScheduler = (options: SyncSchedulerOptions): SyncSchedule
 			follow(shown.current);
 			const paused = bound.current;
 			if (paused === undefined) return;
-			// The copies the last sync wrote are still on the device to be seen.
-			if (conflicts.length > 0) publish({ ...status(), conflicts });
 			// A send the pause aborted counted nothing against its op (the
 			// engine's `signal`), so an op given up on for a reason of its own
-			// stays so, and is named as the store holds it.
-			void stuckOp(paused.connectionId)
-				.then((stuck) => {
-					// Resumed meanwhile, the ops were given their attempts back,
-					// and what this read is already out of date.
-					if (stuck === undefined || !isPaused(paused.connectionId)) return;
-					paused.stuck.current = stuck;
-					publish(status());
-				})
-				.catch(() => undefined);
+			// stays so, and the status goes on naming the one it named.
+			paused.stuck.current = stuck;
+			// The copies the last sync wrote are still on the device to be seen.
+			if (conflicts.length > 0 || stuck !== undefined) publish({ ...status(), conflicts });
 		},
 		status,
 

@@ -1151,8 +1151,8 @@ The two-device suite (`overProviders.test.ts`) does the same at rest, and checks
      Pausing (`pause` in the scheduler) ends the session as a cancel does (`halt`), which aborts every request the run has out, and makes the next one paused: it publishes `paused` and runs nothing, and every trigger — the minute, an edit, focus, the network back, another device's notice — goes through `run`, which refuses while paused; going offline does not say `offline` over it.
      The session is a whole one, so a file beside a document is still read when it is opened.
      A batch the run was already writing is written whole with its cursor, so nothing is half-applied.
-     An op whose request was aborted counts no attempt: the engine is given the session's signal (`SyncEngineOptions.signal`), and a failure once it is aborted is no evidence against the op, so its push asks nothing more.
-     An op given up on for a reason of its own stays so through the pause, and the paused status still names it (`stuck`).
+     An op whose request was aborted counts no attempt: the engine is given the session's signal (`SyncEngineOptions.signal`), and a failure once it is aborted is no evidence against the op, so its push starts no further op.
+     An op given up on for a reason of its own stays so through the pause, and a sync paused while it was stuck still names the op (`stuck`).
      Until 2026-11-16 the pause gave every op its attempts back once the run let go, which wiped one given up on for a reason of its own, and could wipe what a run resumed meanwhile had counted (skysa-kit#20, item 3).
      It lasts until the user asks again — a sync now, or a re-scan — or the source is shown again after another, or the app is opened again: in memory only, so a reload never leaves a device unsyncing without its user there to see it.
    - **What stands against syncing is said until something answers it (2026-11-15).**

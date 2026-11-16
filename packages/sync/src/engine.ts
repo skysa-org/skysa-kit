@@ -103,7 +103,8 @@ export interface SyncEngineOptions {
 	 * Aborted when the caller lets the engine go — a pause, a cancel, another
 	 * source shown — and with it every request it had out. A failure from then
 	 * on is no evidence against the op it was for: no attempt is counted, and
-	 * nothing more is asked of the provider in that push.
+	 * the push starts no further op. A request already started is the
+	 * provider's to stop, which the caller gives the same signal.
 	 */
 	signal?: AbortSignal;
 	/** Injected so conflict filenames are deterministic in tests. */

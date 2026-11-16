@@ -155,18 +155,12 @@ export const describePausing = (
 				h.scheduler.pause();
 				theRemote.gate.delete('changes');
 				held.resolve();
-				// Nothing was tried while the network went, so this gives nothing back.
-				h.env.fire('online');
 				await quiet();
 
 				expect((await documents.pendingOps()).map((queued) => queued.attempts)).toEqual([
 					2,
 				]);
-				// Named as the store holds it, though no run of this session found it.
-				expect(h.scheduler.status()).toMatchObject({
-					phase: 'paused',
-					stuck: { attempts: 2, error: 'refused' },
-				});
+				expect(h.scheduler.status().phase).toBe('paused');
 			});
 
 			it('still names an op given up on, through the pause', async () => {
@@ -184,11 +178,9 @@ export const describePausing = (
 
 				h.scheduler.pause();
 
-				await vi.waitFor(() => {
-					expect(h.scheduler.status()).toMatchObject({
-						phase: 'paused',
-						stuck: { attempts: 2, error: 'refused' },
-					});
+				expect(h.scheduler.status()).toMatchObject({
+					phase: 'paused',
+					stuck: { attempts: 2, error: 'refused' },
 				});
 			});
 

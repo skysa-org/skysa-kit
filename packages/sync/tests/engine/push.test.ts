@@ -867,10 +867,11 @@ describe('push', () => {
 		const op = world.store.queue({ op: 'write', noteId: 'n1', path: 'a.md' });
 		world.provider.setFault((call) => (call.op === 'write' ? new Error('offline') : undefined));
 
-		await world.engine.push();
+		const result = await world.engine.push();
 
 		expect(world.store.ops()[0]?.attempts).toBe(1);
 		expect(world.store.lastError(op.seq)).toBe('offline');
+		expect(result).toMatchObject({ status: 'retry', error: 'offline' });
 	});
 
 	it('gives up on an op that has failed too many times', async () => {
