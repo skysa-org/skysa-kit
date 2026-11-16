@@ -65,5 +65,6 @@ export {
 	type SyncScheduler,
 	type SyncSchedulerOptions,
 } from './sync/scheduler.js';
+export { browserTabs, type TabChannel, type TabMessage } from './sync/tabs.js';
 export type { TokenStates } from './sync/tokens.js';
 export { keepAwakeWhileSyncing } from './sync/wakeLock.js';

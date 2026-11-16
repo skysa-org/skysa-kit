@@ -1,8 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { SYNC_WAIT_MS } from '../../src/sync/scheduler.js';
+import { fakeEnvironment } from '../support/fakes/environment.js';
+import { fakeTabs } from '../support/fakes/tabs.js';
 import { type ClientDevice, fileOf } from './device.js';
 import {
+	cleanups,
 	DEBOUNCE,
 	deferred,
 	type Harness,
@@ -10,6 +13,7 @@ import {
 	quiet,
 	reaches,
 	remote,
+	schedulerDefaults,
 	started,
 	stopSchedulers,
 } from './schedulerHarness.js';
@@ -246,6 +250,146 @@ export const describePausing = (
 		 * up here as the device is by another tab (`ClientDevice.holdUp`), or behind
 		 * another tab's run holding the sync's lock.
 		 */
+		describe('pausing, in every tab of the app', () => {
+			/**
+			 * Tabs of the app on one device: one remote, one token server, the
+			 * device's locks, and a channel between them (`SchedulerEnvironment.tabs`).
+			 */
+			const tabsOf = async (delivery?: 'later' | 'at once') => {
+				const device = await bound();
+				const hub = fakeTabs(delivery);
+				const first = schedulerDefaults();
+				const tab = () => {
+					const env = fakeEnvironment();
+					const scheduler = device.schedule({
+						...first.options,
+						environment: {
+							...env.environment,
+							withLock: first.env.environment.withLock,
+							tabs: hub.open,
+						},
+					});
+					cleanups.unshift(() => {
+						scheduler.stop();
+					});
+					scheduler.start();
+					return { scheduler, env };
+				};
+				return { device, hub, remote: first.remote, tab };
+			};
+
+			it('pauses every tab that shows the source, and asking again in one ends it in all', async () => {
+				const { device, hub, remote: theRemote, tab } = await tabsOf();
+				const one = tab();
+				const two = tab();
+				await reaches(one.scheduler, 'idle');
+				await reaches(two.scheduler, 'idle');
+
+				one.scheduler.pause();
+
+				await reaches(two.scheduler, 'paused');
+				// Heard there, and not told again.
+				expect(hub.told.filter((message) => message.kind === 'paused')).toHaveLength(1);
+				// A change made in either is kept here, as the apps say.
+				const note = await device.create('c1', 'Kept', 'kept here\n');
+				const before = theRemote.pulls();
+				[one, two].forEach(({ env }) => {
+					env.advance(DEBOUNCE);
+					env.fire('focus');
+					env.advance(INTERVAL);
+				});
+				await quiet();
+				expect(theRemote.pulls()).toBe(before);
+				expect(theRemote.fake.contentAt(note.path)).toBeUndefined();
+
+				await two.scheduler.syncNow();
+
+				expect(theRemote.fake.contentAt(note.path)).toContain('kept here');
+				await reaches(one.scheduler, 'idle');
+				expect(two.scheduler.status().phase).toBe('idle');
+			});
+
+			it('pauses a tab opened while another is paused', async () => {
+				const { remote: theRemote, tab } = await tabsOf();
+				const one = tab();
+				await reaches(one.scheduler, 'idle');
+				one.scheduler.pause();
+
+				const two = tab();
+
+				await reaches(two.scheduler, 'paused');
+				const before = theRemote.pulls();
+				two.env.fire('focus');
+				two.env.advance(INTERVAL);
+				await quiet();
+				expect(theRemote.pulls()).toBe(before);
+				expect(two.scheduler.status().phase).toBe('paused');
+				// Told again as a third asks, a paused tab is left as it is.
+				const said: string[] = [];
+				[one, two].forEach(({ scheduler }) => {
+					scheduler.subscribe((next) => said.push(next.phase));
+				});
+				const three = tab();
+				await reaches(three.scheduler, 'paused');
+				await quiet();
+				expect(said).toEqual([]);
+			});
+
+			it('pauses a tab opened while another is paused, told before it reads what the app shows', async () => {
+				const { remote: theRemote, tab } = await tabsOf('at once');
+				const one = tab();
+				await reaches(one.scheduler, 'idle');
+				one.scheduler.pause();
+				const before = theRemote.pulls();
+
+				const two = tab();
+
+				await reaches(two.scheduler, 'paused');
+				await quiet();
+				expect(theRemote.pulls()).toBe(before);
+			});
+
+			it('leaves a tab alone that another source is paused or resumed in, and answers no ask unpaused', async () => {
+				const { hub, remote: theRemote, tab } = await tabsOf();
+				const one = tab();
+				await reaches(one.scheduler, 'idle');
+				const other = hub.open(() => undefined);
+
+				other.tell({ kind: 'paused', connectionId: 'c2' });
+				other.tell({ kind: 'asking' });
+				await quiet();
+
+				expect(one.scheduler.status().phase).toBe('idle');
+				expect(hub.told.filter((message) => message.kind === 'paused')).toHaveLength(1);
+
+				one.scheduler.pause();
+				other.tell({ kind: 'resumed', connectionId: 'c2' });
+				await quiet();
+				const before = theRemote.pulls();
+				one.env.fire('focus');
+				one.env.advance(INTERVAL);
+				await quiet();
+
+				expect(theRemote.pulls()).toBe(before);
+				expect(one.scheduler.status().phase).toBe('paused');
+			});
+
+			it('hears no other tab once stopped', async () => {
+				const { hub, tab } = await tabsOf();
+				const one = tab();
+				const two = tab();
+				await reaches(two.scheduler, 'idle');
+				expect(hub.openCount()).toBe(2);
+
+				two.scheduler.stop();
+
+				expect(hub.openCount()).toBe(1);
+				one.scheduler.pause();
+				await quiet();
+				expect(two.scheduler.status().phase).not.toBe('paused');
+			});
+		});
+
 		describe('a run held up on another tab', () => {
 			/** Held up, and the scheduler told: the same wait a moment later, and timed. */
 			const waitedOn = async (h: Harness) => {

@@ -23,6 +23,7 @@ import {
 import type { ApiClient, Denial, Refusal } from '../api/client.js';
 import type { CredentialStore } from '../store/credentials.js';
 import type { RelayFactory, RelayLink } from './relay.js';
+import { browserTabs, type TabChannel, type TabMessage } from './tabs.js';
 import { createTokenSource, type Refused, type TokenSource, type TokenStates } from './tokens.js';
 
 /**
@@ -168,9 +169,15 @@ export interface SchedulerEnvironment {
 	 * holds it — another tab included.
 	 */
 	readonly withLock: <T>(name: string, work: () => Promise<T>) => Promise<T>;
+	/**
+	 * The app's other tabs on this origin, opened as the scheduler starts with
+	 * what to call when one tells, and closed as it stops, for a pause to be
+	 * the device's (`pause`). Absent, a pause is this tab's alone.
+	 */
+	readonly tabs?: (heard: (message: TabMessage) => void) => TabChannel;
 }
 
-/** The browser's clock, network, visibility and locks. */
+/** The browser's clock, network, visibility, locks and other tabs. */
 export const browserEnvironment = (): SchedulerEnvironment => ({
 	now: Date.now,
 	isOnline: () => navigator.onLine,
@@ -193,6 +200,9 @@ export const browserEnvironment = (): SchedulerEnvironment => ({
 	// one run at a time per tab, which is what the scheduler promises anyway.
 	// https://developer.mozilla.org/en-US/docs/Web/API/Web_Locks_API
 	withLock: (name, work) => ('locks' in navigator ? navigator.locks.request(name, work) : work()),
+	// A browser without BroadcastChannel pauses each tab alone.
+	// https://developer.mozilla.org/en-US/docs/Web/API/BroadcastChannel
+	...(typeof BroadcastChannel === 'undefined' ? {} : { tabs: browserTabs }),
 });
 
 interface ProviderInput {
@@ -428,7 +438,11 @@ export interface SyncScheduler {
 	/**
 	 * Stop the run under way and start no other until the user asks — Sync now
 	 * or a re-scan — or the source is shown again after another, or the app is
-	 * opened again: the status says `paused` meanwhile. The run's requests are
+	 * opened again with no other tab of it still paused: the status says
+	 * `paused` meanwhile. The pause is the device's: every tab of the app that
+	 * shows the source pauses with it, one opened meanwhile is paused too, and
+	 * asking again in any of them ends it in all (`SchedulerEnvironment.tabs`).
+	 * The run's requests are
 	 * aborted, and count no attempt against the ops they were for; a batch it
 	 * was already writing is written whole, its cursor with it, so nothing is
 	 * lost and nothing is applied in part. Files beside notes are still read
@@ -578,6 +592,8 @@ export const createSyncScheduler = (options: SyncSchedulerOptions): SyncSchedule
 	/** The connection the user has paused (`pause`), until they ask again. */
 	const pausedFor = cell<string | undefined>(undefined);
 	const isPaused = (connectionId: string): boolean => pausedFor.current === connectionId;
+	/** The app's other tabs, while started (`SchedulerEnvironment.tabs`). */
+	const tabs = cell<TabChannel | undefined>(undefined);
 	const generations = cell(0);
 	const timers = new Map<Timer, () => void>();
 	const unsubscribers = new Set<() => void>();
@@ -1433,9 +1449,57 @@ export const createSyncScheduler = (options: SyncSchedulerOptions): SyncSchedule
 		});
 	};
 
-	/** The user asking again: a pause of this session's connection is over. */
+	/** The user asking again: a pause of this session's connection is over, in every tab. */
 	const resume = (session: Session) => {
-		if (isPaused(session.connectionId)) pausedFor.current = undefined;
+		if (!isPaused(session.connectionId)) return;
+		pausedFor.current = undefined;
+		tabs.current?.tell({ kind: 'resumed', connectionId: session.connectionId });
+	};
+
+	/** The shown session paused, by this tab's user or another's (`pause`). */
+	const pauseShown = (session: Session) => {
+		pausedFor.current = session.connectionId;
+		const { conflicts } = status();
+		// A session of its own, as `halt` makes one: ending this one aborts
+		// every request the run has out, and the next is made paused, so it
+		// runs nothing and still reads a file beside a note when it is opened.
+		// What stands against the connection stands through it (`accounts`).
+		endSession();
+		follow(shown.current);
+		if (bound.current === undefined) return;
+		// The copies the last sync wrote are still on the device to be seen.
+		// No attempt is given back: a send the pause aborted counted none
+		// against its op (the engine's `signal`), and an op given up on for a
+		// reason of its own stays so.
+		if (conflicts.length > 0) publish({ ...status(), conflicts });
+	};
+
+	/** What another tab of the app told (`tabs.ts`): its pauses are this tab's too. */
+	const heard = (message: TabMessage) => {
+		if (message.kind === 'asking') {
+			// A tab just opened, which is to be paused as the device is.
+			const paused = pausedFor.current;
+			if (paused !== undefined) tabs.current?.tell({ kind: 'paused', connectionId: paused });
+			return;
+		}
+		const { connectionId } = message;
+		const session = bound.current;
+		if (message.kind === 'resumed') {
+			// Asked again there, which gave the attempts back in the store the
+			// tabs share: here it only runs again.
+			if (!isPaused(connectionId)) return;
+			pausedFor.current = undefined;
+			if (session?.connectionId === connectionId) void run(session);
+			return;
+		}
+		if (isPaused(connectionId)) return;
+		if (session?.connectionId === connectionId) {
+			pauseShown(session);
+			return;
+		}
+		// Not following what the app shows yet, as a tab just opened is not:
+		// the session it makes for the connection is made paused (`follow`).
+		if (shown.current === undefined) pausedFor.current = connectionId;
 	};
 
 	/** Settles once the session has no run in flight, however many follow each other. */
@@ -1522,6 +1586,16 @@ export const createSyncScheduler = (options: SyncSchedulerOptions): SyncSchedule
 					publish({ ...status(), phase: 'offline', error: undefined });
 				})
 			);
+			// Last, so what a paused tab answers finds this one listening.
+			const channel = environment.tabs?.(heard);
+			if (channel !== undefined) {
+				tabs.current = channel;
+				unsubscribers.add(() => {
+					tabs.current = undefined;
+					channel.close();
+				});
+				channel.tell({ kind: 'asking' });
+			}
 		},
 
 		stop: () => {
@@ -1571,21 +1645,8 @@ export const createSyncScheduler = (options: SyncSchedulerOptions): SyncSchedule
 		pause: () => {
 			const session = bound.current;
 			if (session === undefined) return;
-			pausedFor.current = session.connectionId;
-			const { conflicts } = status();
-			// A session of its own, as `halt` makes one: ending this one aborts
-			// every request the run has out, and the next is made paused, so
-			// it runs nothing and still reads a file beside a note when it is
-			// opened. What stands against the connection stands through it
-			// (`accounts`).
-			endSession();
-			follow(shown.current);
-			if (bound.current === undefined) return;
-			// The copies the last sync wrote are still on the device to be seen.
-			// No attempt is given back: a send the pause aborted counted none
-			// against its op (the engine's `signal`), and an op given up on for
-			// a reason of its own stays so.
-			if (conflicts.length > 0) publish({ ...status(), conflicts });
+			pauseShown(session);
+			tabs.current?.tell({ kind: 'paused', connectionId: session.connectionId });
 		},
 		status,
 
