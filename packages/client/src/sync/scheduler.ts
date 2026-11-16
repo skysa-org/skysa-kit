@@ -408,11 +408,14 @@ interface SessionLink {
  * (`attach`). Each is optional, and none is waited for.
  */
 export interface Companion {
-	/** A session started syncing the connection: not one started paused. */
+	/**
+	 * A session started syncing the connection: not one made paused, until
+	 * its pause is over.
+	 */
 	readonly started?: (connectionId: string) => void;
 	/** A run of the connection's came to `outcome`, and the status says so. */
 	readonly synced?: (connectionId: string, outcome: SyncOutcome) => void;
-	/** The session ended: anything armed for it goes with it. */
+	/** A session it was told started ended: anything armed for it goes with it. */
 	readonly ended?: (connectionId: string) => void;
 }
 
@@ -437,17 +440,17 @@ export interface SyncScheduler {
 	readonly syncNow: () => Promise<void>;
 	/**
 	 * Stop the run under way and start no other until the user asks — Sync now
-	 * or a re-scan — or the source is shown again after another, or the app is
-	 * opened again with no other tab of it still paused: the status says
-	 * `paused` meanwhile. The pause is the device's
+	 * or a re-scan — or the source is shown again after another in every tab
+	 * that is paused, or the app is opened again with no other tab of it still
+	 * paused: the status says `paused` meanwhile. The pause is the device's
 	 * (`SchedulerEnvironment.sharedPause`): every tab of the app that shows the
 	 * source pauses with it, one opened meanwhile finds it paused, and asking
 	 * again in any of them ends it in all. `thisTab` pauses this tab alone, as
-	 * making way for an update does (`beforeUpdate.ts`). The run's requests are
-	 * aborted, and count no attempt against the ops they were for; a batch it
-	 * was already writing is written whole, its cursor with it, so nothing is
-	 * lost and nothing is applied in part. Files beside notes are still read
-	 * when they are opened.
+	 * making way for an update does (`beforeUpdate.ts`), and asking again in
+	 * another tab does not end it. The run's requests are aborted, and count no
+	 * attempt against the ops they were for; a batch it was already writing is
+	 * written whole, its cursor with it, so nothing is lost and nothing is
+	 * applied in part. Files beside notes are still read when they are opened.
 	 */
 	readonly pause: (options?: Readonly<{ thisTab?: boolean }>) => void;
 	readonly status: () => SchedulerStatus;
@@ -523,6 +526,12 @@ interface Session {
 	readonly abort: AbortController;
 	/** Absent with no relay, and for a session that has nothing to sync with. */
 	readonly relay: RelayLink | undefined;
+	/**
+	 * Its companions were told it started (`tellStarted`), and so are told it
+	 * ended: not a session made paused and never resumed, nor one ended
+	 * before its first run looked at the device's pause.
+	 */
+	readonly begun: Cell<boolean>;
 }
 
 /** What one run came to, before it is turned into a status. */
@@ -590,9 +599,16 @@ export const createSyncScheduler = (options: SyncSchedulerOptions): SyncSchedule
 
 	/** The session for the connection that is bound, if one is. */
 	const bound = cell<Session | undefined>(undefined);
-	/** The connection the user has paused (`pause`), until they ask again. */
-	const pausedFor = cell<string | undefined>(undefined);
-	const isPaused = (connectionId: string): boolean => pausedFor.current === connectionId;
+	/**
+	 * The user's pause (`pause`), until they ask again: the connection, whether
+	 * it is the device's, which this tab holds a part in, and whether it is
+	 * this tab's own as well (`thisTab`), which asking again elsewhere leaves.
+	 */
+	const paused = cell<
+		Readonly<{ connectionId: string; device: boolean; alone: boolean }> | undefined
+	>(undefined);
+	const isPaused = (connectionId: string): boolean =>
+		paused.current?.connectionId === connectionId;
 	/** The pause the app's tabs share, while started (`SchedulerEnvironment.sharedPause`). */
 	const shared = cell<SharedPause | undefined>(undefined);
 	/** The way to let go of this tab's part in the device's pause, while it holds one. */
@@ -1025,6 +1041,7 @@ export const createSyncScheduler = (options: SyncSchedulerOptions): SyncSchedule
 		// Paused in another tab, whose word this one may not have had.
 		const pause = shared.current;
 		if (pause !== undefined && !(await mayRun(pause, session))) return;
+		tellStarted(session);
 		const { provider, engine } = session;
 		if (provider === undefined || engine === undefined) {
 			// Nothing to say of it here: the app knows which providers it syncs,
@@ -1081,7 +1098,7 @@ export const createSyncScheduler = (options: SyncSchedulerOptions): SyncSchedule
 		const ending = bound.current;
 		ending?.abort.abort();
 		bound.current = undefined;
-		if (ending === undefined) return;
+		if (ending?.begun.current !== true) return;
 		companions.forEach((companion) => {
 			companion.ended?.(ending.connectionId);
 		});
@@ -1371,10 +1388,12 @@ export const createSyncScheduler = (options: SyncSchedulerOptions): SyncSchedule
 		// here, on every change of the row, so a session running when its source
 		// is detached ends there, and one starts when it is connected again.
 		const state = toSync(showing);
-		// Another source shown, or none, ends a pause: showing a source is what
-		// syncs it, and coming back to it is asking again.
+		// Another source shown, or none, ends a pause, and this tab's part in
+		// the device's: showing a source is what syncs it, and coming back to it
+		// is asking again. Another tab that never showed the other keeps its
+		// part, and with it the pause.
 		if (state === undefined || !isPaused(state.connectionId)) {
-			pausedFor.current = undefined;
+			paused.current = undefined;
 			letGo();
 		}
 		const active = bound.current;
@@ -1434,6 +1453,7 @@ export const createSyncScheduler = (options: SyncSchedulerOptions): SyncSchedule
 			renewed: cell(false),
 			stuck: cell<StuckOp | undefined>(undefined),
 			abort,
+			begun: cell(false),
 			relay:
 				provider === undefined
 					? undefined
@@ -1450,41 +1470,54 @@ export const createSyncScheduler = (options: SyncSchedulerOptions): SyncSchedule
 		bound.current = session;
 		const { relay } = session;
 		if (relay !== undefined) sessionUnsubscribers.add(relay.close);
-		const paused = isPaused(connectionId);
-		publish({ phase: paused ? 'paused' : 'idle', lastSyncAt: state.lastSyncAt, conflicts: [] });
+		const pausedHere = isPaused(connectionId);
+		publish({
+			phase: pausedHere ? 'paused' : 'idle',
+			lastSyncAt: state.lastSyncAt,
+			conflicts: [],
+		});
 		watchEdits(session);
-		if (paused) return;
-		const pause = shared.current;
-		if (pause === undefined) {
-			begin(session);
+		if (!pausedHere) {
+			void run(session);
 			return;
 		}
-		// Its companions are not told it started while another tab holds the
-		// device paused: they would sync.
-		void mayRun(pause, session).then((may) => {
-			if (may) begin(session);
-		});
+		// The device's pause, which this tab holds a part in again as it starts
+		// (`stop`).
+		if (paused.current?.device === true) holdPause(connectionId);
 	};
 
-	const begin = (session: Session) => {
-		void run(session);
+	/** Its companions told the session syncs, once (`Session.begun`). */
+	const tellStarted = (session: Session) => {
+		if (session.begun.current) return;
+		session.begun.current = true;
 		companions.forEach((companion) => {
 			companion.started?.(session.connectionId);
 		});
 	};
 
 	/**
-	 * Whether the session may sync, or another tab holds the device paused
-	 * (`SharedPause`), and this one pauses with it. Asked as a session starts,
-	 * as each run does, and as another tab says it paused, so a tab opened
-	 * meanwhile finds it, and one whose word comes late finds it over.
+	 * Whether the session may sync: not while another tab holds the device
+	 * paused (`SharedPause`), when this tab joins the pause. Asked as each run
+	 * starts, a session's first included, and as another tab says it paused,
+	 * so a tab opened meanwhile, or one that missed the word, finds it.
 	 */
 	const mayRun = async (pause: SharedPause, session: Session): Promise<boolean> => {
-		const held = await pause.held(pauseName(session.connectionId));
-		// Paused here, or another session made, while the lock was asked.
-		if (!isCurrent(session) || isPaused(session.connectionId)) return false;
-		if (!held) return true;
-		pauseShown(session);
+		const name = pauseName(session.connectionId);
+		if (await pause.held(name)) {
+			const release = await pause.join(name, endedElsewhere);
+			if (release !== undefined) return joined(session, release);
+		}
+		// Another session made meanwhile, paused or not, looks for itself: a
+		// session is made anew as it is paused.
+		return isCurrent(session);
+	};
+
+	/** This tab's part in the device's pause, joined: it pauses with it, unless it moved on. */
+	const joined = (session: Session, release: () => void): false => {
+		if (isCurrent(session)) {
+			part.current = release;
+			pauseShown(session, { device: true, alone: false });
+		} else release();
 		return false;
 	};
 
@@ -1492,9 +1525,7 @@ export const createSyncScheduler = (options: SyncSchedulerOptions): SyncSchedule
 	const holdPause = (connectionId: string) => {
 		const pause = shared.current;
 		if (pause === undefined || part.current !== undefined) return;
-		part.current = pause.hold(pauseName(connectionId), () => {
-			endedElsewhere();
-		});
+		part.current = pause.hold(pauseName(connectionId), endedElsewhere);
 	};
 
 	const letGo = () => {
@@ -1504,16 +1535,23 @@ export const createSyncScheduler = (options: SyncSchedulerOptions): SyncSchedule
 
 	/**
 	 * Asked again in another tab, which gave the attempts back in the store the
-	 * tabs share: the pause is over here too. That tab ran the round its user
-	 * asked for, so a tab out of sight waits to come into sight to run, as it
-	 * waits after a minute it let go by (`armInterval`).
+	 * tabs share and ran the round its user asked for: the pause is over here
+	 * too, unless it is this tab's own as well (`thisTab`). The tab syncs again
+	 * at its next minute, or as it comes into sight, rather than run a round
+	 * of its own beside that one.
 	 */
 	const endedElsewhere = () => {
+		part.current = undefined;
 		const session = bound.current;
 		if (session === undefined) return;
+		const was = paused.current;
+		if (was?.alone === true) {
+			paused.current = { ...was, device: false };
+			return;
+		}
 		resume(session);
-		if (environment.isVisible()) void run(session);
-		else publish({ ...status(), phase: 'idle' });
+		publish({ ...status(), phase: environment.isOnline() ? 'idle' : 'offline' });
+		armInterval(session);
 	};
 
 	/**
@@ -1523,11 +1561,8 @@ export const createSyncScheduler = (options: SyncSchedulerOptions): SyncSchedule
 	 */
 	const resume = (session: Session) => {
 		letGo();
-		if (!isPaused(session.connectionId)) return;
-		pausedFor.current = undefined;
-		companions.forEach((companion) => {
-			companion.started?.(session.connectionId);
-		});
+		paused.current = undefined;
+		tellStarted(session);
 	};
 
 	/** And in every tab, each told as its part ends (`SharedPause.end`). */
@@ -1537,11 +1572,11 @@ export const createSyncScheduler = (options: SyncSchedulerOptions): SyncSchedule
 
 	/**
 	 * The shown session paused, by this tab's user or another's (`pause`,
-	 * `mayRun`), and on the device unless `thisTab`.
+	 * `joined`): on the device, where this tab holds a part, and in this tab
+	 * alone.
 	 */
-	const pauseShown = (session: Session, options?: Readonly<{ thisTab?: boolean }>) => {
-		pausedFor.current = session.connectionId;
-		if (options?.thisTab !== true) holdPause(session.connectionId);
+	const pauseShown = (session: Session, how: Readonly<{ device: boolean; alone: boolean }>) => {
+		paused.current = { connectionId: session.connectionId, ...how };
 		const { conflicts } = status();
 		// A session of its own, as `halt` makes one: ending this one aborts
 		// every request the run has out, and the next is made paused, so it
@@ -1561,7 +1596,8 @@ export const createSyncScheduler = (options: SyncSchedulerOptions): SyncSchedule
 	const heard = () => {
 		const pause = shared.current;
 		const session = bound.current;
-		if (pause !== undefined && session !== undefined) void mayRun(pause, session);
+		if (pause === undefined || session === undefined || isPaused(session.connectionId)) return;
+		void mayRun(pause, session);
 	};
 
 	/** Settles once the session has no run in flight, however many follow each other. */
@@ -1667,9 +1703,8 @@ export const createSyncScheduler = (options: SyncSchedulerOptions): SyncSchedule
 			endSession();
 			// Each connection's account with it: started again, it asks afresh.
 			accounts.clear();
-			// And the pause: started again, it finds the device's.
+			// Its part in the device's pause too, taken again as it starts.
 			letGo();
-			pausedFor.current = undefined;
 		},
 
 		resync: async () => {
@@ -1714,7 +1749,12 @@ export const createSyncScheduler = (options: SyncSchedulerOptions): SyncSchedule
 		pause: (options) => {
 			const session = bound.current;
 			if (session === undefined) return;
-			pauseShown(session, options);
+			const alone = options?.thisTab === true;
+			const was = isPaused(session.connectionId) ? paused.current : undefined;
+			pauseShown(session, {
+				device: !alone || was?.device === true,
+				alone: alone || was?.alone === true,
+			});
 		},
 		status,
 
