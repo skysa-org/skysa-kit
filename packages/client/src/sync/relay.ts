@@ -20,8 +20,9 @@ import { credentialFor, type CredentialStore } from '../store/credentials.js';
  * made in the storage folder by anything else, and a socket that is down, or an
  * instance that runs none, must never be a reason a note does not arrive. So
  * nothing here reports a failure to anyone; it waits, and tries again, unless
- * the relay has never once been heard from this page and its sockets keep
- * failing, when it stops for the session (`RELAY_GIVE_UP`).
+ * the browser will not open a socket, or the relay has not once been heard in
+ * this session and its sockets keep failing, when it stops for the session
+ * (`RELAY_GIVE_UP`).
  *
  * Open only while the app is in front of the user and online. A hidden tab
  * gives its socket up — the poll it goes back to on coming forward covers
@@ -94,9 +95,8 @@ export const RELAY_PONG_MS = 10_000;
 export const RELAY_RETRY_MS = 1000;
 export const RELAY_MAX_RETRY_MS = 60_000;
 /**
- * Sockets in a row lost before the relay said anything on them, or that the
- * browser would not open, at which a link that has never heard the relay
- * stops for the session: half a minute or so of the backoff. A browser that
+ * Sockets in a row lost before the relay said anything on them, at which a
+ * link that has never heard the relay stops for the session. A browser that
  * refuses the socket — one before CSP Level 3, where `connect-src 'self'`
  * does not cover a same-origin `wss:` — or a proxy that takes the upgrade and
  * passes no frames would otherwise have it ask for a ticket every minute for
@@ -104,9 +104,9 @@ export const RELAY_MAX_RETRY_MS = 60_000;
  *
  * A server refusing the upgrade loses the socket before anything is heard
  * too, and the page cannot tell that apart. So a session begun while the
- * upgrade fails for that long gives up as well, and the next session tries
- * again. One that has heard the relay never gives up: a deploy closes sockets
- * that were heard.
+ * upgrade keeps failing gives up as well, and the next session tries again.
+ * One that has heard the relay never gives up on a failed socket: a deploy
+ * closes sockets that were heard.
  */
 export const RELAY_GIVE_UP = 6;
 /**
@@ -213,9 +213,8 @@ export const createRelayLink = (options: RelayLinkOptions): RelayLink => {
 	};
 
 	/**
-	 * A socket lost, or one the browser would not open: tried again, unless the
-	 * relay has never been heard in this session and this is the last of
-	 * `RELAY_GIVE_UP` in a row.
+	 * A socket lost: tried again, unless the relay has never been heard in this
+	 * session and this is the last of `RELAY_GIVE_UP` in a row.
 	 */
 	const socketFailed = () => {
 		if (!flags.has('reached')) {
@@ -328,17 +327,11 @@ export const createRelayLink = (options: RelayLinkOptions): RelayLink => {
 					if (mine()) lost(code);
 				},
 			});
-		} catch (error) {
-			// The page's policy refuses the socket, as it will for as long as the
-			// page is open; or the browser would not open the URL. By name, since
-			// a `DOMException` need not be this realm's `Error`.
-			const policy =
-				typeof error === 'object' &&
-				error !== null &&
-				'name' in error &&
-				error.name === 'SecurityError';
-			if (policy) stop();
-			else socketFailed();
+		} catch {
+			// The page's policy refuses the socket (a `SecurityError`), or the
+			// browser the URL (a `SyntaxError`), as each will for as long as the
+			// page is open.
+			stop();
 		}
 	};
 

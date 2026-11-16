@@ -962,10 +962,10 @@ Any other value boots, with a warning to remove it.
 
 Where the operator turns it on, a device that has pushed tells the API and the API tells the connection's other devices, which then pull; it carries that something changed, and nothing else.
 A device's link to it is only a hint, and polling goes on whatever becomes of it: after a failure it tries again, after a wait that doubles from about a second up to a minute.
-It stops for the session where the relay cannot be reached from the page: at once on a `SecurityError` from opening a socket, and after six sockets in a row lost before the relay said anything, or that the browser would not open, where it has never been heard in the session (`RELAY_GIVE_UP`).
+It stops for the session where the relay cannot be reached from the page: at once where the browser will not open a socket at all (it throws), and after six sockets in a row lost before the relay said anything, where it has never been heard in the session (`RELAY_GIVE_UP`).
 A browser from before CSP Level 3 refuses a same-origin `wss:` under `connect-src 'self'`, and a proxy may take the upgrade and pass no frames; either would otherwise have the link ask for a ticket every minute for as long as the app is in view.
-A server refusing the upgrade loses the socket unheard too, and the page cannot tell that apart, so a session begun while the upgrade fails for half a minute or so gives up as well; the next session tries again.
-A link that has heard the relay never gives up, so a deploy, which closes sockets that were heard, does not end it.
+A server refusing the upgrade loses the socket unheard too, and the page cannot tell that apart, so a session begun while the upgrade keeps failing gives up as well; the next session tries again.
+A link that has heard the relay never gives up on a failed socket, so a deploy, which closes sockets that were heard, does not end it.
 The decision record is [`decisions/0003-change-relay.md`](decisions/0003-change-relay.md).
 
 

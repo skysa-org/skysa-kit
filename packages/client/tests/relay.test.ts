@@ -107,11 +107,20 @@ const linked = (overrides: Partial<RelayLinkOptions> = {}) => {
 	return { link, env, ticket, onChanged, ...sockets };
 };
 
-/** Lost before the relay said anything, `times` over, each asking for the next ticket. */
-const refused = async (h: ReturnType<typeof linked>, times: number) => {
+/**
+ * Each socket lost by `fail` before the relay said anything, `times` over,
+ * each asking for the next ticket. Closed before it opened, unless told.
+ */
+const refused = async (
+	h: ReturnType<typeof linked>,
+	times: number,
+	fail = (socket: FakeSocket) => {
+		socket.events.closed(1006);
+	}
+) => {
 	for (const _attempt of Array.from({ length: times })) {
 		await settled();
-		h.last().events.closed(1006);
+		fail(h.last());
 		h.env.advance(Math.max(0, ...h.env.pending()));
 	}
 };
@@ -471,6 +480,8 @@ describe('the relay link', () => {
 
 		h.env.set({ visible: false });
 		h.env.set({ visible: true });
+		h.env.set({ online: false });
+		h.env.set({ online: true });
 		h.link.pushed();
 		await settled();
 
@@ -479,50 +490,39 @@ describe('the relay link', () => {
 
 	it('gives up the same way on sockets that open and are never heard', async () => {
 		const h = linked();
-		for (const _attempt of Array.from({ length: RELAY_GIVE_UP })) {
-			await settled();
+		await refused(h, RELAY_GIVE_UP, (socket) => {
 			// Taken through the upgrade by something that passes no frames.
-			h.last().events.opened();
+			socket.events.opened();
 			h.env.advance(RELAY_PONG_MS);
-			h.env.advance(Math.max(0, ...h.env.pending()));
-		}
+		});
 		await settled();
 
 		expect(h.ticket).toHaveBeenCalledTimes(RELAY_GIVE_UP);
 		expect(h.env.pending()).toEqual([]);
 	});
 
-	it('gives up the same way on a URL the browser will not open', async () => {
-		const h = linked({
-			open: () => {
-				throw new SyntaxError('bad URL');
-			},
-		});
-		for (const _attempt of Array.from({ length: RELAY_GIVE_UP })) {
+	it('gives up for the session at once where the browser will not open the socket at all', async () => {
+		for (const refusal of [
+			new DOMException('Refused by the page’s policy.', 'SecurityError'),
+			new SyntaxError('bad URL'),
+		]) {
+			const h = linked({
+				open: () => {
+					throw refusal;
+				},
+			});
 			await settled();
-			h.env.advance(Math.max(0, ...h.env.pending()));
+			expect(h.env.pending()).toEqual([]);
+
+			h.env.set({ visible: false });
+			h.env.set({ visible: true });
+			h.env.set({ online: false });
+			h.env.set({ online: true });
+			h.link.pushed();
+			await settled();
+
+			expect(h.ticket).toHaveBeenCalledOnce();
 		}
-		await settled();
-
-		expect(h.ticket).toHaveBeenCalledTimes(RELAY_GIVE_UP);
-		expect(h.env.pending()).toEqual([]);
-	});
-
-	it('gives up for the session at once where the page’s policy refuses the socket', async () => {
-		const h = linked({
-			open: () => {
-				throw new DOMException('Refused by the page’s policy.', 'SecurityError');
-			},
-		});
-		await settled();
-		expect(h.env.pending()).toEqual([]);
-
-		h.env.set({ visible: false });
-		h.env.set({ visible: true });
-		h.link.pushed();
-		await settled();
-
-		expect(h.ticket).toHaveBeenCalledOnce();
 	});
 
 	it('never gives up once it has heard the relay in this session', async () => {
@@ -552,17 +552,6 @@ describe('the relay link', () => {
 
 		expect(h.ticket).toHaveBeenCalledTimes(RELAY_GIVE_UP + 2);
 		expect(h.env.pending()).toEqual([]);
-	});
-
-	it('tries again when the browser will not open the socket at all', async () => {
-		const h = linked({
-			open: () => {
-				throw new SyntaxError('bad URL');
-			},
-		});
-		await settled();
-
-		expect(h.env.pending()).toEqual([RELAY_RETRY_MS]);
 	});
 });
 
