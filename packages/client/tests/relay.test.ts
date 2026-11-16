@@ -7,6 +7,7 @@ import {
 	createRelayFactory,
 	createRelayLink,
 	type OpenRelaySocket,
+	RELAY_GIVE_UP,
 	RELAY_MAX_RETRY_MS,
 	RELAY_PING_MS,
 	RELAY_PONG_MS,
@@ -104,6 +105,24 @@ const linked = (overrides: Partial<RelayLinkOptions> = {}) => {
 		link.close();
 	});
 	return { link, env, ticket, onChanged, ...sockets };
+};
+
+/**
+ * Each socket lost by `fail` before the relay said anything, `times` over,
+ * each asking for the next ticket. Closed before it opened, unless told.
+ */
+const refused = async (
+	h: ReturnType<typeof linked>,
+	times: number,
+	fail = (socket: FakeSocket) => {
+		socket.events.closed(1006);
+	}
+) => {
+	for (const _attempt of Array.from({ length: times })) {
+		await settled();
+		fail(h.last());
+		h.env.advance(Math.max(0, ...h.env.pending()));
+	}
 };
 
 /** Opened, and answered once: a socket that works. */
@@ -452,15 +471,87 @@ describe('the relay link', () => {
 		expect(h.onChanged).not.toHaveBeenCalled();
 	});
 
-	it('tries again when the browser will not open the socket at all', async () => {
-		const h = linked({
-			open: () => {
-				throw new SyntaxError('bad URL');
-			},
+	it('gives up for the session on sockets lost unheard, where it has never heard the relay', async () => {
+		const h = linked();
+		await refused(h, RELAY_GIVE_UP - 1);
+		await settled();
+		h.last().events.closed(1006);
+		expect(h.env.pending()).toEqual([]);
+
+		h.env.set({ visible: false });
+		h.env.set({ visible: true });
+		h.env.set({ online: false });
+		h.env.set({ online: true });
+		h.link.pushed();
+		await settled();
+
+		expect(h.ticket).toHaveBeenCalledTimes(RELAY_GIVE_UP);
+	});
+
+	it('gives up the same way on sockets that open and are never heard', async () => {
+		const h = linked();
+		await refused(h, RELAY_GIVE_UP, (socket) => {
+			// Taken through the upgrade by something that passes no frames.
+			socket.events.opened();
+			h.env.advance(RELAY_PONG_MS);
 		});
 		await settled();
 
-		expect(h.env.pending()).toEqual([RELAY_RETRY_MS]);
+		expect(h.ticket).toHaveBeenCalledTimes(RELAY_GIVE_UP);
+		expect(h.env.pending()).toEqual([]);
+	});
+
+	it('gives up for the session at once where the browser will not open the socket at all', async () => {
+		for (const refusal of [
+			new DOMException('Refused by the page’s policy.', 'SecurityError'),
+			new SyntaxError('bad URL'),
+		]) {
+			const h = linked({
+				open: () => {
+					throw refusal;
+				},
+			});
+			await settled();
+			expect(h.env.pending()).toEqual([]);
+
+			h.env.set({ visible: false });
+			h.env.set({ visible: true });
+			h.env.set({ online: false });
+			h.env.set({ online: true });
+			h.link.pushed();
+			await settled();
+
+			expect(h.ticket).toHaveBeenCalledOnce();
+		}
+	});
+
+	it('never gives up once it has heard the relay in this session', async () => {
+		const h = linked();
+		await refused(h, RELAY_GIVE_UP - 1);
+		const socket = await working(h);
+		socket.events.closed(1006);
+		h.env.advance(Math.max(0, ...h.env.pending()));
+		await refused(h, 2 * RELAY_GIVE_UP);
+		await settled();
+
+		// Each socket lost asked for the next.
+		expect(h.sockets).toHaveLength(3 * RELAY_GIVE_UP + 1);
+	});
+
+	it('counts sockets in a row across hiding, showing and a ticket it could not have', async () => {
+		const h = linked();
+		await refused(h, RELAY_GIVE_UP - 1);
+		await settled();
+		h.env.set({ visible: false });
+		h.ticket.mockRejectedValueOnce(new Error('down'));
+		h.env.set({ visible: true });
+		await settled();
+		h.env.advance(Math.max(0, ...h.env.pending()));
+		await settled();
+		h.last().events.closed(1006);
+
+		expect(h.ticket).toHaveBeenCalledTimes(RELAY_GIVE_UP + 2);
+		expect(h.env.pending()).toEqual([]);
 	});
 });
 

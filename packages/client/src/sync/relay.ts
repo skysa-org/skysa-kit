@@ -19,7 +19,10 @@ import { credentialFor, type CredentialStore } from '../store/credentials.js';
  * Only ever a hint. Polling goes on as it is: the relay never hears of an edit
  * made in the storage folder by anything else, and a socket that is down, or an
  * instance that runs none, must never be a reason a note does not arrive. So
- * nothing here reports a failure to anyone; it waits, and tries again.
+ * nothing here reports a failure to anyone; it waits, and tries again, unless
+ * the browser will not open a socket, or the relay has not once been heard in
+ * this session and its sockets keep failing, when it stops for the session
+ * (`RELAY_GIVE_UP`).
  *
  * Open only while the app is in front of the user and online. A hidden tab
  * gives its socket up — the poll it goes back to on coming forward covers
@@ -92,6 +95,21 @@ export const RELAY_PONG_MS = 10_000;
 export const RELAY_RETRY_MS = 1000;
 export const RELAY_MAX_RETRY_MS = 60_000;
 /**
+ * Sockets in a row lost before the relay said anything on them, at which a
+ * link that has never heard the relay stops for the session. A browser that
+ * refuses the socket — one before CSP Level 3, where `connect-src 'self'`
+ * does not cover a same-origin `wss:` — or a proxy that takes the upgrade and
+ * passes no frames would otherwise have it ask for a ticket every minute for
+ * as long as the app is in view. Polling goes on as it is.
+ *
+ * A server refusing the upgrade loses the socket before anything is heard
+ * too, and the page cannot tell that apart. So a session begun while the
+ * upgrade keeps failing gives up as well, and the next session tries again.
+ * One that has heard the relay never gives up on a failed socket: a deploy
+ * closes sockets that were heard.
+ */
+export const RELAY_GIVE_UP = 6;
+/**
  * The least time between two `pushed` this device sends. Half again the
  * relay's second, so the network's jitter cannot bring two inside it and have
  * the later one dropped — the one that says the last push happened.
@@ -102,11 +120,12 @@ type Timer = 'retry' | 'ping' | 'pong' | 'tell';
 
 /**
  * `closed`: the session is over. `stopped`: told there is nothing to connect
- * to. `connecting`: a ticket is being asked for. `open`: the socket has opened.
- * `heard`: the server has said something on it. `owed`: a push it has not yet
+ * to, or given up on. `connecting`: a ticket is being asked for. `open`: the
+ * socket has opened. `heard`: the server has said something on it. `reached`:
+ * it has said something on one in this session. `owed`: a push it has not yet
  * been told of.
  */
-type Flag = 'closed' | 'stopped' | 'connecting' | 'open' | 'heard' | 'owed';
+type Flag = 'closed' | 'stopped' | 'connecting' | 'open' | 'heard' | 'reached' | 'owed';
 
 /** What belongs to one socket, and goes with it. */
 const SOCKET_TIMERS: readonly Timer[] = ['ping', 'pong', 'tell'];
@@ -121,6 +140,8 @@ export const createRelayLink = (options: RelayLinkOptions): RelayLink => {
 	const socket = cell<RelaySocket | undefined>(undefined);
 	/** Failures in a row since the server last said anything, for the backoff. */
 	const failures = cell(0);
+	/** Sockets lost unheard while the relay has never been heard, for giving up. */
+	const unheard = cell(0);
 	/**
 	 * Which attempt is current. A ticket that arrives, or a socket that speaks,
 	 * after the link has let its attempt go is about nothing.
@@ -191,6 +212,21 @@ export const createRelayLink = (options: RelayLinkOptions): RelayLink => {
 		});
 	};
 
+	/**
+	 * A socket lost: tried again, unless the relay has never been heard in this
+	 * session and this is the last of `RELAY_GIVE_UP` in a row.
+	 */
+	const socketFailed = () => {
+		if (!flags.has('reached')) {
+			unheard.current += 1;
+			if (unheard.current >= RELAY_GIVE_UP) {
+				stop();
+				return;
+			}
+		}
+		failed();
+	};
+
 	/** Tell the relay of a push, as soon as there is a socket and the spacing allows. */
 	const tell = () => {
 		if (!flags.has('owed') || !flags.has('open')) return;
@@ -208,7 +244,7 @@ export const createRelayLink = (options: RelayLinkOptions): RelayLink => {
 		send(RELAY_PING);
 		arm('pong', RELAY_PONG_MS, () => {
 			drop();
-			failed();
+			socketFailed();
 		});
 		arm('ping', RELAY_PING_MS, ping);
 	};
@@ -223,6 +259,7 @@ export const createRelayLink = (options: RelayLinkOptions): RelayLink => {
 
 	const heard = (data: unknown) => {
 		flags.add('heard');
+		flags.add('reached');
 		failures.current = 0;
 		if (data === RELAY_PONG) {
 			cancel('pong');
@@ -249,7 +286,7 @@ export const createRelayLink = (options: RelayLinkOptions): RelayLink => {
 			void connect();
 			return;
 		}
-		failed();
+		socketFailed();
 	};
 
 	const connect = async (): Promise<void> => {
@@ -291,8 +328,10 @@ export const createRelayLink = (options: RelayLinkOptions): RelayLink => {
 				},
 			});
 		} catch {
-			// A URL the browser would not open: tried again, like any failure.
-			failed();
+			// The page's policy refuses the socket (a `SecurityError`), or the
+			// browser the URL (a `SyntaxError`), as each will for as long as the
+			// page is open.
+			stop();
 		}
 	};
 
