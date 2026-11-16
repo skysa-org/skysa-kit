@@ -105,9 +105,9 @@ export interface SyncEngineOptions {
 	 * on is no evidence against the op it was for: no attempt is counted, and
 	 * the push starts no further op. A request already started is the
 	 * provider's to stop, which the caller gives the same signal. An engine let
-	 * go of is done with: every push after says `retry` and sends nothing, so
-	 * a caller that goes on makes a new one, as the scheduler does with each
-	 * session.
+	 * go of is done with: every push after sends nothing, and says `retry`
+	 * where anything was left to send, so a caller that goes on makes a new
+	 * one, as the scheduler does with each session.
 	 */
 	signal?: AbortSignal;
 	/** Injected so conflict filenames are deterministic in tests. */

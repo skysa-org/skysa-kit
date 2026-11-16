@@ -1012,7 +1012,7 @@ Three ops, each in `packages/sync/src/push/files.ts`:
 
 **Uploads do not hold up the queue.**
 This is the second exception to the ordered queue, after `rmdir`.
-An upload that fails is counted against its attempts and stepped over, and one out of attempts is stepped over and kept.
+An upload that fails is counted against its attempts and stepped over, and one out of attempts is stepped over and kept; one whose request the run's letting go aborted is neither, and nothing behind it goes (`SyncEngineOptions.signal`).
 It is never completed: it is the only copy of the file.
 A note that links the file goes without it, and other devices show the file as not there until it lands, which heals itself.
 - **Order.**
@@ -1618,6 +1618,7 @@ They live in `packages/sync/src/engine.ts` and, for the push, in `packages/sync/
   An op stops being tried after five failures, and a provider refusing every request while a quota resets would spend all five in half a minute on an op there is nothing wrong with — the user's note, blocked, with every op behind it waiting.
   A `RateLimitError` says nothing about the request, so the engine reports it as a retry without counting it, on the pull side as well as the push side.
   Everything else is counted, including a 5xx: it may be the request.
+  Except a failure once the caller has let the engine go (`SyncEngineOptions.signal`), which is the abort's and not the request's.
   The same goes for a rate limit met while *resolving* a push conflict — reading the remote entry the conflict rule needs is a request like any other — so the resolution's own error, not the conflict that led to it, decides which branch the failure takes.
 - **Known gap: a rate limit that never ends is never *named*.**
   Nothing counts an uncounted retry, so a provider that answers 429 forever leaves the op retrying forever — every five minutes at the least, since the wait is the longer of the backoff (capped at five) and the provider's own answer (capped at fifteen) — and the status says `retrying` with the provider's message rather than naming the op that is stuck behind it.
