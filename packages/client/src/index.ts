@@ -1,7 +1,8 @@
 /**
  * The API client, the token source, the provider factory and its request
- * deadlines, the scheduler, the relay client, the connect code a device holds,
- * a long run's count, and the stores a screen listens to.
+ * deadlines, the scheduler, the relay client, the connect code a device holds
+ * and the gate's rules about it, a long run's count, and the stores a screen
+ * listens to.
  */
 
 export {
@@ -15,6 +16,15 @@ export {
 	type Result,
 } from './api/client.js';
 export { answer, type Asked, useInstanceConfig } from './api/instanceConfig.js';
+export {
+	ASK_AGAIN_MS,
+	type AskAgainOptions,
+	askAboutConnectCode,
+	askHeldCodeAgain,
+	codeWasRefused,
+	type ConnectCodeOutcome,
+	useConnectCodeHeldUntil,
+} from './connect/gate.js';
 export {
 	connectCodeAskedAt,
 	connectCodeHeldUntil,
