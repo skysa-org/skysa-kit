@@ -104,9 +104,9 @@ export interface SchedulerStatus {
 	 * again (`TokenSource.standing`), or `reauthorize_required` where the
 	 * provider refused even a fresh one, until a run gets through. A run
 	 * meanwhile, going offline, a backoff, a pause or another source shown in
-	 * between leaves it standing, and the phase says how syncing is going as it is: what was refused is not
-	 * news again with each run that asks. `needsReconnect` says when
-	 * connecting the account again is the answer.
+	 * between leaves it standing, and the phase says how syncing is going as
+	 * it is: what was refused is not news again with each run that asks.
+	 * `needsReconnect` says when connecting the account again is the answer.
 	 */
 	readonly refusal?: Refusal;
 	/**
@@ -143,6 +143,12 @@ export const needsReconnect = (status: SchedulerStatus): boolean =>
 	status.refusal === 'credential_required' ||
 	status.refusal === 'credential_revoked' ||
 	status.refusal === 'reauthorize_required';
+
+/**
+ * A status as a caller hands it to be published: what is stuck, and what
+ * stands against the connection, are the session's to say (`publish`).
+ */
+type Said = Omit<SchedulerStatus, 'stuck' | 'refusal' | 'denial'>;
 
 export type SchedulerEvent = 'focus' | 'visibilitychange' | 'online' | 'offline';
 
@@ -450,12 +456,13 @@ export interface SyncScheduler {
 type Flag = 'again' | 'nudged' | 'backingOff';
 
 /**
- * What stands against one connection (`standingFor`), kept by the scheduler
- * across the connection's sessions.
+ * A connection's tokens, and what stands against it (`standingFor`), kept by
+ * the scheduler across the connection's sessions: a session made again for
+ * it, after a pause, another source shown, or a cancel, says what still
+ * stands, and the two never answer differently.
  */
-interface Standing {
-	/** The server's last refusal, until a token is had (`TokenSource.standing`). */
-	readonly refused: Cell<Refused | undefined>;
+interface Account {
+	readonly tokens: TokenSource;
 	/** The provider refused even a fresh token, and no run has got through since. */
 	readonly unauthorized: Cell<boolean>;
 }
@@ -476,12 +483,12 @@ interface Session {
 	readonly inFlight: Cell<Promise<void> | undefined>;
 	/** When a sync first came back `blocked`, since it last did not. */
 	readonly blockedSince: Cell<number | undefined>;
-	/** What stands against the connection, which outlasts the session. */
-	readonly standing: Standing;
+	/** The connection's, which outlasts the session (`Account`). */
+	readonly account: Account;
 	/**
-	 * The run's last renewal (`reauthorize`) had a fresh token: a run paused
-	 * after it was paused by the provider, which would not take that token,
-	 * and not by the server, which gave it.
+	 * A run's last renewal (`reauthorize`) had a fresh token, and the server
+	 * has refused nothing since: a run paused after it was paused by the
+	 * provider, which would not take that token, and not by the server.
 	 */
 	readonly renewed: Cell<boolean>;
 	/**
@@ -581,9 +588,11 @@ export const createSyncScheduler = (options: SyncSchedulerOptions): SyncSchedule
 	 */
 	const standingFor = (session: Session | undefined): Refused | undefined => {
 		if (session === undefined) return undefined;
-		const { refused, unauthorized } = session.standing;
-		if (refused.current !== undefined) return refused.current;
-		return unauthorized.current ? { refusal: 'reauthorize_required' } : undefined;
+		const refused = session.tokens.standing();
+		if (refused !== undefined) return refused;
+		return session.account.unauthorized.current
+			? { refusal: 'reauthorize_required' }
+			: undefined;
 	};
 
 	/**
@@ -597,7 +606,7 @@ export const createSyncScheduler = (options: SyncSchedulerOptions): SyncSchedule
 	 * would come back with the next thing said, and one stood against the
 	 * account before it would be said of the one after it.
 	 */
-	const publish = (next: SchedulerStatus) => {
+	const publish = (next: Said) => {
 		const {
 			stuck: _carried,
 			refusal: _refusal,
@@ -605,7 +614,7 @@ export const createSyncScheduler = (options: SyncSchedulerOptions): SyncSchedule
 			progress,
 			waiting,
 			...rest
-		} = next;
+		}: SchedulerStatus = next;
 		const stuck = bound.current?.stuck.current;
 		const standing = standingFor(bound.current);
 		// Progress is about the run under way and nothing else: carried into
@@ -652,27 +661,34 @@ export const createSyncScheduler = (options: SyncSchedulerOptions): SyncSchedule
 	 * just refused to mint one: that is not a token going stale, and asking again
 	 * straight away gets the same answer.
 	 */
-	const reauthorize = async (session: Session): Promise<void> => {
-		session.renewed.current = false;
-		const refusal = session.tokens.refusal();
+	const renew = async (tokens: TokenSource): Promise<void> => {
+		const refusal = tokens.refusal();
 		if (refusal !== undefined)
 			throw new AuthError(`The server would not mint a token: ${refusal}`);
-		await session.tokens.refresh();
+		await tokens.refresh();
+	};
+
+	/**
+	 * A run's renewal, which says when it had a token (`Session.renewed`). One
+	 * that did not was refused, which `standingChanged` says.
+	 */
+	const reauthorize = async (session: Session): Promise<void> => {
+		await renew(session.tokens);
 		session.renewed.current = true;
 	};
 
-	/** Once more after a fresh token, for work that met an expired one. */
-	const withAuth = <T>(session: Session, work: () => Promise<T>): Promise<T> =>
+	/** Once more after `renewing`, for work that met an expired token. */
+	const withAuth = <T>(renewing: () => Promise<void>, work: () => Promise<T>): Promise<T> =>
 		work().catch(async (error: unknown) => {
 			if (!isAuthError(error)) throw error;
-			await reauthorize(session);
+			await renewing();
 			return work();
 		});
 
 	/** The marker file, on the first sync of a connection. */
 	const ensureRoot = async (session: Session, provider: StorageProvider) => {
 		if (!(await store.needsRoot(session.connectionId))) return;
-		const { rootId } = await withAuth(session, provider.ensureRoot);
+		const { rootId } = await withAuth(() => reauthorize(session), provider.ensureRoot);
 		// A connection let go of meanwhile does not get its row back, and one
 		// kept detached is not given a root.
 		await store.keepRoot(session.connectionId, rootId);
@@ -717,8 +733,9 @@ export const createSyncScheduler = (options: SyncSchedulerOptions): SyncSchedule
 		const changed = async () => (await store.bindings()) !== before;
 		try {
 			// Before anything that writes: the store refuses to until it has.
-			const { superseded } = await withAuth(session, () =>
-				store.verifyResume(session.connectionId, provider)
+			const { superseded } = await withAuth(
+				() => reauthorize(session),
+				() => store.verifyResume(session.connectionId, provider)
 			);
 			if (superseded) return { kind: 'superseded' };
 			// A copy re-binds, which is this run's own doing.
@@ -893,13 +910,13 @@ export const createSyncScheduler = (options: SyncSchedulerOptions): SyncSchedule
 		if (outcome.status === 'paused') {
 			// The provider, which only a run that gets through answers. The
 			// server's own refusal stands of itself.
-			if (session.renewed.current) session.standing.unauthorized.current = true;
+			if (session.renewed.current) session.account.unauthorized.current = true;
 			publish({ ...status(), phase: 'attention', error: outcome.error, conflicts });
 			return;
 		}
 		// Nothing left failing that time will fix: the backoff starts over.
 		session.failures.current = 0;
-		session.standing.unauthorized.current = false;
+		session.account.unauthorized.current = false;
 		if (outcome.status === 'blocked') await blocked(session);
 		else session.blockedSince.current = undefined;
 		// Asked for after `blocked`, which may have just given the queue its
@@ -1236,36 +1253,56 @@ export const createSyncScheduler = (options: SyncSchedulerOptions): SyncSchedule
 	};
 
 	/**
-	 * What stands against each connection synced, for as long as the scheduler
-	 * runs: a session made again for one, after a pause, another source shown,
-	 * or a cancel, still says it until something answers it.
+	 * Each connection synced, for as long as the scheduler runs, until it is
+	 * let go (`follow`).
 	 */
-	const standings = new Map<string, Standing>();
-	const standingOf = (connectionId: string): Standing => {
-		const known = standings.get(connectionId);
+	const accounts = new Map<string, Account>();
+	const accountOf = (connectionId: string): Account => {
+		const known = accounts.get(connectionId);
 		if (known !== undefined) return known;
-		const made: Standing = {
-			refused: cell<Refused | undefined>(undefined),
+		const made: Account = {
+			tokens: createTokenSource({
+				credentials: store.credentials,
+				states: store.tokens,
+				client,
+				connectionId,
+				now: environment.now,
+				onStanding: () => {
+					standingChanged(connectionId);
+				},
+			}),
 			unauthorized: cell(false),
 		};
-		standings.set(connectionId, made);
+		accounts.set(connectionId, made);
 		return made;
 	};
 
 	/**
-	 * What stands against the connection has changed. Said then, rather than
-	 * with whatever is said next. And where a token, had outside a run, has
-	 * answered what stopped syncing, a run, as focus would start one, rather
-	 * than a stop with no reason beside it: after the one ending, where one
-	 * is (`run`).
+	 * What the server says of the connection has changed: said then, rather
+	 * than with whatever is said next. A refusal is the last word on the
+	 * runs' renewals (`Session.renewed`). And a refusal answered, by a token
+	 * had in a run or outside one, is followed by a run, now or after the one
+	 * under way, as focus would start one: whatever that run came to, it may
+	 * have stopped for what has just been answered.
 	 */
 	const standingChanged = (connectionId: string) => {
 		const session = bound.current;
 		if (session?.connectionId !== connectionId) return;
-		const answered =
-			session.standing.refused.current === undefined && status().phase === 'attention';
+		const answered = session.tokens.standing() === undefined;
+		if (!answered) session.renewed.current = false;
+		publish({ ...status() });
 		if (answered) void run(session);
-		else publish({ ...status() });
+	};
+
+	/**
+	 * The source shown, where it is synced: not one detached (`follow`), which
+	 * is let go with what stood against it, so that connected again it is
+	 * asked of afresh.
+	 */
+	const liveOf = (showing: ShownSource | undefined): ShownSource | undefined => {
+		if (showing?.detached !== true) return showing;
+		accounts.delete(showing.connectionId);
+		return undefined;
 	};
 
 	const follow = (showing: ShownSource | undefined) => {
@@ -1276,7 +1313,7 @@ export const createSyncScheduler = (options: SyncSchedulerOptions): SyncSchedule
 		// the user to connect again about a source that already says so. Asked
 		// here, on every change of the row, so a session running when its source
 		// is detached ends there, and one starts when it is connected again.
-		const live = showing?.detached === true ? undefined : showing;
+		const live = liveOf(showing);
 		// Held by a cancel, which is about to ask the server to let it go.
 		const state = live !== undefined && halted.has(live.connectionId) ? undefined : live;
 		// Another source shown, or none, ends a pause: showing a source is what
@@ -1293,18 +1330,8 @@ export const createSyncScheduler = (options: SyncSchedulerOptions): SyncSchedule
 		const generation = generations.current + 1;
 		generations.current = generation;
 		const { connectionId } = state;
-		const standing = standingOf(connectionId);
-		const tokens = createTokenSource({
-			credentials: store.credentials,
-			states: store.tokens,
-			client,
-			connectionId,
-			now: environment.now,
-			standing: standing.refused,
-			onStanding: () => {
-				standingChanged(connectionId);
-			},
-		});
+		const account = accountOf(connectionId);
+		const { tokens } = account;
 		const abort = new AbortController();
 		const provider =
 			state.provider === undefined
@@ -1342,7 +1369,7 @@ export const createSyncScheduler = (options: SyncSchedulerOptions): SyncSchedule
 			lastSeq: cell<number | undefined>(undefined),
 			inFlight: cell<Promise<void> | undefined>(undefined),
 			blockedSince: cell<number | undefined>(undefined),
-			standing,
+			account,
 			renewed: cell(false),
 			stuck: cell<StuckOp | undefined>(undefined),
 			abort,
@@ -1391,7 +1418,8 @@ export const createSyncScheduler = (options: SyncSchedulerOptions): SyncSchedule
 		if (session?.connectionId !== connectionId || provider === undefined) return undefined;
 		return {
 			provider,
-			withAuth: <T>(work: () => Promise<T>) => withAuth(session, work),
+			// Not a run's: what it comes to says nothing of why a run stopped.
+			withAuth: <T>(work: () => Promise<T>) => withAuth(() => renew(session.tokens), work),
 			told: () => {
 				session.relay?.pushed();
 			},
@@ -1513,7 +1541,7 @@ export const createSyncScheduler = (options: SyncSchedulerOptions): SyncSchedule
 			// every request the run has out, and the next is made paused, so
 			// it runs nothing and still reads a file beside a note when it is
 			// opened. What stands against the connection stands through it
-			// (`standings`).
+			// (`accounts`).
 			endSession();
 			follow(shown.current);
 			const paused = bound.current;

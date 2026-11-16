@@ -1,8 +1,8 @@
-import { cell, isAuthError } from '@skysa/storage';
+import { isAuthError } from '@skysa/storage';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { ApiClient } from '../../src/api/client.js';
-import { createTokenSource, type Refused } from '../../src/sync/tokens.js';
+import { createTokenSource } from '../../src/sync/tokens.js';
 import type { ClientDevice } from './device.js';
 
 const CREDENTIAL = 'sk1_the-credential-this-device-holds';
@@ -364,33 +364,6 @@ export const describeTokenSource = (
 				},
 				undefined,
 			]);
-		});
-
-		it('keeps what stands where it is told to, for whoever comes after', async () => {
-			const device = await bound();
-			const token = vi
-				.fn<ApiClient['token']>()
-				.mockResolvedValue({ ok: false, refusal: 'credential_revoked' });
-			const standing = cell<Refused | undefined>(undefined);
-			await createTokenSource({
-				...over(device),
-				client: presenting(token),
-				connectionId: 'c1',
-				standing,
-			})
-				.get()
-				.catch(() => undefined);
-
-			const after = createTokenSource({
-				...over(device),
-				client: presenting(token),
-				connectionId: 'c1',
-				standing,
-			});
-
-			expect(after.standing()).toEqual({ refusal: 'credential_revoked' });
-			// What it was refused is not its own answer: the server is asked.
-			expect(after.refusal()).toBeUndefined();
 		});
 
 		it('does not bring back the row of a connection let go while minting', async () => {

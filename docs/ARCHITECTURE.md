@@ -1130,13 +1130,14 @@ The two-device suite (`overProviders.test.ts`) does the same at rest, and checks
    - **What stands against syncing is said until something answers it (2026-11-15).**
      The status's `refusal`, with its `denial`, is the server's last refusal from when it was given until a token is had again from anywhere (`TokenSource.standing` in `packages/client/src/sync/tokens.ts`), or `reauthorize_required` where the provider refused even a fresh token, until a run gets through.
      It is said whatever the phase: a run that asks again, going offline, a backoff, a pause and another source shown in between all leave it standing, and the phase says how syncing is going meanwhile.
-     The scheduler keeps it for each connection (`standings`), and each session's token source keeps what it is refused there, so a session made again for the connection says it still.
+     The scheduler keeps each connection's token source across its sessions (`accounts`), so a session made again for the connection says it still; a connection let go is let go with what stood against it, and is asked afresh once connected again.
      Until then each run cleared it as it started, and going offline cleared it too, so an app that offered "Connect again" under a refusal took it away on every focus, and whoever went to fetch an operator's code came back to an empty field (skysa-kit#22, item 3; memoriam kept it in its view meanwhile, memoriam#48).
      A token had mid-run lets it go then and there (`onStanding`, told in a microtask of its own so that nothing it does can stop a token being had), not at whatever the run says next.
-     One had outside a run, by a file read as it is opened, where syncing had stopped for the refusal, starts a run, as focus would.
-     The provider's refusal is told from the server's by what the run's last renewal came to (`renewed`): a fresh token minted, and the run still paused, is the provider's.
+     A refusal answered, by a token had in a run or outside one (a file read as it is opened), is followed by a run, now or after the one under way, as focus would start one: whatever that run came to, it may have stopped for what has just been answered.
+     The provider's refusal is told from the server's by what a run's last renewal came to (`renewed`): a fresh token minted, with nothing refused since, and the run still paused, is the provider's.
+     A renewal outside a run, for a file read, says nothing of why a run stopped, and does not count.
      `needsReconnect(status)` says when connecting again is the answer: the device holds no credential for the connection, the server knows none, or the provider's grant is gone.
-     It is the rule each app had copied, which asked it of `attention` alone.
+     It is the rule each app had copied, which asked it of `attention` alone, and which said the provider's refusal as an `authorization required` error with no refusal, where the status now says `reauthorize_required`.
      The token source's `refusal()` keeps its meaning, the server's last answer, which no answer at all clears: so a server that could not be reached is still retried, rather than waited on for a refusal it may since have lifted.
      A run superseded part-way leaves no count behind either: the run after it starts with none (`progress`), where it said the old run's count until it had one of its own (skysa-kit#20, item 4).
 2. **Push**: drain `opQueue` in order — except that where the provider takes more than one at a time (`StorageProvider.writesAtOnce`, 2026-10-05), the writes of notes at its front go that many at once (`together` in the engine).

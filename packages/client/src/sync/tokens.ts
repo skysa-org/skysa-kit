@@ -1,4 +1,4 @@
-import { AuthError, type Cell, cell } from '@skysa/storage';
+import { AuthError, cell } from '@skysa/storage';
 
 import type { AccessToken, ApiClient, Denial, Refusal } from '../api/client.js';
 import { credentialFor, type CredentialStore } from '../store/credentials.js';
@@ -48,12 +48,6 @@ export interface TokenSourceOptions {
 	connectionId: string;
 	now?: () => number;
 	/**
-	 * Where `standing` is kept, when it is to outlast this source: the
-	 * scheduler keeps one for each connection, so a session made again for it
-	 * still says what stood against it. The source's own, without one.
-	 */
-	standing?: Cell<Refused | undefined>;
-	/**
 	 * Told each time what `standing` answers changes, so whoever shows it can
 	 * say so then rather than at whatever it says next. In a microtask of its
 	 * own: whatever it does, a token is had or refused the same.
@@ -82,7 +76,8 @@ export interface TokenSource {
 	readonly refusal: () => Refusal | undefined;
 	/**
 	 * The server's last refusal, with what the operator's policy said beside
-	 * it where it was `not_entitled`, until a token is had again from anywhere. Unlike `refusal`, a request that gets no answer leaves it
+	 * it where it was `not_entitled`, until a token is had again from
+	 * anywhere. Unlike `refusal`, a request that gets no answer leaves it
 	 * standing: an account the server would not sync is not one it syncs for
 	 * being out of reach, and what it said is still the last word on it
 	 * (`SchedulerStatus.refusal`).
@@ -95,7 +90,7 @@ export const createTokenSource = (options: TokenSourceOptions): TokenSource => {
 	const now = options.now ?? Date.now;
 	const cached = cell<AccessToken | undefined>(undefined);
 	const refused = cell<Refusal | undefined>(undefined);
-	const standing = options.standing ?? cell<Refused | undefined>(undefined);
+	const standing = cell<Refused | undefined>(undefined);
 
 	/** The server has answered with a refusal, or a token is had. */
 	const stand = (next: Refused | undefined) => {

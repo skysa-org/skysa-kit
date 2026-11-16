@@ -539,6 +539,46 @@ export const describeFailures = (
 			expect(token).toHaveBeenCalledTimes(2);
 		});
 
+		it('lets what stood against a connection go once it is let go', async () => {
+			const device = await bound();
+			const token = vi.fn<ApiClient['token']>(() =>
+				Promise.resolve({ ok: false, refusal: 'credential_revoked' })
+			);
+			const h = started(device, { client: presenting(token) });
+			await reaches(h.scheduler, 'attention');
+			await device.letGo('c1', { unsent: true });
+			await reaches(h.scheduler, 'local');
+
+			// Connected again, and offline before its server is asked.
+			h.env.state.online = false;
+			await device.bind('c1');
+
+			await reaches(h.scheduler, 'offline');
+			expect(h.scheduler.status().refusal).toBeUndefined();
+		});
+
+		it('syncs once more after a run in which a refusal was answered', async () => {
+			const device = await bound();
+			const token = vi
+				.fn<ApiClient['token']>()
+				.mockResolvedValueOnce({ ok: false, refusal: 'credential_revoked' })
+				.mockResolvedValue({
+					ok: true,
+					value: { accessToken: 'ok', expiresAt: Date.now() + HOUR },
+				});
+			const h = started(device, { client: presenting(token) });
+			await reaches(h.scheduler, 'attention');
+			const before = h.remote.pulls();
+
+			h.env.fire('focus');
+
+			// Whatever the run came to, it may have stopped for what was answered.
+			await vi.waitFor(() => {
+				expect(h.remote.pulls()).toBe(before + 2);
+			});
+			await reaches(h.scheduler, 'idle');
+		});
+
 		it('says nothing of what stood against one connection about the next', async () => {
 			const device = await bound();
 			const token = vi
