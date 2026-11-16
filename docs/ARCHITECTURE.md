@@ -693,7 +693,7 @@ Keep it boring.
     A pass the policy gives for less than the hour runs out unasked, as the protocol's "at most once an hour" says.
     `codeWasRefused` takes the refusal and its code from the connect's answer.
     `useConnectCodeHeldUntil` follows the record as stored (`useSyncExternalStore`), so a render reads no clock: a timer lets the code go as it ends, and any other read past the end does too.
-    Its effects are layout effects, so a hold found ended as it mounts is let go of before anything is painted.
+    A hold found ended as it mounts is let go of at once, and shown so once React has subscribed to the store, which may be just after the first paint.
     It tells `onLapse` which typed code it showed while good was let go of after its end, in this tab or another, and not where anything is held in its place or it is dropped before its end; never a pass, which is never shown.
 - **Rate-limit seam:** `createApp({ rateLimiter })`, defaulting to `neverLimited`, consulted by `POST /api/auth/connect/:provider/start`, the callback, and `POST /api/token` — the three endpoints that spend an outbound provider call — and by `POST /api/connect-code`, which spends none but answers a question worth guessing at.
   Also by the change relay's ticket and upgrade (`relay-ticket:<connectionId>`, `relay:<connectionId>`), which spend none either but would otherwise let one device open sockets without limit.

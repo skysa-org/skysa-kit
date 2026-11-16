@@ -85,9 +85,12 @@ export const ASK_AGAIN_MS = 60 * 60_000;
 /**
  * When this page loaded, by this device's clock: a refused connect comes back
  * as a fresh load. The navigation's start, not this module's, which a chunk
- * loaded later or a module replaced in development would move.
+ * loaded later or a module replaced in development would move; counted back
+ * from `Date.now()`, the clock the stamps are on, not taken from
+ * `performance.timeOrigin`, which a browser may put hours off that clock once
+ * the device has slept.
  */
-const LOADED = performance.timeOrigin;
+const LOADED = Date.now() - performance.now();
 
 /** What a tab holds while it asks about a held value again, so another tab asks nothing meanwhile. */
 const LOCK = 'skysa.connectCode.askAgain';
@@ -105,7 +108,10 @@ export interface AskAgainOptions {
 	 * hour, about a value nothing has happened to in this load.
 	 */
 	readonly refused?: boolean;
-	/** The clock the asking is judged and stamped by: this device's, where not given. */
+	/**
+	 * This device's clock, where given in its place: every step of the asking
+	 * judges and stamps by it. Another tab stamps by the device's own.
+	 */
 	readonly now?: number;
 }
 
@@ -125,9 +131,13 @@ const due = (held: HeldConnectCode, refused: boolean, now: number): boolean => {
 	return now < since || now - since >= ASK_AGAIN_MS;
 };
 
-/** Whether what is held is as it was: not replaced, dropped, renewed or asked about meanwhile. */
+/**
+ * Whether what is stored is as it was: not replaced, dropped, let go of,
+ * renewed or asked about meanwhile. Its end passing changes nothing, as for
+ * the answer (`stillHeld`): it was good when the asking began.
+ */
 const unchanged = (held: HeldConnectCode): boolean => {
-	const stored = heldConnectCodeRecord();
+	const stored = storedConnectCode();
 	return stored?.code === held.code && stored.asked === held.asked && stored.tried === held.tried;
 };
 
@@ -136,9 +146,9 @@ const unchanged = (held: HeldConnectCode): boolean => {
  * because its time ran out while the policy was asked: a renewal then keeps
  * it. One dropped before its end, or replaced, is not taken back.
  */
-const stillHeld = (held: HeldConnectCode): boolean => {
+const stillHeld = (held: HeldConnectCode, now: number): boolean => {
 	const stored = storedConnectCode();
-	return stored === undefined ? held.until <= Date.now() : stored.code === held.code;
+	return stored === undefined ? held.until <= now : stored.code === held.code;
 };
 
 /** A value asked about in this load whose stamp storage would not keep. */
@@ -146,11 +156,14 @@ const unstamped = cell<string | undefined>(undefined);
 
 /**
  * Whether to ask, the stamp made: where storage kept it, yes; where it would
- * not, only the first time in this load, since nothing else stops the next
- * call asking again.
+ * not, only the first time in this load since it last kept one, since nothing
+ * else stops the next call asking again.
  */
 const once = (tried: HeldConnectCode, now: number): boolean => {
-	if (tried.tried === now) return true;
+	if (tried.tried === now) {
+		unstamped.current = undefined;
+		return true;
+	}
 	if (unstamped.current === tried.code) return false;
 	unstamped.current = tried.code;
 	return true;
@@ -216,25 +229,29 @@ const alone = async (wait: boolean, work: () => Promise<void>): Promise<void> =>
  * runs out unasked. One it no longer takes is let go of here, so the gate asks
  * for a code before a consent screen rather than after one. Not asked, or not
  * answered, it is kept: the callback still decides. Where what is held changes
- * while `asksForCode` answers, nothing is asked; and an answer about a value
- * no longer held, because a new code was typed meanwhile, changes nothing.
+ * while `asksForCode` answers, nothing is asked, though its end passing is no
+ * change: it was good when the asking began, and a renewal keeps it. An answer
+ * about a value no longer held, because a new code was typed meanwhile,
+ * changes nothing.
  */
 export const askHeldCodeAgain = async (
 	client: Pick<ApiClient, 'checkConnectCode'>,
 	{ asksForCode, refused = false, now: given }: AskAgainOptions
 ): Promise<void> => {
-	if (dueNow(refused, given ?? Date.now()) === undefined) return;
+	// Read again under the lock, since another tab's stamps, made while this
+	// one waited, would be later than a time read before; and again for the
+	// answer, since the value may have run out by then.
+	const clock = (): number => given ?? Date.now();
+	if (dueNow(refused, clock()) === undefined) return;
 	await alone(refused, async () => {
-		// Read again once the lock is held: another tab's stamps, made while
-		// this one waited, would be later than a time read before it.
-		const now = given ?? Date.now();
+		const now = clock();
 		const held = dueNow(refused, now);
 		if (held === undefined) return;
 		const tried = connectCodeTried(held.code, now);
 		if (tried === undefined || !once(tried, now)) return;
 		if (!(await takesCode(asksForCode)) || !unchanged(tried)) return;
 		const said = await policySays(client, held.code);
-		if (said === undefined || said === 'tooMany' || !stillHeld(tried)) return;
+		if (said === undefined || said === 'tooMany' || !stillHeld(tried, clock())) return;
 		if (said.accepted) renewHeldConnectCode(tried, said, now);
 		else dropConnectCode();
 	});
@@ -265,9 +282,11 @@ const LONGEST_TIMER_MS = 2 ** 31 - 1;
  * It follows the record as stored (`useSyncExternalStore`): another tab can
  * take or drop one, and this one ask about it again, each telling the store's
  * watchers. The hold also ends by the clock, which tells no one, so a timer
- * lets it go as it ends, and a render reads no clock. The timer is a layout
- * effect: a hold found already ended as the hook mounts is let go of before
- * anything is painted. A browser runs a timer that came due while the tab
+ * lets it go as it ends, and a render reads no clock. A hold found already
+ * ended as the hook mounts is let go of at once, and shown so as soon as React
+ * has subscribed to the store, which may be just after the first paint: React
+ * subscribes in a passive effect, and a forced render from an effect is what
+ * lint forbids. A browser runs a timer that came due while the tab
  * slept as it wakes, and any other read past the end lets it go too; until
  * then, for as long as a timer is late, this is the end that has passed.
  *

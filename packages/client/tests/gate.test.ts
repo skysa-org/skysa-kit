@@ -38,9 +38,9 @@ const policy = () => ({
 });
 
 /** A pass the policy gave this device for a typed code, `ago` ms back. */
-const passFrom = (ago: number) => {
+const passFrom = (ago: number, hold = 'PASS-1') => {
 	const at = Date.now() - ago;
-	holdAcceptedCode('INVITE-7', { expiresIn: YEAR_S, hold: 'PASS-1' }, at);
+	holdAcceptedCode('INVITE-7', { expiresIn: YEAR_S, hold }, at);
 	return at;
 };
 
@@ -426,14 +426,35 @@ describe('a held value, asked about again as the app loads', () => {
 
 	it('still asks where storage will not take the stamp, once in the load', async () => {
 		const client = policy();
-		passFrom(2 * ASK_AGAIN_MS);
+		// A value of its own: what the load has asked about outlasts the test.
+		passFrom(2 * ASK_AGAIN_MS, 'PASS-Q');
 		vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
 			throw new DOMException('The quota has been exceeded.', 'QuotaExceededError');
 		});
 		await askHeldCodeAgain(client, { asksForCode: asks() });
 		await askHeldCodeAgain(client, { asksForCode: asks(), refused: true });
 
-		expect(client.checkConnectCode).toHaveBeenCalledExactlyOnceWith('PASS-1');
+		expect(client.checkConnectCode).toHaveBeenCalledExactlyOnceWith('PASS-Q');
+	});
+
+	it('asks once more where storage refuses the stamp again after keeping one', async () => {
+		vi.useFakeTimers({ now: Date.now(), toFake: ['Date'] });
+		const client = policy();
+		// A value of its own: what the load has asked about outlasts the test.
+		passFrom(2 * ASK_AGAIN_MS, 'PASS-R');
+		const quota = () =>
+			vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+				throw new DOMException('The quota has been exceeded.', 'QuotaExceededError');
+			});
+		const refusing = quota();
+		await askHeldCodeAgain(client, { asksForCode: asks() });
+		refusing.mockRestore();
+		await askHeldCodeAgain(client, { asksForCode: asks() });
+		vi.setSystemTime(Date.now() + 2 * ASK_AGAIN_MS);
+		quota();
+		await askHeldCodeAgain(client, { asksForCode: asks() });
+
+		expect(client.checkConnectCode).toHaveBeenCalledTimes(3);
 	});
 
 	it('asks nothing where a watcher told of the asking holds something else', async () => {
@@ -470,6 +491,46 @@ describe('a held value, asked about again as the app loads', () => {
 		expect(client.checkConnectCode).toHaveBeenCalledWith('PASS-1');
 		expect(heldConnectCode()).toBe('PASS-1');
 		expect(heldConnectCodeShown()).toBe(false);
+	});
+
+	it('asks about a pass that ran out while the gate said whether it takes one, and keeps the renewal', async () => {
+		vi.useFakeTimers({ now: NOW, toFake: ['Date'] });
+		const client = policy();
+		holdAcceptedCode(
+			'INVITE-7',
+			{ expiresIn: 2 * 60 * 60, hold: 'PASS-1' },
+			NOW - 2 * ASK_AGAIN_MS + 1
+		);
+		await askHeldCodeAgain(client, {
+			asksForCode: () => {
+				vi.setSystemTime(NOW + 10_000);
+				return true;
+			},
+		});
+
+		expect(client.checkConnectCode).toHaveBeenCalledExactlyOnceWith('PASS-1');
+		expect(heldConnectCode()).toBe('PASS-1');
+		expect(heldConnectCodeShown()).toBe(false);
+	});
+
+	it('judges a pass let go of while the policy answered by the clock it was given', async () => {
+		vi.useFakeTimers({ now: NOW, toFake: ['Date'] });
+		const client = policy();
+		// Ended a minute ago by this device's clock, and good by the one given.
+		holdAcceptedCode(
+			'INVITE-7',
+			{ expiresIn: 4 * 60 * 60 - 60, hold: 'PASS-1' },
+			NOW - 4 * 60 * 60_000
+		);
+		client.checkConnectCode.mockImplementation(() => {
+			dropConnectCode();
+			return Promise.resolve({ ok: true, value: { accepted: true, expiresIn: YEAR_S } });
+		});
+		await askHeldCodeAgain(client, { asksForCode: asks(), now: NOW - 2 * ASK_AGAIN_MS });
+
+		// Dropped before its end, by that clock, so not taken back.
+		expect(client.checkConnectCode).toHaveBeenCalledWith('PASS-1');
+		expect(heldConnectCode()).toBeUndefined();
 	});
 
 	it('asks nothing where the pass was asked about, dropped, or a code typed, while the gate said whether it takes one', async () => {
