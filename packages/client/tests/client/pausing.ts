@@ -163,6 +163,27 @@ export const describePausing = (
 				expect(h.scheduler.status().phase).toBe('paused');
 			});
 
+			it('still names an op given up on, through the pause', async () => {
+				const device = await bound();
+				await device.create('c1', 'Stuck', 'refused\n');
+				const documents = device.store.syncStore('c1');
+				const [op] = await documents.pendingOps();
+				if (op === undefined) throw new Error('nothing was queued');
+				await documents.failOp(op.seq, 'refused');
+				await documents.failOp(op.seq, 'refused');
+				const h = started(device, { maxAttempts: 2 });
+				await vi.waitFor(() => {
+					expect(h.scheduler.status().stuck).toMatchObject({ attempts: 2 });
+				});
+
+				h.scheduler.pause();
+
+				expect(h.scheduler.status()).toMatchObject({
+					phase: 'paused',
+					stuck: { attempts: 2, error: 'refused' },
+				});
+			});
+
 			it('counts no attempt against a send it aborted', async () => {
 				const device = await bound();
 				const theRemote = remote();

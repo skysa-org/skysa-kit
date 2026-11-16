@@ -1580,12 +1580,16 @@ export const createSyncScheduler = (options: SyncSchedulerOptions): SyncSchedule
 			// (`accounts`).
 			endSession();
 			follow(shown.current);
-			if (bound.current === undefined) return;
-			// The copies the last sync wrote are still on the device to be seen.
-			// A send the pause aborted counted nothing against its op (the
-			// engine's `signal`), and an op given up on for a reason of its own
-			// stays given up on.
-			if (conflicts.length > 0) publish({ ...status(), conflicts });
+			const paused = bound.current;
+			if (paused === undefined) return;
+			// What the last sync left is still so. The copies it wrote are on
+			// the device to be seen. A send the pause aborted counted nothing
+			// against its op (the engine's `signal`), so an op given up on for
+			// a reason of its own stays given up on, and still named.
+			paused.stuck.current = session.stuck.current;
+			if (conflicts.length > 0 || paused.stuck.current !== undefined) {
+				publish({ ...status(), conflicts });
+			}
 		},
 		status,
 

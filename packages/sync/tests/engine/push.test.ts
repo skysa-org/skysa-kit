@@ -769,13 +769,62 @@ describe('push', () => {
 			return new DOMException('The operation was aborted.', 'AbortError');
 		});
 
-		await engine.push();
+		const result = await engine.push();
 
+		expect(result.status).toBe('retry');
 		expect(world.store.ops().map((op) => [op.path, op.attempts])).toEqual([
 			['a.md', 0],
 			['b.md', 0],
 		]);
 		expect(asked).toEqual(['a.md']);
+	});
+
+	it('counts nothing where it was let go of while a conflict was being resolved', async () => {
+		const abort = new AbortController();
+		const engine = engineWith({ signal: abort.signal });
+		const entry = await remoteFile('a.md', 'one\n');
+		world.store.put({
+			id: 'n1',
+			path: 'a.md',
+			content: 'mine\n',
+			dirty: true,
+			...boundTo(entry),
+		});
+		world.store.queue({ op: 'write', noteId: 'n1', path: 'a.md' });
+		await world.provider.write('a.md', 'theirs\n', { expectedVersion: entry.version });
+		world.provider.setFault((call) => {
+			if (call.op !== 'read') return undefined;
+			abort.abort();
+			return new DOMException('The operation was aborted.', 'AbortError');
+		});
+
+		const result = await engine.push();
+
+		expect(result.status).toBe('retry');
+		expect(world.store.ops()[0]?.attempts).toBe(0);
+	});
+
+	it('sends nothing more once let go of, though the send under way landed', async () => {
+		const abort = new AbortController();
+		const engine = engineWith({ signal: abort.signal });
+		world.store.put({ id: 'n1', path: 'a.md', content: 'a\n', dirty: true });
+		world.store.put({ id: 'n2', path: 'b.md', content: 'b\n', dirty: true });
+		world.store.queue({ op: 'write', noteId: 'n1', path: 'a.md' });
+		world.store.queue({ op: 'write', noteId: 'n2', path: 'b.md' });
+		const asked: (string | undefined)[] = [];
+		world.provider.setFault((call) => {
+			if (call.op !== 'write') return undefined;
+			asked.push(call.path);
+			// Its answer was on its way back as the run was let go of.
+			abort.abort();
+			return undefined;
+		});
+
+		const result = await engine.push();
+
+		expect(result.status).toBe('retry');
+		expect(asked).toEqual(['a.md']);
+		expect(world.store.ops().map((op) => op.path)).toEqual(['b.md']);
 	});
 
 	it('records the failure against the op it belongs to', async () => {
