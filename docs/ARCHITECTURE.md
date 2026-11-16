@@ -1158,14 +1158,15 @@ The two-device suite (`overProviders.test.ts`) does the same at rest, and checks
      The pause is the device's, as the apps say it is: every tab of the app that shows the source pauses with it, a tab opened meanwhile finds it paused, and asking again in any tab ends it in all (`SchedulerEnvironment.sharedPause`, in `packages/client/src/sync/sharedPause.ts`).
      It is a Web Lock, named after the sync's (`lockName`), which each paused tab holds a part in, shared.
      Each run looks at it before it starts, a session's first included, so a tab opened meanwhile, or one that was frozen as the pause was made or missed the word, finds it, and joins it: it takes a part of its own, so the pause lasts while any tab of it is open and paused.
-     A look can be answered after the pause is over, so a tab joins only where another part is still held once it holds its own, and one tab joins at a time, under a lock of its own, so two that looked too soon never find each other's part.
-     A tab that pauses tells the others over a `BroadcastChannel` (`skysa-pause`), so one at a run stops it now; what it tells is only to look.
-     Asking again steals the lock, once the attempts are given back (or, for a re-scan, the cursor is gone), which ends every tab's part at once.
-     Each tab hears it from its own part ending, says it is idle, or offline, and syncs at its next minute, or as it comes into sight: the tab that asked ran the round its user asked for.
-     Each tab's companions are told the session started as its first run looks and finds no pause, and as a pause is over; they are told it ended only after that.
+     A look can be answered after the pause is over, so a tab joins only where another part is still held once it holds its own, and one tab joins at a time, under a lock of its own that the pause is also ended under, so two that looked too soon never find each other's part, and what a join counts holds until it keeps its part.
+     A tab that pauses tells the others over a `BroadcastChannel` (`skysa-pause`), naming the pause, so one at a run stops it now; what it tells is only to look.
+     Asking again steals the lock as the user asks, which ends every tab's part at once, so a pause made after it, in any tab, stands.
+     The tab that asked stays paused, so nothing runs there or joins a pause, until the attempts are given back (or, for a re-scan, the cursor is gone), and then runs the round its user asked for, unless it was paused again meanwhile.
+     Each other tab hears it from its own part ending, says it is idle, or offline, and syncs at its next minute, or as it comes into sight, rather than run beside that round.
+     Each tab's companions are told the session started as a run finds no pause, the session's first or the first after a pause; they are told it ended only after that.
      Until 2026-11-16 they were not told it started again after Sync now, and stayed stopped until the source changed or the app was opened again.
      Making way for an update pauses each tab alone (`pause`'s `thisTab`), so a tab left frozen holds no other paused after it, and asking again in another tab does not end it.
-     A tab that shows another source lets go of its part; one that stops lets go of it and takes it again as it starts, still paused.
+     A tab that shows another source lets go of its part; one that stops keeps it, and its pause, so it hears of the pause ending meanwhile, and starts unpaused if it did.
      None of it rejects: a browser without Web Locks, or whose lock manager refuses, pauses each tab alone.
      Until 2026-11-16 each tab paused alone, and another tab went on sending the changes the paused one said it kept (skysa-kit#20, item 2).
      It lasts until the user asks again — a sync now, or a re-scan, in any tab — or the source is shown again after another in every tab that holds a part, each letting go of its part as it moves, or the app is opened again with no tab of it still paused: in memory only, so a reload never leaves a device unsyncing without its user there to see it.

@@ -1,3 +1,5 @@
+import { cell } from '@skysa/storage';
+
 import type { SharedPause } from '../../../src/sync/sharedPause.js';
 
 /** A tab's part in a pause: told as it ends, unless it was let go of first. */
@@ -18,9 +20,10 @@ interface Part {
 export const fakeSharedPause = (options: Readonly<{ words?: 'byHand' }> = {}) => {
 	const parts = new Map<string, Set<Part>>();
 	/** What each open tab calls as it is told. */
-	const tabs = new Set<() => void>();
+	const tabs = new Set<(name: string) => void>();
 	const words: (() => void)[] = [];
-	const looks = new Map<'held', (() => void)[]>();
+	/** Looks waiting to be answered, from `holdLooks` until `answer`. */
+	const looks = cell<(() => void)[] | undefined>(undefined);
 
 	const isHeld = (name: string): boolean => (parts.get(name)?.size ?? 0) > 0;
 
@@ -35,7 +38,7 @@ export const fakeSharedPause = (options: Readonly<{ words?: 'byHand' }> = {}) =>
 		};
 	};
 
-	const open = (heard: () => void): SharedPause => {
+	const open = (heard: (name: string) => void): SharedPause => {
 		tabs.add(heard);
 		return {
 			hold: (name, ended) => {
@@ -43,7 +46,7 @@ export const fakeSharedPause = (options: Readonly<{ words?: 'byHand' }> = {}) =>
 				tabs.forEach((other) => {
 					if (other === heard) return;
 					const word = () => {
-						if (tabs.has(other)) other();
+						if (tabs.has(other)) other(name);
 					};
 					if (options.words === 'byHand') words.push(word);
 					else queueMicrotask(word);
@@ -52,10 +55,10 @@ export const fakeSharedPause = (options: Readonly<{ words?: 'byHand' }> = {}) =>
 			},
 			held: (name) => {
 				const answer = isHeld(name);
-				const held = looks.get('held');
-				if (held === undefined) return Promise.resolve(answer);
+				const waiting = looks.current;
+				if (waiting === undefined) return Promise.resolve(answer);
 				return new Promise((resolve) => {
-					held.push(() => {
+					waiting.push(() => {
 						resolve(answer);
 					});
 				});
@@ -91,15 +94,15 @@ export const fakeSharedPause = (options: Readonly<{ words?: 'byHand' }> = {}) =>
 		},
 		/** Has each look from now on wait for `answer`. */
 		holdLooks: () => {
-			looks.set('held', looks.get('held') ?? []);
+			looks.current ??= [];
 		},
 		/** Looks waiting to be answered. */
-		looking: () => looks.get('held')?.length ?? 0,
+		looking: () => looks.current?.length ?? 0,
 		/** Answers every look waiting, and each from now on at once. */
 		answer: () => {
-			const held = looks.get('held') ?? [];
-			looks.delete('held');
-			held.forEach((look) => {
+			const waiting = looks.current ?? [];
+			looks.current = undefined;
+			waiting.forEach((look) => {
 				look();
 			});
 		},

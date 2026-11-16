@@ -262,7 +262,7 @@ export const describePausing = (
 					sharedPause = hub.open,
 				}: Readonly<{
 					companion?: Companion;
-					sharedPause?: (heard: () => void) => SharedPause;
+					sharedPause?: (heard: (name: string) => void) => SharedPause;
 				}> = {}) => {
 					const env = fakeEnvironment();
 					const scheduler = device.schedule({
@@ -280,7 +280,13 @@ export const describePausing = (
 					scheduler.start();
 					return { scheduler, env };
 				};
-				return { device, hub, remote: first.remote, tab };
+				return {
+					device,
+					hub,
+					remote: first.remote,
+					tab,
+					withLock: first.env.environment.withLock,
+				};
 			};
 
 			/** A companion, and what it is told, in order. */
@@ -320,8 +326,8 @@ export const describePausing = (
 				expect(theRemote.fake.contentAt(note.path)).toBeUndefined();
 
 				const asking = two.scheduler.syncNow();
-				// Its own part let go of at once.
-				expect(hub.parts()).toBe(1);
+				// Over in every tab as the user asks.
+				expect(hub.parts()).toBe(0);
 				await asking;
 
 				expect(theRemote.fake.contentAt(note.path)).toContain('kept here');
@@ -364,6 +370,10 @@ export const describePausing = (
 				await one.scheduler.syncNow();
 
 				expect(first.said).toEqual(['started', 'ended', 'started']);
+				// The other's, as it next syncs.
+				await quiet();
+				expect(second.said).toEqual(['started', 'ended']);
+				two.env.advance(INTERVAL);
 				await vi.waitFor(() => {
 					expect(second.said).toEqual(['started', 'ended', 'started']);
 				});
@@ -423,35 +433,84 @@ export const describePausing = (
 				held.resolve();
 			});
 
-			it('ends the pause in the other tabs once the attempts are given back', async () => {
-				const { device, hub, tab } = await tabsOf();
-				const documents = device.store.syncStore('c1');
-				const seen: number[][] = [];
+			it('keeps a pause made as Sync now asks', async () => {
+				const { hub, remote: theRemote, tab } = await tabsOf();
 				const one = tab();
-				const two = tab({
-					sharedPause: (heard) => {
-						const pause = hub.open(heard);
-						return {
-							...pause,
-							end: async (name) => {
-								seen.push((await documents.pendingOps()).map((op) => op.attempts));
-								await pause.end(name);
-							},
-						};
-					},
-				});
+				const two = tab();
 				await reaches(one.scheduler, 'idle');
 				await reaches(two.scheduler, 'idle');
 				one.scheduler.pause();
 				await reaches(two.scheduler, 'paused');
-				await device.create('c1', 'Refused', 'once\n');
-				const [op] = await documents.pendingOps();
-				if (op === undefined) throw new Error('nothing was queued');
-				await documents.failOp(op.seq, 'refused');
+				const before = theRemote.pulls();
 
-				await two.scheduler.syncNow();
+				const asking = one.scheduler.syncNow();
+				one.scheduler.pause();
+				await asking;
+				// Whatever asks it to run after.
+				one.env.fire('focus');
+				one.env.advance(INTERVAL);
 
-				expect(seen).toEqual([[0]]);
+				await reaches(two.scheduler, 'paused');
+				await quiet();
+				expect(one.scheduler.status().phase).toBe('paused');
+				expect(hub.parts()).toBe(2);
+				expect(theRemote.pulls()).toBe(before);
+			});
+
+			it('stays paused while a re-scan waits for the lock, and runs only the round asked for', async () => {
+				const { device, remote: theRemote, tab, withLock } = await tabsOf();
+				const one = tab();
+				const two = tab();
+				await reaches(one.scheduler, 'idle');
+				await reaches(two.scheduler, 'idle');
+				one.scheduler.pause();
+				await reaches(two.scheduler, 'paused');
+				const before = theRemote.pulls();
+				// Another tab's run, of a build before this one, at the network.
+				const theirs = deferred();
+				const theirSync = withLock(device.app.lockName('c1'), () => theirs.promise);
+
+				const asking = one.scheduler.resync();
+				await reaches(two.scheduler, 'idle');
+				one.env.fire('focus');
+				one.env.advance(DEBOUNCE);
+				await quiet();
+				expect(one.scheduler.status().phase).toBe('paused');
+				theirs.resolve();
+				await theirSync;
+				await asking;
+
+				await quiet();
+				expect(theRemote.pulls()).toBe(before + 1);
+				expect(theRemote.cursors.at(-1)).toBeUndefined();
+				expect(one.scheduler.status().phase).toBe('idle');
+			});
+
+			it('stays paused while Sync now gives the attempts back, and runs only the round asked for', async () => {
+				const { device, remote: theRemote, tab, withLock } = await tabsOf();
+				const one = tab();
+				const two = tab();
+				await reaches(one.scheduler, 'idle');
+				await reaches(two.scheduler, 'idle');
+				one.scheduler.pause();
+				await reaches(two.scheduler, 'paused');
+				const before = theRemote.pulls();
+				// Another tab's run at the network, so that a run started here
+				// waits for it.
+				const theirs = deferred();
+				const theirSync = withLock(device.app.lockName('c1'), () => theirs.promise);
+
+				const asking = one.scheduler.syncNow();
+				one.env.fire('focus');
+				one.env.advance(DEBOUNCE);
+				await quiet();
+				theirs.resolve();
+				await theirSync;
+				await asking;
+
+				await quiet();
+				expect(theRemote.pulls()).toBe(before + 1);
+				expect(one.scheduler.status().phase).toBe('idle');
 			});
 
 			it('syncs again at its next minute, or in sight, in a tab whose pause another ended', async () => {
@@ -572,10 +631,14 @@ export const describePausing = (
 				const one = tab();
 				await reaches(one.scheduler, 'idle');
 				const other = hub.open(() => undefined);
+				hub.holdLooks();
 
 				other.hold('another source', () => undefined);
 				await quiet();
 
+				// Not even a look.
+				expect(hub.looking()).toBe(0);
+				hub.answer();
 				expect(one.scheduler.status().phase).toBe('idle');
 				const before = theRemote.pulls();
 				one.env.advance(INTERVAL);
@@ -623,6 +686,13 @@ export const describePausing = (
 					one.scheduler.pause({ thisTab: true });
 					one.scheduler.pause();
 				});
+				// Paused for an update, it takes no part in a pause another tab
+				// makes after.
+				await one.scheduler.syncNow();
+				await stillPaused(() => {
+					one.scheduler.pause({ thisTab: true });
+					two.scheduler.pause();
+				});
 			});
 
 			it('pauses no other tab for an update, nor one opened after it', async () => {
@@ -642,7 +712,7 @@ export const describePausing = (
 				expect(three.scheduler.status().phase).toBe('idle');
 			});
 
-			it('lets go of its part as it stops, or shows another source', async () => {
+			it('lets go of its part as it shows another source, and keeps it as it stops', async () => {
 				const { device, hub, tab } = await tabsOf();
 				const one = tab();
 				const two = tab();
@@ -655,11 +725,6 @@ export const describePausing = (
 				one.scheduler.pause();
 				expect(hub.parts()).toBe(2);
 
-				two.scheduler.stop();
-
-				expect(hub.parts()).toBe(1);
-				expect(hub.openCount()).toBe(1);
-
 				await device.bind('c2');
 
 				await vi.waitFor(() => {
@@ -669,9 +734,16 @@ export const describePausing = (
 				const three = tab();
 				await reaches(one.scheduler, 'idle');
 				await reaches(three.scheduler, 'idle');
+
+				// Stopped, it hears no word, and holds its part still.
+				one.scheduler.pause();
+				await reaches(two.scheduler, 'paused');
+				two.scheduler.stop();
+				expect(hub.openCount()).toBe(2);
+				expect(hub.parts()).toBe(3);
 			});
 
-			it('keeps a pause through a stop and start, and holds its part again', async () => {
+			it('keeps a pause, and its part, through a stop and a start', async () => {
 				const { hub, remote: theRemote, tab } = await tabsOf();
 				const one = tab();
 				await reaches(one.scheduler, 'idle');
@@ -679,23 +751,36 @@ export const describePausing = (
 				const before = theRemote.pulls();
 
 				one.scheduler.stop();
-				expect(hub.parts()).toBe(0);
+				expect(hub.parts()).toBe(1);
 				one.scheduler.start();
 
-				await vi.waitFor(() => {
-					expect(hub.parts()).toBe(1);
-				});
-				expect(one.scheduler.status().phase).toBe('paused');
+				await reaches(one.scheduler, 'paused');
 				one.env.advance(INTERVAL);
 				await quiet();
 				expect(theRemote.pulls()).toBe(before);
-				// The same for the device's pause beneath an update's.
-				one.scheduler.pause({ thisTab: true });
+				expect(hub.parts()).toBe(1);
+			});
+
+			it('starts unpaused once another tab asked again while it was stopped', async () => {
+				const { hub, remote: theRemote, tab } = await tabsOf();
+				const one = tab();
+				const two = tab();
+				await reaches(one.scheduler, 'idle');
+				await reaches(two.scheduler, 'idle');
+				one.scheduler.pause();
+				await reaches(two.scheduler, 'paused');
 				one.scheduler.stop();
+
+				await two.scheduler.syncNow();
+				await quiet();
+				const before = theRemote.pulls();
 				one.scheduler.start();
+
 				await vi.waitFor(() => {
-					expect(hub.parts()).toBe(1);
+					expect(theRemote.pulls()).toBe(before + 1);
 				});
+				await reaches(one.scheduler, 'idle');
+				expect(hub.parts()).toBe(0);
 			});
 		});
 

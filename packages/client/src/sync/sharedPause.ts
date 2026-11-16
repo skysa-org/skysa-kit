@@ -9,9 +9,9 @@ import { cell } from '@skysa/storage';
  * and which lasts while any tab holds one: a tab opened meanwhile, or one
  * that was frozen when it was made, finds it held when it next looks. Asking
  * again steals it, which ends every tab's part at once, and each tab learns
- * of that from its own part's ending. A word between tabs only has one that
- * is syncing look now. None of it rejects: a lock manager that refuses holds
- * no pause, and each tab syncs as it would without one.
+ * of that from its own part's ending. A word between tabs, naming the pause,
+ * only has one that is syncing look now. None of it rejects: a lock manager
+ * that refuses holds no pause, and each tab syncs as it would without one.
  * https://developer.mozilla.org/en-US/docs/Web/API/Web_Locks_API
  */
 export interface SharedPause {
@@ -28,11 +28,15 @@ export interface SharedPause {
 	 * if the pause still stands once this tab holds it: resolves to the way to
 	 * let go of it, or to nothing where the pause was over. A tab that looked
 	 * just before the pause was asked again so finds it over, though the look
-	 * found it held. One tab joins at a time, so two of them never find each
-	 * other's part. Has no other tab look.
+	 * found it held. One tab joins at a time, and no pause is ended while one
+	 * does, so two of them never find each other's part, and what a join counts
+	 * holds until it is kept. Has no other tab look.
 	 */
 	readonly join: (name: string, ended: () => void) => Promise<(() => void) | undefined>;
-	/** Ends the pause `name` in every tab, ending each part held in it. */
+	/**
+	 * Ends the pause `name` in every tab, ending each part held in it: not
+	 * while a tab joins it.
+	 */
 	readonly end: (name: string) => Promise<void>;
 	/** Has no more said to look, and says it to no other tab. */
 	readonly close: () => void;
@@ -42,11 +46,11 @@ const CHANNEL = 'skysa-pause';
 
 /**
  * A part in the pause `name`: `held` once the lock is had, false if it was
- * refused; `ended` called if it is stolen once kept, and not once let go of.
+ * refused; `ended` called if it is stolen, and not once let go of. No steal
+ * comes while a tab joins (`join`), so none comes before a part is kept.
  */
 const take = (name: string, ended: () => void) => {
 	const gone = cell(false);
-	const kept = cell(false);
 	const free = cell<() => void>(() => undefined);
 	const holding = new Promise<void>((resolve) => {
 		free.current = resolve;
@@ -66,15 +70,12 @@ const take = (name: string, ended: () => void) => {
 				had.current(false);
 				// Stolen; refused for any other reason, it was never held.
 				const stolen = error instanceof DOMException && error.name === 'AbortError';
-				if (stolen && kept.current && !gone.current) ended();
+				if (stolen && !gone.current) ended();
 			}
 		);
 	return {
 		held,
 		done,
-		keep: () => {
-			kept.current = true;
-		},
 		release: () => {
 			gone.current = true;
 			free.current();
@@ -82,44 +83,46 @@ const take = (name: string, ended: () => void) => {
 	};
 };
 
-/** How many parts are held in the pause `name`. */
+/** How many parts are held in the pause `name`: none, where the lock manager will not say. */
 const parts = async (name: string): Promise<number> => {
-	const { held = [] } = await navigator.locks.query();
+	const { held = [] } = await navigator.locks.query().catch(() => ({ held: [] }));
 	// Only parts: `end` holds it alone for the moment it takes.
 	return held.filter((lock) => lock.name === name && lock.mode === 'shared').length;
 };
+
+/** The lock a tab joins the pause `name` under, and ends it under (`join`). */
+const joining = (name: string): string => `${name} joining`;
 
 /**
  * The browser's, where it has Web Locks. Where it has no `BroadcastChannel`
  * either, a tab finds the pause as its next run looks.
  * https://developer.mozilla.org/en-US/docs/Web/API/BroadcastChannel
  */
-export const browserSharedPause = (heard: () => void): SharedPause => {
+export const browserSharedPause = (heard: (name: string) => void): SharedPause => {
 	const channel =
 		typeof BroadcastChannel === 'undefined' ? undefined : new BroadcastChannel(CHANNEL);
-	channel?.addEventListener('message', heard);
+	channel?.addEventListener('message', (event: MessageEvent) => {
+		// Another build may say something else.
+		if (typeof event.data === 'string') heard(event.data);
+	});
 	return {
 		hold: (name, ended) => {
 			const part = take(name, ended);
-			part.keep();
 			// Held, so a tab that looks now finds it.
 			void part.held.then((granted) => {
 				if (granted) channel?.postMessage(name);
 			});
 			return part.release;
 		},
-		held: async (name) => (await parts(name).catch(() => 0)) > 0,
+		held: async (name) => (await parts(name)) > 0,
 		join: (name, ended) =>
 			navigator.locks
-				.request(`${name} joining`, async () => {
+				.request(joining(name), async () => {
 					const part = take(name, ended);
 					if (!(await part.held)) return undefined;
-					// Another tab's part, which a steal before this one's would
-					// have ended: it was not ended since.
-					if ((await parts(name)) > 1) {
-						part.keep();
-						return part.release;
-					}
+					// Another tab's part, held now: no pause is ended while a
+					// tab joins it.
+					if ((await parts(name)) > 1) return part.release;
 					part.release();
 					// Gone before the next tab to join counts.
 					await part.done;
@@ -128,7 +131,9 @@ export const browserSharedPause = (heard: () => void): SharedPause => {
 				.catch(() => undefined),
 		end: async (name) => {
 			await navigator.locks
-				.request(name, { steal: true }, () => undefined)
+				.request(joining(name), () =>
+					navigator.locks.request(name, { steal: true }, () => undefined)
+				)
 				.catch(() => undefined);
 		},
 		close: () => {
