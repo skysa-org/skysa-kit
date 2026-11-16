@@ -498,7 +498,8 @@ interface Session {
 	 */
 	readonly renewed: Cell<boolean>;
 	/**
-	 * The op this connection's last completed run found out of attempts. Session
+	 * The op this connection's last completed run found out of attempts, or, in
+	 * a session made paused, the one the store holds as out of them. Session
 	 * state rather than the scheduler's, so a run or a re-scan that finishes
 	 * after the user has switched accounts cannot clear — or answer for — the
 	 * connection that is bound now.
@@ -1508,6 +1509,9 @@ export const createSyncScheduler = (options: SyncSchedulerOptions): SyncSchedule
 				environment.listen('online', () => {
 					const session = bound.current;
 					if (session === undefined) return;
+					// Paused, nothing was tried meanwhile, so nothing failed for
+					// the network's going: an op given up on stays so.
+					if (isPaused(session.connectionId)) return;
 					void released(session).then(() => run(session));
 				})
 			);
@@ -1582,14 +1586,20 @@ export const createSyncScheduler = (options: SyncSchedulerOptions): SyncSchedule
 			follow(shown.current);
 			const paused = bound.current;
 			if (paused === undefined) return;
-			// What the last sync left is still so. The copies it wrote are on
-			// the device to be seen. A send the pause aborted counted nothing
-			// against its op (the engine's `signal`), so an op given up on for
-			// a reason of its own stays given up on, and still named.
-			paused.stuck.current = session.stuck.current;
-			if (conflicts.length > 0 || paused.stuck.current !== undefined) {
-				publish({ ...status(), conflicts });
-			}
+			// The copies the last sync wrote are still on the device to be seen.
+			if (conflicts.length > 0) publish({ ...status(), conflicts });
+			// A send the pause aborted counted nothing against its op (the
+			// engine's `signal`), so an op given up on for a reason of its own
+			// stays so, and is named as the store holds it.
+			void stuckOp(paused.connectionId)
+				.then((stuck) => {
+					// Resumed meanwhile, the ops were given their attempts back,
+					// and what this read is already out of date.
+					if (stuck === undefined || !isPaused(paused.connectionId)) return;
+					paused.stuck.current = stuck;
+					publish(status());
+				})
+				.catch(() => undefined);
 		},
 		status,
 

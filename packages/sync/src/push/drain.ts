@@ -199,7 +199,7 @@ export const createPush = (context: EngineContext, { fileState, resolutionFor }:
 	 * Let go of by the caller (`aborted`), and its requests with it: nothing
 	 * more is asked of the provider, and nothing is counted against an op.
 	 */
-	const letGo = (progress: PushProgress, error?: unknown): SyncOutcome => ({
+	const abandoned = (progress: PushProgress, error?: unknown): SyncOutcome => ({
 		...drained(progress),
 		status: 'retry',
 		...(error === undefined ? {} : { error: messageOf(error) }),
@@ -305,7 +305,7 @@ export const createPush = (context: EngineContext, { fileState, resolutionFor }:
 		const [held, ...rest] = ops;
 		meter.pushLeft(ops.length, held);
 		if (held === undefined) return drained(progress);
-		if (aborted()) return letGo(progress);
+		if (aborted()) return abandoned(progress);
 		const batch = together(ops);
 		const ready = batch.length > 1 ? await stillTogether(batch) : undefined;
 		if (ready !== undefined) {
@@ -360,6 +360,10 @@ export const createPush = (context: EngineContext, { fileState, resolutionFor }:
 		progress: PushProgress,
 		retriedAuth: boolean
 	): Promise<SyncOutcome> => {
+		// Let go of already — a write sent beside the one that failed was
+		// aborted — and no resolution is asked of the provider.
+		if (aborted()) return abandoned(progress, error);
+
 		// The resolution reads the remote and writes to the store, either of
 		// which can fail in its own right — and a failure there must land in the
 		// same place as any other, or the op's `attempts` never moves and it can
@@ -398,7 +402,7 @@ export const createPush = (context: EngineContext, { fileState, resolutionFor }:
 		// Let go of, and the request with it — the op's own, or one its
 		// resolution made: what failed says nothing of the op, so it keeps its
 		// attempts.
-		if (aborted()) return letGo(progress, reason);
+		if (aborted()) return abandoned(progress, reason);
 
 		if (isAuthError(reason)) {
 			if (retriedAuth || !(await renew())) return paused(drained(progress));

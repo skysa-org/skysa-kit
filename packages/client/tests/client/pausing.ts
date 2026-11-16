@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { SYNC_WAIT_MS } from '../../src/sync/scheduler.js';
+import { type SchedulerStatus, SYNC_WAIT_MS } from '../../src/sync/scheduler.js';
 import type { ClientDevice } from './device.js';
 import {
 	DEBOUNCE,
@@ -155,12 +155,18 @@ export const describePausing = (
 				h.scheduler.pause();
 				theRemote.gate.delete('changes');
 				held.resolve();
+				// Nothing was tried while the network went, so this gives nothing back.
+				h.env.fire('online');
 				await quiet();
 
 				expect((await documents.pendingOps()).map((queued) => queued.attempts)).toEqual([
 					2,
 				]);
-				expect(h.scheduler.status().phase).toBe('paused');
+				// Named as the store holds it, though no run of this session found it.
+				expect(h.scheduler.status()).toMatchObject({
+					phase: 'paused',
+					stuck: { attempts: 2, error: 'refused' },
+				});
 			});
 
 			it('still names an op given up on, through the pause', async () => {
@@ -178,10 +184,36 @@ export const describePausing = (
 
 				h.scheduler.pause();
 
-				expect(h.scheduler.status()).toMatchObject({
-					phase: 'paused',
-					stuck: { attempts: 2, error: 'refused' },
+				await vi.waitFor(() => {
+					expect(h.scheduler.status()).toMatchObject({
+						phase: 'paused',
+						stuck: { attempts: 2, error: 'refused' },
+					});
 				});
+			});
+
+			it('names no op given up on once Sync now has given it its attempts back', async () => {
+				const device = await bound();
+				await device.create('c1', 'Stuck', 'refused\n');
+				const documents = device.store.syncStore('c1');
+				const [op] = await documents.pendingOps();
+				if (op === undefined) throw new Error('nothing was queued');
+				await documents.failOp(op.seq, 'refused');
+				await documents.failOp(op.seq, 'refused');
+				const h = started(device, { maxAttempts: 2 });
+				await vi.waitFor(() => {
+					expect(h.scheduler.status().stuck).toMatchObject({ attempts: 2 });
+				});
+				const said: SchedulerStatus[] = [];
+
+				h.scheduler.pause();
+				h.scheduler.subscribe((next) => said.push(next));
+				await h.scheduler.syncNow();
+				await reaches(h.scheduler, 'idle');
+
+				expect(
+					said.filter((next) => next.phase === 'paused' || next.stuck !== undefined)
+				).toEqual([]);
 			});
 
 			it('counts no attempt against a send it aborted', async () => {

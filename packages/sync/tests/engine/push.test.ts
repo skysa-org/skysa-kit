@@ -516,6 +516,41 @@ describe('push', () => {
 			]);
 		});
 
+		it('resolves nothing beside a write sent with it that was let go of', async () => {
+			// The first meets a conflict, and the write sent beside it is aborted.
+			const abort = new AbortController();
+			const engine = engineWith({ signal: abort.signal });
+			const entry = await remoteFile('a.md', 'one\n');
+			world.store.put({
+				id: 'n0',
+				path: 'a.md',
+				content: 'mine\n',
+				dirty: true,
+				...boundTo(entry),
+			});
+			world.store.put({ id: 'n1', path: 'b.md', content: 'b\n', dirty: true });
+			world.store.queue({ op: 'write', noteId: 'n0', path: 'a.md' });
+			world.store.queue({ op: 'write', noteId: 'n1', path: 'b.md' });
+			await world.provider.write('a.md', 'theirs\n', { expectedVersion: entry.version });
+			const asked: string[] = [];
+			world.provider.setFault((call) => {
+				asked.push(call.op);
+				if (call.op !== 'write' || call.path !== 'b.md') return undefined;
+				abort.abort();
+				return new DOMException('The operation was aborted.', 'AbortError');
+			});
+
+			const result = await engine.push();
+
+			expect(result.status).toBe('retry');
+			expect(asked).toEqual(['write', 'write']);
+			expect(world.store.ops().map((op) => [op.path, op.attempts])).toEqual([
+				['a.md', 0],
+				['b.md', 0],
+			]);
+			expect(world.store.notes().map((note) => note.path)).toEqual(['a.md', 'b.md']);
+		});
+
 		it('refreshes once for writes sent together that met an expired token, and sends only those again', async () => {
 			queueNotes(['a.md', 'b.md', 'c.md', 'd.md']);
 			const sent = new Map<string, number>();
