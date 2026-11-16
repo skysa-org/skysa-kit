@@ -107,6 +107,15 @@ const linked = (overrides: Partial<RelayLinkOptions> = {}) => {
 	return { link, env, ticket, onChanged, ...sockets };
 };
 
+/** Lost before the relay said anything, `times` over, each asking for the next ticket. */
+const refused = async (h: ReturnType<typeof linked>, times: number) => {
+	for (const _attempt of Array.from({ length: times })) {
+		await settled();
+		h.last().events.closed(1006);
+		h.env.advance(Math.max(0, ...h.env.pending()));
+	}
+};
+
 /** Opened, and answered once: a socket that works. */
 const working = async (h: ReturnType<typeof linked>) => {
 	await settled();
@@ -453,13 +462,9 @@ describe('the relay link', () => {
 		expect(h.onChanged).not.toHaveBeenCalled();
 	});
 
-	it('gives up for the session on sockets that never open, where it has never heard the relay', async () => {
+	it('gives up for the session on sockets lost unheard, where it has never heard the relay', async () => {
 		const h = linked();
-		for (const _attempt of Array.from({ length: RELAY_GIVE_UP - 1 })) {
-			await settled();
-			h.last().events.closed(1006);
-			h.env.advance(Math.max(0, ...h.env.pending()));
-		}
+		await refused(h, RELAY_GIVE_UP - 1);
 		await settled();
 		h.last().events.closed(1006);
 		expect(h.env.pending()).toEqual([]);
@@ -470,6 +475,21 @@ describe('the relay link', () => {
 		await settled();
 
 		expect(h.ticket).toHaveBeenCalledTimes(RELAY_GIVE_UP);
+	});
+
+	it('gives up the same way on sockets that open and are never heard', async () => {
+		const h = linked();
+		for (const _attempt of Array.from({ length: RELAY_GIVE_UP })) {
+			await settled();
+			// Taken through the upgrade by something that passes no frames.
+			h.last().events.opened();
+			h.env.advance(RELAY_PONG_MS);
+			h.env.advance(Math.max(0, ...h.env.pending()));
+		}
+		await settled();
+
+		expect(h.ticket).toHaveBeenCalledTimes(RELAY_GIVE_UP);
+		expect(h.env.pending()).toEqual([]);
 	});
 
 	it('gives up the same way on a URL the browser will not open', async () => {
@@ -488,34 +508,30 @@ describe('the relay link', () => {
 		expect(h.env.pending()).toEqual([]);
 	});
 
-	it('gives up at once where the page’s policy refuses the socket', async () => {
+	it('gives up for the session at once where the page’s policy refuses the socket', async () => {
 		const h = linked({
 			open: () => {
 				throw new DOMException('Refused by the page’s policy.', 'SecurityError');
 			},
 		});
 		await settled();
+		expect(h.env.pending()).toEqual([]);
+
+		h.env.set({ visible: false });
+		h.env.set({ visible: true });
+		h.link.pushed();
+		await settled();
 
 		expect(h.ticket).toHaveBeenCalledOnce();
-		expect(h.env.pending()).toEqual([]);
 	});
 
-	it('never gives up once a socket has opened in this session, heard or not', async () => {
+	it('never gives up once it has heard the relay in this session', async () => {
 		const h = linked();
-		const refused = async (times: number) => {
-			for (const _attempt of Array.from({ length: times })) {
-				await settled();
-				h.last().events.closed(1006);
-				h.env.advance(Math.max(0, ...h.env.pending()));
-			}
-		};
-		await refused(RELAY_GIVE_UP - 1);
-		await settled();
-		// Opened, and lost before the relay said anything.
-		h.last().events.opened();
-		h.last().events.closed(1006);
+		await refused(h, RELAY_GIVE_UP - 1);
+		const socket = await working(h);
+		socket.events.closed(1006);
 		h.env.advance(Math.max(0, ...h.env.pending()));
-		await refused(2 * RELAY_GIVE_UP);
+		await refused(h, 2 * RELAY_GIVE_UP);
 		await settled();
 
 		// Each socket lost asked for the next.
@@ -524,11 +540,7 @@ describe('the relay link', () => {
 
 	it('counts sockets in a row across hiding, showing and a ticket it could not have', async () => {
 		const h = linked();
-		for (const _attempt of Array.from({ length: RELAY_GIVE_UP - 1 })) {
-			await settled();
-			h.last().events.closed(1006);
-			h.env.advance(Math.max(0, ...h.env.pending()));
-		}
+		await refused(h, RELAY_GIVE_UP - 1);
 		await settled();
 		h.env.set({ visible: false });
 		h.ticket.mockRejectedValueOnce(new Error('down'));
