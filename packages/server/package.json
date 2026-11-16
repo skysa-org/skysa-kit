@@ -50,7 +50,7 @@
 		"@skysa/protocol": "workspace:*",
 		"@skysa/storage": "workspace:*",
 		"drizzle-orm": "^0.45.4",
-		"hono": "^4.13.13",
+		"hono": "^4.13.16",
 		"zod": "catalog:"
 	},
 	"devDependencies": {
