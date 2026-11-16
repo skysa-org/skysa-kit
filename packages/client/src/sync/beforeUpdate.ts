@@ -24,8 +24,10 @@ import type { SyncScheduler } from './scheduler.js';
  * user's pause would pause it (`pause` in `scheduler.ts`): the run's requests
  * are aborted and no other starts. Every other tab is asked to do the same,
  * since a sync another tab runs goes through the same worker; a tab hidden or
- * frozen still takes the message. After the reload syncing starts again by
- * itself, since a pause lasts only until the app is opened again.
+ * frozen still takes the message. Each pauses itself alone (`thisTab`), not
+ * the device as the user's pause does, so a tab left frozen does not hold
+ * every tab paused after the update. After the reload syncing starts again by
+ * itself, since this tab's pause lasts only until the app is opened again.
  *
  * What it cannot stop is a request nothing here makes — a picture opened in
  * the moment, a tab of an older build that does not listen. Those hold the
@@ -97,7 +99,7 @@ export const makeWayWhenAsked = (
 	channel: UpdateChannel
 ): (() => void) =>
 	channel.onAnnounce(() => {
-		scheduler.pause();
+		scheduler.pause({ thisTab: true });
 	});
 
 /**
@@ -113,6 +115,6 @@ export const makeWay = async (
 		})
 ): Promise<void> => {
 	channel.announce();
-	scheduler.pause();
+	scheduler.pause({ thisTab: true });
 	await wait(MAKE_WAY_MS);
 };

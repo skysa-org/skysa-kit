@@ -1155,7 +1155,21 @@ The two-device suite (`overProviders.test.ts`) does the same at rest, and checks
      An op given up on for a reason of its own stays so through the pause, though the paused status names no op, as before: a run after the pause names it again where it is still out of attempts.
      The network coming back still gives every op its attempts back, paused or not.
      Until 2026-11-16 the pause gave every op its attempts back once the run let go, which wiped one given up on for a reason of its own, and could wipe what a run resumed meanwhile had counted (skysa-kit#20, item 3).
-     It lasts until the user asks again — a sync now, or a re-scan — or the source is shown again after another, or the app is opened again: in memory only, so a reload never leaves a device unsyncing without its user there to see it.
+     The pause is the device's, as the apps say it is: every tab of the app that shows the source pauses with it, a tab opened meanwhile finds it paused, and asking again in any tab ends it in all (`SchedulerEnvironment.sharedPause`, in `packages/client/src/sync/sharedPause.ts`).
+     It is a Web Lock, named after the sync's (`lockName`), which each paused tab holds a part in, shared.
+     Each run looks at it before it starts, a session's first included, so a tab opened meanwhile, or one that was frozen as the pause was made or missed the word, finds it, and joins it: it takes a part of its own, so the pause lasts while any tab of it is open and paused.
+     A look can be answered after the pause is over, so a tab joins only where another part is still held once it holds its own, and one tab joins at a time, under a lock of its own that the pause is also ended under, so two that looked too soon never find each other's part, and what a join counts holds until it keeps its part.
+     A tab that pauses tells the others over a `BroadcastChannel` (`skysa-pause`), naming the pause, so one at a run stops it now; what it tells is only to look.
+     Asking again steals the lock as the user asks, which ends every tab's part at once, so a pause made after it, in any tab, stands.
+     The tab that asked stays paused, so nothing runs there or joins a pause, until the attempts are given back (or, for a re-scan, the cursor is gone), and then runs the round its user asked for, unless it was paused again meanwhile.
+     Each other tab hears it from its own part ending, says it is idle, or offline, and syncs at its next minute, or as it comes into sight, rather than run beside that round.
+     Each tab's companions are told the session started as a run finds no pause, the session's first or the first after a pause; they are told it ended only after that.
+     Until 2026-11-16 they were not told it started again after Sync now, and stayed stopped until the source changed or the app was opened again.
+     Making way for an update pauses each tab alone (`pause`'s `thisTab`), so a tab left frozen holds no other paused after it, and asking again in another tab does not end it.
+     A tab that shows another source lets go of its part; one that stops keeps it, and its pause, so it hears of the pause ending meanwhile, and starts unpaused if it did.
+     None of it rejects: a browser without Web Locks, or whose lock manager refuses, pauses each tab alone.
+     Until 2026-11-16 each tab paused alone, and another tab went on sending the changes the paused one said it kept (skysa-kit#20, item 2).
+     It lasts until the user asks again — a sync now, or a re-scan, in any tab — or the source is shown again after another in every tab that holds a part, each letting go of its part as it moves, or the app is opened again with no tab of it still paused: in memory only, so a reload never leaves a device unsyncing without its user there to see it.
    - **What stands against syncing is said until something answers it (2026-11-15).**
      The status's `refusal`, with its `denial`, is the server's last refusal from when it was given until a token is had again from anywhere (`TokenSource.standing` in `packages/client/src/sync/tokens.ts`), or `reauthorize_required` where the provider refused even a fresh token, until a run's pull gets through, whatever its push then comes to, short of the provider refusing a fresh token there too.
      It is said whatever the phase: a run that asks again, going offline, a backoff, a pause and a cancel's hold all leave it standing, and the phase says how syncing is going meanwhile (during the hold it is `local`, which says nothing of a connection, and the refusal is said again once the hold is released).
@@ -1708,7 +1722,7 @@ What follows is the kit's part of skysa-notes' §8; the rest — its fill window
   So Reload pauses this tab's sync, as the user's pause does, and asks every other tab to pause too over a `BroadcastChannel` (`skysa-update`).
   It gives them 250 ms, then asks (`packages/client/src/sync/beforeUpdate.ts`).
   With a second tab making requests until told, the take-over and both reloads came in about 1.5 s.
-  A pause lasts only until the app is opened again, so syncing starts again after the reload by itself.
+  Each tab pauses itself alone for it, not the device as the user's pause does, and a tab's pause lasts only until the app is opened again, so syncing starts again after the reload by itself.
   The prompt says it is updating meanwhile, and after ten seconds, what else will do it.
   A request nothing here makes, such as a picture opened at that moment or a tab still on a build from before this, still holds the take-over to the five minutes.
   The update *to* this build is one of those: the old page handles the click.
