@@ -642,7 +642,7 @@ Keep it boring.
   - **Kept for as long as the policy says.**
     The app holds an accepted code in `localStorage` beside the time the policy said it stops being good, so it survives the round trip through the consent screen and a closed tab or installed app, and one code can connect several accounts.
     A read after that time finds nothing, and lets it go just after, in a microtask, never during the read: a gate reads the code as it renders, and a read that let it go at once would tell every watcher in the middle of that render (2026-11-15, skysa-kit#22).
-    A gate showing the code also lets it go by a timer as the hold ends (`useConnectCodeHeldUntil`), since an end by the clock tells no one.
+    A gate showing the code also lets it go by a timer as the hold ends (`useConnectCodeHeldUntil`), since an end by the clock tells no one, and the hook follows the record as stored, which changes only with storage.
     It was `sessionStorage` until the policy could say how long: a code kept for later visits would have outlived what it meant, and the end the policy gives is what keeps that from happening now.
     It is none of the three kinds of secret: the operator issued it to the person typing it, and it is worth only what their policy decides.
     Where storage is refused, the app holds it in memory, which is enough for the connect it was accepted for.
@@ -682,11 +682,13 @@ Keep it boring.
     `askAboutConnectCode` answers with an outcome: `accepted`, `refused` with the policy's reason, `tooMany` or `unchecked`.
     `askHeldCodeAgain` takes whether the gate asks for a code as a function, asked only once a value is held and due, so an app that must ask `/config` for it asks only then.
     Each asking spends a guess the address shares, so it is guarded.
-    The store keeps when this device last asked about the value again, answered or not, and no tab asks within a minute of that: one load asking twice asks once, and no answer does not become a request on every render.
-    After a refused connect it asks at once otherwise, even just after the policy gave the pass; a clock set back counts as due; and where what is held changed while `asksForCode` was answering, nothing is asked.
+    The store keeps when this device last asked about the value again (`tried`), stamped before `asksForCode`, answered or not, and the hour counts from that or the policy's last word, whichever is later: no answer, a 429 or a failing `asksForCode` waits the hour like any other.
+    After a refused connect it asks at once, once in that load, since a refused connect comes back as a fresh load; a clock set back counts as due; and where what is held changed while `asksForCode` was answering, nothing is asked.
+    A tab asks under a Web Lock taken only if free, so two tabs opening together ask once: `localStorage` is read and written apart.
+    A pass the policy gives for less than the hour runs out unasked, as the protocol's "at most once an hour" says.
     `codeWasRefused` takes the refusal and its code from the connect's answer.
-    `useConnectCodeHeldUntil` follows the store (`useSyncExternalStore`) and tells `onLapse` which typed code ran out, however the end is seen: its own timer, another tab's, or a render after the end.
-    It is never told a value the policy gave to hold, which is never shown.
+    `useConnectCodeHeldUntil` follows the record as stored (`useSyncExternalStore`), so a render reads no clock: a timer lets the code go as it ends, and any other read past the end does too.
+    It tells `onLapse` which typed code it showed was let go of after its end, in this tab or another, and not one replaced by another typed code or dropped before its end; never a pass, which is never shown.
 - **Rate-limit seam:** `createApp({ rateLimiter })`, defaulting to `neverLimited`, consulted by `POST /api/auth/connect/:provider/start`, the callback, and `POST /api/token` — the three endpoints that spend an outbound provider call — and by `POST /api/connect-code`, which spends none but answers a question worth guessing at.
   Also by the change relay's ticket and upgrade (`relay-ticket:<connectionId>`, `relay:<connectionId>`), which spend none either but would otherwise let one device open sockets without limit.
   A seam and not a Cloudflare binding, for the same reason as the entitlement one: a binding would be deployment-specific code in a repo that forbids it.

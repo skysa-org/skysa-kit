@@ -12,6 +12,7 @@ import {
 	heldConnectCodeShown,
 	holdAcceptedCode,
 	holdConnectCode,
+	storedConnectCode,
 	watchConnectCode,
 } from '../src/store/connectCode.js';
 
@@ -206,9 +207,9 @@ describe('what the policy gives to hold in place of a code', () => {
 		holdAcceptedCode('K7QM-2XRD', { expiresIn: 60, hold: PASS }, NOW);
 		expect(heldConnectCodeRecord(NOW)?.tried).toBe(0);
 
-		connectCodeTried('W3TB-9HQP', NOW + 10_000);
+		expect(connectCodeTried('W3TB-9HQP', NOW + 10_000)).toBeUndefined();
 		expect(heldConnectCodeRecord(NOW)?.tried).toBe(0);
-		connectCodeTried(PASS, NOW + 10_000);
+		expect(connectCodeTried(PASS, NOW + 10_000)).toEqual(heldConnectCodeRecord(NOW));
 		expect(heldConnectCodeRecord(NOW)).toEqual({
 			code: PASS,
 			until: NOW + 60_000,
@@ -224,6 +225,22 @@ describe('what the policy gives to hold in place of a code', () => {
 
 		holdAcceptedCode('W3TB-9HQP', { expiresIn: 900 }, NOW + 40_000);
 		expect(heldConnectCodeRecord(NOW + 40_000)?.tried).toBe(0);
+	});
+
+	it('is, as stored, the same record while storage is unchanged, run out or not', () => {
+		holdConnectCode('K7QM-2XRD', 900, NOW);
+		const stored = storedConnectCode();
+
+		expect(stored?.until).toBe(NOW + 900_000);
+		expect(storedConnectCode()).toBe(stored);
+		expect(heldConnectCode(NOW + 900_000)).toBeUndefined();
+		expect(storedConnectCode()).toBe(stored);
+
+		holdConnectCode('K7QM-2XRD', 900, NOW + 1000);
+		expect(storedConnectCode()).not.toBe(stored);
+		expect(storedConnectCode()?.until).toBe(NOW + 901_000);
+		dropConnectCode();
+		expect(storedConnectCode()).toBeUndefined();
 	});
 
 	it('tells whoever is watching when another tab changes it', () => {

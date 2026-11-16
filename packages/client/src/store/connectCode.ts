@@ -94,9 +94,19 @@ const parse = (raw: string | null): Held | undefined => {
 	}
 };
 
+/** What was last read, so storage that has not changed answers with the same record. */
+const lastRead = cell<Readonly<{ raw: string | null; held: Held | undefined }> | undefined>(
+	undefined
+);
+
 const read = (): Held | undefined => {
 	try {
-		return parse(globalThis.localStorage.getItem(KEY));
+		const raw = globalThis.localStorage.getItem(KEY);
+		const last = lastRead.current;
+		if (last?.raw === raw) return last.held;
+		const held = parse(raw);
+		lastRead.current = { raw, held };
+		return held;
 	} catch {
 		return memory.current;
 	}
@@ -141,6 +151,13 @@ const current = (now: number): Held | undefined => {
 /** What is held, read once, for a rule that needs several of its parts as they were together. */
 export const heldConnectCodeRecord = (now = Date.now()): HeldConnectCode | undefined =>
 	current(now);
+
+/**
+ * What is stored, whether or not it has run out, and the same record for as
+ * long as storage is unchanged: a snapshot for `useSyncExternalStore`, which
+ * must not change by the clock alone. A reader says what has run out.
+ */
+export const storedConnectCode: () => HeldConnectCode | undefined = read;
 
 export const heldConnectCode = (now = Date.now()): string | undefined => current(now)?.code;
 
@@ -215,12 +232,15 @@ export const holdAcceptedCode = (
 
 /**
  * That this device is asking the policy about `code` again, at `now`, where
- * it is still what is held: so neither this tab nor another asks about it
- * again straight after, answered or not.
+ * it is still what is held, so it is not asked about again straight after,
+ * answered or not. What is held then, or nothing where `code` is not.
  */
-export const connectCodeTried = (code: string, now = Date.now()): void => {
+export const connectCodeTried = (code: string, now = Date.now()): HeldConnectCode | undefined => {
 	const held = current(now);
-	if (held?.code === code) write({ ...held, tried: now });
+	if (held?.code !== code) return undefined;
+	const tried = { ...held, tried: now };
+	write(tried);
+	return tried;
 };
 
 export const dropConnectCode = (): void => {
