@@ -92,6 +92,15 @@ export const RELAY_PONG_MS = 10_000;
 export const RELAY_RETRY_MS = 1000;
 export const RELAY_MAX_RETRY_MS = 60_000;
 /**
+ * Sockets in a row that closed, or would not be opened, before opening, at
+ * which a link that has never heard the relay stops for the session: about
+ * half a minute of the backoff. A browser that refuses the socket — one
+ * before CSP Level 3, where `connect-src 'self'` does not cover a same-origin
+ * `wss:` — would otherwise ask for a ticket every minute for as long as the
+ * app is in view. Polling goes on as it is.
+ */
+export const RELAY_GIVE_UP = 6;
+/**
  * The least time between two `pushed` this device sends. Half again the
  * relay's second, so the network's jitter cannot bring two inside it and have
  * the later one dropped — the one that says the last push happened.
@@ -102,11 +111,12 @@ type Timer = 'retry' | 'ping' | 'pong' | 'tell';
 
 /**
  * `closed`: the session is over. `stopped`: told there is nothing to connect
- * to. `connecting`: a ticket is being asked for. `open`: the socket has opened.
- * `heard`: the server has said something on it. `owed`: a push it has not yet
+ * to, or given up on. `connecting`: a ticket is being asked for. `open`: the
+ * socket has opened. `heard`: the server has said something on it. `reached`:
+ * it has said something on one in this session. `owed`: a push it has not yet
  * been told of.
  */
-type Flag = 'closed' | 'stopped' | 'connecting' | 'open' | 'heard' | 'owed';
+type Flag = 'closed' | 'stopped' | 'connecting' | 'open' | 'heard' | 'reached' | 'owed';
 
 /** What belongs to one socket, and goes with it. */
 const SOCKET_TIMERS: readonly Timer[] = ['ping', 'pong', 'tell'];
@@ -121,6 +131,8 @@ export const createRelayLink = (options: RelayLinkOptions): RelayLink => {
 	const socket = cell<RelaySocket | undefined>(undefined);
 	/** Failures in a row since the server last said anything, for the backoff. */
 	const failures = cell(0);
+	/** Sockets in a row that never opened, for giving up. */
+	const unopened = cell(0);
 	/**
 	 * Which attempt is current. A ticket that arrives, or a socket that speaks,
 	 * after the link has let its attempt go is about nothing.
@@ -191,6 +203,16 @@ export const createRelayLink = (options: RelayLinkOptions): RelayLink => {
 		});
 	};
 
+	/** A socket that never opened: tried again, unless none has and the relay has never been heard. */
+	const refused = () => {
+		unopened.current += 1;
+		if (unopened.current >= RELAY_GIVE_UP && !flags.has('reached')) {
+			stop();
+			return;
+		}
+		failed();
+	};
+
 	/** Tell the relay of a push, as soon as there is a socket and the spacing allows. */
 	const tell = () => {
 		if (!flags.has('owed') || !flags.has('open')) return;
@@ -215,6 +237,7 @@ export const createRelayLink = (options: RelayLinkOptions): RelayLink => {
 
 	const opened = () => {
 		flags.add('open');
+		unopened.current = 0;
 		// At once, not in 45 seconds: the answer is how the link knows the way
 		// through to the relay works, and so that its backoff can start over.
 		ping();
@@ -223,6 +246,7 @@ export const createRelayLink = (options: RelayLinkOptions): RelayLink => {
 
 	const heard = (data: unknown) => {
 		flags.add('heard');
+		flags.add('reached');
 		failures.current = 0;
 		if (data === RELAY_PONG) {
 			cancel('pong');
@@ -235,6 +259,7 @@ export const createRelayLink = (options: RelayLinkOptions): RelayLink => {
 
 	const lost = (code: number) => {
 		const working = flags.has('heard');
+		const wasOpen = flags.has('open');
 		drop();
 		// Revoked or disconnected. The next request to the API is refused as
 		// well, which is how the user hears of it (`sync/tokens.ts`).
@@ -249,7 +274,8 @@ export const createRelayLink = (options: RelayLinkOptions): RelayLink => {
 			void connect();
 			return;
 		}
-		failed();
+		if (wasOpen) failed();
+		else refused();
 	};
 
 	const connect = async (): Promise<void> => {
@@ -291,8 +317,8 @@ export const createRelayLink = (options: RelayLinkOptions): RelayLink => {
 				},
 			});
 		} catch {
-			// A URL the browser would not open: tried again, like any failure.
-			failed();
+			// A URL the browser would not open, or a socket its policy refuses.
+			refused();
 		}
 	};
 

@@ -961,6 +961,9 @@ Any other value boots, with a warning to remove it.
 ### Change relay (optional, 2026-10-05)
 
 Where the operator turns it on, a device that has pushed tells the API and the API tells the connection's other devices, which then pull; it carries that something changed, and nothing else.
+A device's link to it is only a hint, and polling goes on whatever becomes of it: after a failure it tries again, waiting from a second up to a minute.
+Six sockets in a row that never opened, on a link that has never heard the relay, stop it for the session (`RELAY_GIVE_UP`).
+A browser that refuses a same-origin `wss:` under `connect-src 'self'`, one from before CSP Level 3, would otherwise ask for a ticket every minute for as long as the app is in view.
 The decision record is [`decisions/0003-change-relay.md`](decisions/0003-change-relay.md).
 
 

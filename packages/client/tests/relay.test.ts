@@ -7,6 +7,7 @@ import {
 	createRelayFactory,
 	createRelayLink,
 	type OpenRelaySocket,
+	RELAY_GIVE_UP,
 	RELAY_MAX_RETRY_MS,
 	RELAY_PING_MS,
 	RELAY_PONG_MS,
@@ -450,6 +451,76 @@ describe('the relay link', () => {
 		socket.events.heard(RELAY_CHANGED);
 		expect(socket.sent).toEqual([RELAY_PING]);
 		expect(h.onChanged).not.toHaveBeenCalled();
+	});
+
+	it('gives up for the session on sockets that never open, where it has never heard the relay', async () => {
+		const h = linked();
+		for (const _attempt of Array.from({ length: RELAY_GIVE_UP - 1 })) {
+			await settled();
+			h.last().events.closed(1006);
+			h.env.advance(Math.max(0, ...h.env.pending()));
+		}
+		await settled();
+		h.last().events.closed(1006);
+		expect(h.env.pending()).toEqual([]);
+
+		h.env.set({ visible: false });
+		h.env.set({ visible: true });
+		h.link.pushed();
+		await settled();
+
+		expect(h.ticket).toHaveBeenCalledTimes(RELAY_GIVE_UP);
+	});
+
+	it('gives up the same way where the browser will not open the socket at all', async () => {
+		const h = linked({
+			open: () => {
+				throw new DOMException('Refused by the page’s policy.', 'SecurityError');
+			},
+		});
+		for (const _attempt of Array.from({ length: RELAY_GIVE_UP })) {
+			await settled();
+			h.env.advance(Math.max(0, ...h.env.pending()));
+		}
+		await settled();
+
+		expect(h.ticket).toHaveBeenCalledTimes(RELAY_GIVE_UP);
+		expect(h.env.pending()).toEqual([]);
+	});
+
+	it('counts again from nothing once a socket has opened', async () => {
+		const h = linked();
+		const refused = async (times: number) => {
+			for (const _attempt of Array.from({ length: times })) {
+				await settled();
+				h.last().events.closed(1006);
+				h.env.advance(Math.max(0, ...h.env.pending()));
+			}
+		};
+		await refused(RELAY_GIVE_UP - 1);
+		await settled();
+		// Opened, and lost before the relay said anything.
+		h.last().events.opened();
+		h.last().events.closed(1006);
+		h.env.advance(Math.max(0, ...h.env.pending()));
+		await refused(RELAY_GIVE_UP - 1);
+		await settled();
+
+		// Each socket lost asked for the next.
+		expect(h.sockets).toHaveLength(2 * RELAY_GIVE_UP);
+	});
+
+	it('never gives up once it has heard the relay in this session', async () => {
+		const h = linked();
+		const socket = await working(h);
+		socket.events.closed(1006);
+		for (const _attempt of Array.from({ length: 2 * RELAY_GIVE_UP })) {
+			h.env.advance(Math.max(0, ...h.env.pending()));
+			await settled();
+			h.last().events.closed(1006);
+		}
+
+		expect(h.env.pending()).toHaveLength(1);
 	});
 
 	it('tries again when the browser will not open the socket at all', async () => {
