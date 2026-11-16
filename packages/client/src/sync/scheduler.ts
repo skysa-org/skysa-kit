@@ -21,7 +21,7 @@ import {
 } from '@skysa/sync';
 
 import type { ApiClient, Denial, Refusal } from '../api/client.js';
-import { credentialFor, type CredentialStore } from '../store/credentials.js';
+import type { CredentialStore } from '../store/credentials.js';
 import type { RelayFactory, RelayLink } from './relay.js';
 import { createTokenSource, type Refused, type TokenSource, type TokenStates } from './tokens.js';
 
@@ -457,9 +457,9 @@ type Flag = 'again' | 'nudged' | 'backingOff';
 
 /**
  * A connection's tokens, and what stands against it (`standingFor`), kept by
- * the scheduler across the connection's sessions: a session made again for
- * it, after a pause, another source shown, or a cancel, says what still
- * stands, and the two never answer differently.
+ * the scheduler across the connection's sessions while it is synced: a
+ * session made again for it, after a pause or a cancel's hold, says what
+ * still stands, and the two never answer differently.
  */
 interface Account {
 	readonly tokens: TokenSource;
@@ -672,11 +672,13 @@ export const createSyncScheduler = (options: SyncSchedulerOptions): SyncSchedule
 
 	/**
 	 * A run's renewal, which says when it had a token (`Session.renewed`). One
-	 * that did not was refused, which `standingChanged` says.
+	 * that did not was refused, which `standingChanged` says; so was one
+	 * whose mint went through while another beside it was refused (several
+	 * writes at once, `StorageProvider.writesAtOnce`).
 	 */
 	const reauthorize = async (session: Session): Promise<void> => {
 		await renew(session.account.tokens);
-		session.renewed.current = true;
+		session.renewed.current = session.account.tokens.standing() === undefined;
 	};
 
 	/** Once more after `renewing`, for work that met an expired token. */
@@ -911,8 +913,13 @@ export const createSyncScheduler = (options: SyncSchedulerOptions): SyncSchedule
 		const conflicts = together(status().conflicts, outcome.conflicts);
 		if (outcome.status === 'paused') {
 			// The provider, which only a run that gets through answers. The
-			// server's own refusal stands of itself.
+			// server's own refusal stands of itself, and one answered since the
+			// run met it is tried again, as time may fix any other failure.
 			if (session.renewed.current) session.account.unauthorized.current = true;
+			if (standingFor(session) === undefined) {
+				failed(session, outcome.error, outcome.conflicts);
+				return;
+			}
 			publish({ ...status(), phase: 'attention', error: outcome.error, conflicts });
 			return;
 		}
@@ -954,9 +961,10 @@ export const createSyncScheduler = (options: SyncSchedulerOptions): SyncSchedule
 		}
 		if (result.pulledAt !== undefined) {
 			// The provider took the run's token for a whole pull: it is not
-			// refusing it, whatever the push came to, short of its refusing it
-			// there as well (`synced`).
-			if (result.outcome.status !== 'paused') session.account.unauthorized.current = false;
+			// refusing it, whatever the push came to, short of its refusing a
+			// fresh one there as well (`synced`).
+			const refused = result.outcome.status === 'paused' && session.renewed.current;
+			if (!refused) session.account.unauthorized.current = false;
 			publish({ ...status(), lastSyncAt: result.pulledAt });
 		}
 		// Whatever the rest of the round came to: what was pushed is there for
@@ -1259,10 +1267,7 @@ export const createSyncScheduler = (options: SyncSchedulerOptions): SyncSchedule
 		sessionUnsubscribers.add(stop);
 	};
 
-	/**
-	 * Each connection synced, for as long as the scheduler runs, until it is
-	 * let go (`forgetLetGo`).
-	 */
+	/** Each connection synced, while it is (`forgetOthers`). */
 	const accounts = new Map<string, Account>();
 	const accountOf = (connectionId: string): Account => {
 		const known = accounts.get(connectionId);
@@ -1285,33 +1290,28 @@ export const createSyncScheduler = (options: SyncSchedulerOptions): SyncSchedule
 	};
 
 	/**
-	 * Each connection kept, let go of where the device no longer holds its
-	 * credential: it was let go, detached or not, which answers whatever
-	 * stood against it, so that connected again it is asked afresh. One only
-	 * no longer shown keeps what stands against it. Asked of the store, whose
-	 * credential goes in the same breath as the connection: a source let go
-	 * is not always seen detached first.
+	 * Every connection kept but `syncing`, and one a cancel is holding still,
+	 * let go of. A connection's account lasts through its sessions — a pause,
+	 * a cancel's hold — and goes once another source, or none, is synced:
+	 * let go, detached or in one step, it is asked afresh once connected
+	 * again, and so it is shown again after another, as a new binding is.
 	 */
-	const forgetLetGo = () => {
+	const forgetOthers = (syncing: string | undefined) => {
 		accounts.forEach((_account, connectionId) => {
-			void credentialFor(store.credentials, connectionId).then(
-				(held) => {
-					if (held === undefined) accounts.delete(connectionId);
-				},
-				// A store that cannot say keeps it, as one that says it is held.
-				() => undefined
-			);
+			if (connectionId !== syncing && !halted.has(connectionId))
+				accounts.delete(connectionId);
 		});
 	};
 
 	/**
 	 * What the server says of the connection has changed: said then, rather
 	 * than with whatever is said next. A refusal is the last word on the
-	 * runs' renewals (`Session.renewed`). And a refusal answered, by a token
-	 * had in a run or outside one, is followed by a run, now or after the one
-	 * under way, as focus would start one, and as focus does, it leaves a
-	 * backoff to its timer: whatever that run came to, it may have stopped
-	 * for what has just been answered.
+	 * runs' renewals (`Session.renewed`). And a refusal answered outside a
+	 * run — a token had for a file read, or by another tab — is followed by
+	 * one, as focus would start one, which leaves a backoff to its timer:
+	 * syncing may have stopped for it. A run's own answer is the run's to go
+	 * on with, and a run stopped for a refusal answered before it settled is
+	 * tried again (`synced`).
 	 */
 	const standingChanged = (account: Account) => {
 		const session = bound.current;
@@ -1321,7 +1321,7 @@ export const createSyncScheduler = (options: SyncSchedulerOptions): SyncSchedule
 		const answered = session.account.tokens.standing() === undefined;
 		if (!answered) session.renewed.current = false;
 		publish({ ...status() });
-		if (answered) void nudge(session);
+		if (answered && session.inFlight.current === undefined) void nudge(session);
 	};
 
 	/**
@@ -1349,7 +1349,7 @@ export const createSyncScheduler = (options: SyncSchedulerOptions): SyncSchedule
 		const active = bound.current;
 		if (state?.connectionId === active?.connectionId && active !== undefined) return;
 		endSession();
-		forgetLetGo();
+		forgetOthers(state?.connectionId);
 		if (state === undefined) {
 			publish({ phase: 'local', conflicts: [] });
 			return;

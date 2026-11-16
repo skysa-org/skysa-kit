@@ -1,6 +1,6 @@
 import { AuthError, cell } from '@skysa/storage';
 
-import type { AccessToken, ApiClient, Denial, Refusal } from '../api/client.js';
+import type { AccessToken, ApiClient, Refusal, Result } from '../api/client.js';
 import { credentialFor, type CredentialStore } from '../store/credentials.js';
 
 /**
@@ -56,7 +56,7 @@ export interface TokenSourceOptions {
 }
 
 /** A refusal from the server, and what the operator's policy said beside it. */
-export type Refused = Readonly<{ refusal: Refusal; denial?: Denial | undefined }>;
+export type Refused = Readonly<Omit<Extract<Result<never>, { ok: false }>, 'ok'>>;
 
 const same = (a: Refused | undefined, b: Refused | undefined): boolean =>
 	a?.refusal === b?.refusal &&

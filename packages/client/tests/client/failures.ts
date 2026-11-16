@@ -346,6 +346,48 @@ export const describeFailures = (
 			expect(said.filter((status) => status.refusal !== 'reauthorize_required')).toEqual([]);
 		});
 
+		it("lets the provider's refusal go where the server's stopped a run whose pull the provider took", async () => {
+			const device = await bound();
+			await device.create('c1', 'Plan', '');
+			const ok = (accessToken: string, expiresAt = Date.now() + HOUR) =>
+				({ ok: true, value: { accessToken, expiresAt } }) as const;
+			const token = vi
+				.fn<ApiClient['token']>()
+				.mockResolvedValueOnce(ok('a'))
+				.mockResolvedValueOnce(ok('b'))
+				.mockResolvedValueOnce(ok('c'))
+				// A renewal in the push, spent before it is used, and the server
+				// refusing the next.
+				.mockResolvedValueOnce(ok('d', 0))
+				.mockResolvedValueOnce({ ok: false, refusal: 'not_entitled' })
+				.mockResolvedValue(ok('f'));
+			const h = started(device, { client: presenting(token) });
+			h.remote.rejected.add('a');
+			h.remote.rejected.add('b');
+			await reaches(h.scheduler, 'attention');
+			expect(h.scheduler.status().refusal).toBe('reauthorize_required');
+			const wrote = cell(0);
+			h.remote.fake.setFault((call) => {
+				if (call.op !== 'write') return undefined;
+				wrote.current += 1;
+				return wrote.current === 1 ? new AuthError('expired') : undefined;
+			});
+			await h.scheduler.syncNow();
+			expect(h.scheduler.status().refusal).toBe('not_entitled');
+			await device.keepElsewhere('c1', {
+				accessToken: 'from-another-tab',
+				expiresAt: Date.now() + 10 * HOUR,
+			});
+
+			// A file beside a document, opened, which answers the server.
+			await h.scheduler.sessionFor('c1')?.provider.list('');
+
+			// The provider took the last run's tokens for its pull, and never refused
+			// a fresh one in it.
+			expect(h.scheduler.status().refusal).toBeUndefined();
+			await reaches(h.scheduler, 'idle');
+		});
+
 		it("lets the provider's refusal go once a run's pull gets through, whatever its push comes to", async () => {
 			const device = await bound();
 			const note = await device.create('c1', 'Plan', '');
@@ -461,7 +503,27 @@ export const describeFailures = (
 			});
 		});
 
-		it('keeps a refusal through another source shown, and this one again', async () => {
+		it("keeps a refusal through a cancel's hold, and once it is let go of", async () => {
+			const device = await bound();
+			const token = vi
+				.fn<ApiClient['token']>()
+				.mockResolvedValueOnce({ ok: false, refusal: 'credential_revoked' })
+				.mockResolvedValue({
+					ok: true,
+					value: { accessToken: 'ok', expiresAt: Date.now() + HOUR },
+				});
+			const h = started(device, { client: presenting(token) });
+			await reaches(h.scheduler, 'attention');
+			h.env.state.online = false;
+
+			const release = await h.scheduler.halt('c1');
+			release();
+
+			await reaches(h.scheduler, 'offline');
+			expect(h.scheduler.status().refusal).toBe('credential_revoked');
+		});
+
+		it('asks a connection afresh once another source has been synced in between', async () => {
 			const device = await bound();
 			const token = vi
 				.fn<ApiClient['token']>()
@@ -475,11 +537,12 @@ export const describeFailures = (
 			await device.bind('c2');
 			await reaches(h.scheduler, 'idle');
 
+			// Shown again as a new binding is, and offline before its server is asked.
 			h.env.state.online = false;
 			await device.show('c1');
 
 			await reaches(h.scheduler, 'offline');
-			expect(h.scheduler.status().refusal).toBe('credential_revoked');
+			expect(h.scheduler.status().refusal).toBeUndefined();
 		});
 
 		it('syncs again once a token had outside a run answers what stopped it', async () => {
@@ -507,6 +570,38 @@ export const describeFailures = (
 			await reaches(h.scheduler, 'idle');
 			expect(h.scheduler.status().refusal).toBeUndefined();
 			expect(h.scheduler.status().error).toBeUndefined();
+		});
+
+		it('leaves a backoff to its timer where a token had outside a run answers what stood', async () => {
+			const device = await bound();
+			const token = vi
+				.fn<ApiClient['token']>()
+				.mockResolvedValueOnce({ ok: false, refusal: 'not_entitled' })
+				.mockRejectedValueOnce(new Error('Failed to fetch'))
+				.mockResolvedValue({
+					ok: true,
+					value: { accessToken: 'ok', expiresAt: Date.now() + HOUR },
+				});
+			const h = started(device, { client: presenting(token) });
+			await reaches(h.scheduler, 'attention');
+			// The server out of reach, which is retried, and still the last word.
+			await h.scheduler.syncNow();
+			expect(h.scheduler.status()).toMatchObject({
+				phase: 'retrying',
+				refusal: 'not_entitled',
+			});
+			await device.keepElsewhere('c1', {
+				accessToken: 'from-another-tab',
+				expiresAt: Date.now() + 10 * HOUR,
+			});
+			const pulls = h.remote.pulls();
+
+			await h.scheduler.sessionFor('c1')?.provider.list('');
+			await quiet();
+
+			expect(h.scheduler.status().refusal).toBeUndefined();
+			expect(h.remote.pulls()).toBe(pulls);
+			expect(h.env.pending()).toEqual([BACKOFF]);
 		});
 
 		it("says the server's refusal, not the provider's, where it came after a renewal that went through", async () => {
@@ -597,7 +692,6 @@ export const describeFailures = (
 			await reaches(h.scheduler, 'attention');
 			await device.letGo('c1', { unsent });
 			await reaches(h.scheduler, 'local');
-			await quiet();
 
 			// Connected again, and offline before its server is asked.
 			h.env.state.online = false;
@@ -607,7 +701,7 @@ export const describeFailures = (
 			expect(h.scheduler.status().refusal).toBeUndefined();
 		});
 
-		it('syncs once more after a run in which a refusal was answered', async () => {
+		it('syncs once where the run that asks again has the token that answers what stood', async () => {
 			const device = await bound();
 			const token = vi
 				.fn<ApiClient['token']>()
@@ -621,12 +715,45 @@ export const describeFailures = (
 			const before = h.remote.pulls();
 
 			h.env.fire('focus');
-
-			// Whatever the run came to, it may have stopped for what was answered.
-			await vi.waitFor(() => {
-				expect(h.remote.pulls()).toBe(before + 2);
-			});
 			await reaches(h.scheduler, 'idle');
+			await quiet();
+
+			// The run goes on with the token it had, and nothing it did was stopped
+			// for the refusal.
+			expect(h.remote.pulls()).toBe(before + 1);
+		});
+
+		it('runs once, not again and again, where each token had is followed by a refusal', async () => {
+			const device = await bound();
+			const asked = cell(0);
+			const token = vi.fn<ApiClient['token']>(() => {
+				asked.current += 1;
+				return Promise.resolve(
+					asked.current % 2 === 1
+						? { ok: false, refusal: 'not_entitled' }
+						: {
+								ok: true,
+								value: {
+									accessToken: `t${asked.current}`,
+									expiresAt: Date.now() + HOUR,
+								},
+							}
+				);
+			});
+			const h = started(device, { client: presenting(token) });
+			await reaches(h.scheduler, 'attention');
+			// Every token minted is one the provider will not take.
+			Array.from({ length: 20 }, (_, i) => `t${2 * (i + 1)}`).forEach((minted) => {
+				h.remote.rejected.add(minted);
+			});
+
+			h.env.fire('focus');
+			await reaches(h.scheduler, 'attention');
+			await quiet();
+
+			// The token, which answered what stood, and the renewal, refused again.
+			expect(token).toHaveBeenCalledTimes(3);
+			expect(h.scheduler.status().refusal).toBe('not_entitled');
 		});
 
 		it('leaves a provider asking for room its wait, after a run in which a refusal was answered', async () => {
