@@ -641,7 +641,8 @@ Keep it boring.
     That is why it does not reopen "No sign-in separate from storage" below: it is said to connect, and after that the storage account is the identity, as before.
   - **Kept for as long as the policy says.**
     The app holds an accepted code in `localStorage` beside the time the policy said it stops being good, so it survives the round trip through the consent screen and a closed tab or installed app, and one code can connect several accounts.
-    A read after that time finds nothing and clears it.
+    A read after that time finds nothing, and writes nothing: a gate reads the code as it renders, and a read that let it go would tell every watcher in the middle of that render.
+    What has run out is let go of by the next write, or by the gate's timer as the hold ends (`useConnectCodeHeldUntil`, 2026-11-15, skysa-kit#22).
     It was `sessionStorage` until the policy could say how long: a code kept for later visits would have outlived what it meant, and the end the policy gives is what keeps that from happening now.
     It is none of the three kinds of secret: the operator issued it to the person typing it, and it is worth only what their policy decides.
     Where storage is refused, the app holds it in memory, which is enough for the connect it was accepted for.
@@ -675,6 +676,9 @@ Keep it boring.
   - **A yes is not a stored connection.**
     The callback can still fail after the policy says yes, and then nothing is stored.
     A policy that records something on a yes, such as linking the account to the code, must let the same account connect again and be asked again.
+  - **The rules are the kit's, and the words the app's (2026-11-15, skysa-kit#22).**
+    Every app had copied the gate's rules: asking about a typed code, asking again about a held value as it loads, whether a refused connect is about the code, and the timer that wakes a gate as a hold ends.
+    They are `@skysa/client`'s now (`packages/client/src/connect/gate.ts`): `checkConnectCode` says what happened (`accepted`, `refused` with the policy's reason, `tooMany`, `unchecked`) and each app says it in its own words; `askHeldCodeAgain` takes whether the gate asks for a code as a function, asked only once a value is held and due, so an app that must ask `/config` for it asks only then; `codeWasRefused` and `useConnectCodeHeldUntil` are as the apps had them, the hook telling `onLapse` which code ran out.
 - **Rate-limit seam:** `createApp({ rateLimiter })`, defaulting to `neverLimited`, consulted by `POST /api/auth/connect/:provider/start`, the callback, and `POST /api/token` — the three endpoints that spend an outbound provider call — and by `POST /api/connect-code`, which spends none but answers a question worth guessing at.
   Also by the change relay's ticket and upgrade (`relay-ticket:<connectionId>`, `relay:<connectionId>`), which spend none either but would otherwise let one device open sockets without limit.
   A seam and not a Cloudflare binding, for the same reason as the entitlement one: a binding would be deployment-specific code in a repo that forbids it.
@@ -1783,6 +1787,7 @@ packages/
   client/                  # @skysa/client: the client's side of sync
     src/
       api/                 # the API client, the instance config
+      connect/             # the gate's rules: asking about a code, asking again, a refused one, until when one is held
       sync/                # the token source, the provider factory, the scheduler, the relay client, the wake lock
       store/               # the credentials, the connect code, the emitter a screen listens to
     tests/                 # the shared client suites over a device's ports; /testing

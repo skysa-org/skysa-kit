@@ -5,6 +5,7 @@ import {
 	connectCodeAskedAt,
 	connectCodeHeldUntil,
 	dropConnectCode,
+	forgetLapsedConnectCode,
 	heldConnectCode,
 	heldConnectCodeShown,
 	holdAcceptedCode,
@@ -40,13 +41,45 @@ describe('the connect code held for as long as it is good', () => {
 		expect(connectCodeHeldUntil(NOW)).toBe(NOW + 900_000);
 	});
 
-	it('is let go of once that time has come', () => {
+	it('is nothing once that time has come, and gone with the next write', () => {
 		holdConnectCode('K7QM-2XRD', 900, NOW);
 
 		expect(heldConnectCode(NOW + 899_999)).toBe('K7QM-2XRD');
 		expect(heldConnectCode(NOW + 900_000)).toBeUndefined();
-		// And gone from storage, not only unread.
+		expect(connectCodeHeldUntil(NOW + 900_000)).toBeUndefined();
+		holdConnectCode('   ', 900, NOW + 900_000);
 		expect(localStorage.length).toBe(0);
+	});
+
+	it('tells no one as it is read, past its time or not', () => {
+		holdConnectCode('K7QM-2XRD', 900, NOW);
+		const told = vi.fn();
+		const stop = watchConnectCode(told);
+
+		// What a render reads: a watcher told then sets another component's
+		// state in the middle of it.
+		heldConnectCode(NOW);
+		heldConnectCode(NOW + 900_000);
+		connectCodeHeldUntil(NOW + 900_000);
+		heldConnectCodeShown(NOW + 900_000);
+		connectCodeAskedAt(NOW + 900_000);
+		stop();
+
+		expect(told).not.toHaveBeenCalled();
+	});
+
+	it('is let go of where its time has come, and only then, telling whoever is watching', () => {
+		holdConnectCode('K7QM-2XRD', 900, NOW);
+		const told = vi.fn();
+		const stop = watchConnectCode(told);
+
+		forgetLapsedConnectCode(NOW + 899_999);
+		expect(heldConnectCode(NOW)).toBe('K7QM-2XRD');
+		forgetLapsedConnectCode(NOW + 900_000);
+		stop();
+
+		expect(localStorage.length).toBe(0);
+		expect(told).toHaveBeenCalledOnce();
 	});
 
 	it('is held trimmed, and a blank one, or one good for no time, is none', () => {
