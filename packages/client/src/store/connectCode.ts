@@ -50,7 +50,11 @@ export interface HeldConnectCode {
 	readonly until: number;
 	/** Whether it is what the person typed, and so theirs to see; not, when it is the policy's `hold`. */
 	readonly shown: boolean;
-	/** When the policy last said it would take it, by this device's clock. */
+	/**
+	 * When the policy last said it would take it, by this device's clock, and
+	 * no later than this device last asked about it again: a word dated ahead
+	 * by a clock since set back is taken as of that asking.
+	 */
 	readonly asked: number;
 	/**
 	 * When this device last asked the policy about it again, answered or not,
@@ -172,7 +176,10 @@ export const connectCodeHeldUntil = (now = Date.now()): number | undefined =>
 export const heldConnectCodeShown = (now = Date.now()): boolean =>
 	heldConnectCodeRecord(now)?.shown === true;
 
-/** When the policy last said it would take what is held: 0 where that is not known. */
+/**
+ * When the policy last said it would take what is held, no later than this
+ * device last asked about it again: 0 where that is not known.
+ */
 export const connectCodeAskedAt = (now = Date.now()): number | undefined =>
 	heldConnectCodeRecord(now)?.asked;
 
@@ -248,7 +255,23 @@ export const connectCodeTried = (code: string, now = Date.now()): HeldConnectCod
 	const held = heldConnectCodeRecord(now);
 	if (held?.code !== code) return undefined;
 	write({ ...held, asked: Math.min(held.asked, now), tried: now });
-	return heldConnectCodeRecord(now);
+	const back = heldConnectCodeRecord(now);
+	return back?.code === code ? back : undefined;
+};
+
+/**
+ * What the policy said, asked about `held` again and taking it: its `hold` in
+ * place of it where it gave one, otherwise `held` itself, for as long as it
+ * said, never shown, and keeping when it was asked about. Not `holdAcceptedCode`,
+ * which tells a value asked about again from a typed one by what is held now,
+ * and would take a pass let go of meanwhile for a typed code, to be shown.
+ */
+export const renewHeldConnectCode = (
+	held: HeldConnectCode,
+	answer: Readonly<{ expiresIn: number; hold?: string }>,
+	now = Date.now()
+): void => {
+	hold(answer.hold ?? held.code, answer.expiresIn, { shown: false, tried: held.tried }, now);
 };
 
 export const dropConnectCode = (): void => {

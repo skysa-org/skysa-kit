@@ -12,6 +12,7 @@ import {
 	heldConnectCodeShown,
 	holdAcceptedCode,
 	holdConnectCode,
+	renewHeldConnectCode,
 	storedConnectCode,
 	watchConnectCode,
 } from '../src/store/connectCode.js';
@@ -226,6 +227,25 @@ describe('what the policy gives to hold in place of a code', () => {
 
 		holdAcceptedCode('W3TB-9HQP', { expiresIn: 900 }, NOW + 40_000);
 		expect(heldConnectCodeRecord(NOW + 40_000)?.tried).toBe(0);
+	});
+
+	it('is renewed as a pass, never shown, keeping when it was asked about again', () => {
+		holdAcceptedCode('K7QM-2XRD', { expiresIn: 60, hold: PASS }, NOW);
+		const tried = connectCodeTried(PASS, NOW + 10_000);
+		if (tried === undefined) throw new Error('not held');
+		dropConnectCode();
+
+		renewHeldConnectCode(tried, { expiresIn: 600 }, NOW + 20_000);
+		expect(heldConnectCodeRecord(NOW + 20_000)).toEqual({
+			code: PASS,
+			until: NOW + 620_000,
+			shown: false,
+			asked: NOW + 20_000,
+			tried: NOW + 10_000,
+		});
+		renewHeldConnectCode(tried, { expiresIn: 600, hold: `${PASS}2` }, NOW + 30_000);
+		expect(heldConnectCode(NOW + 30_000)).toBe(`${PASS}2`);
+		expect(heldConnectCodeShown(NOW + 30_000)).toBe(false);
 	});
 
 	it('is, as stored, the same record while storage is unchanged, run out or not', () => {

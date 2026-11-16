@@ -687,7 +687,9 @@ Keep it boring.
     A clock set back since a stamp counts as due once: the asking stamps the policy's word back to the clock it is judged by, so no call that gets no answer is followed by another.
     Every stamp is on that clock, this device's unless a caller gives one; and where what is held changed while `asksForCode` was answering, nothing is asked.
     A tab asks under a Web Lock taken only if free, so two tabs opening together ask once: `localStorage` is read and written apart.
-    Where Web Locks are missing or refused, it asks alone, as the scheduler does.
+    Where Web Locks are missing, it asks alone, as the scheduler does; where the browser refuses them (a sandboxed frame, whose storage is the tab's own), it asks alone too.
+    A tab that finds the lock taken asks nothing, except after a refused connect, where it waits for the lock and judges again once it has it.
+    Where storage will not keep the stamp, a value is asked about once in the load.
     A pass the policy gives for less than the hour runs out unasked, as the protocol's "at most once an hour" says.
     `codeWasRefused` takes the refusal and its code from the connect's answer.
     `useConnectCodeHeldUntil` follows the record as stored (`useSyncExternalStore`), so a render reads no clock: a timer lets the code go as it ends, and any other read past the end does too.
