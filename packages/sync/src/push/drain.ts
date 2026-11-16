@@ -197,13 +197,16 @@ export const createPush = (context: EngineContext, { fileState, resolutionFor }:
 
 	/**
 	 * Stopped short, to be tried again: an op's request failed, and the outcome
-	 * says why (`failed`), or the caller let go of the run (`aborted`) before
-	 * the next op went, when nothing is counted against it.
+	 * says why (`failed`), with the wait a rate limit asked for, or the caller
+	 * let go of the run (`aborted`) before the next op went, when nothing is
+	 * counted against it.
 	 */
 	const retrying = (progress: PushProgress, failed?: { reason: unknown }): SyncOutcome => ({
 		...drained(progress),
 		status: 'retry',
-		...(failed === undefined ? {} : { error: messageOf(failed.reason) }),
+		...(failed === undefined
+			? {}
+			: { error: messageOf(failed.reason), ...waitFor(failed.reason) }),
 	});
 
 	/**
@@ -306,11 +309,10 @@ export const createPush = (context: EngineContext, { fileState, resolutionFor }:
 		const [held, ...rest] = ops;
 		meter.pushLeft(ops.length, held);
 		if (held === undefined) return drained(progress);
-		// Let go of, it does nothing more, here or at the provider.
-		if (aborted()) return retrying(progress);
 		const batch = together(ops);
 		const ready = batch.length > 1 ? await stillTogether(batch) : undefined;
 		if (ready !== undefined) {
+			// Let go of while they were read: none of them goes.
 			if (aborted()) return retrying(progress);
 			return sendTogether(ready, ops.slice(batch.length), progress, retriedAuth);
 		}
@@ -320,6 +322,9 @@ export const createPush = (context: EngineContext, { fileState, resolutionFor }:
 		// has just asked to keep. So each op is asked for again just before it
 		// goes, and one that is gone is passed over.
 		const op = await store.opBySeq(held.seq);
+		// Asked after the read, the last wait before the op goes: let go of, the
+		// run does nothing more, starts no op, and asks for no token to send one.
+		if (aborted()) return retrying(progress);
 		if (op === undefined) return drainOps(rest, progress, retriedAuth);
 		if (awaitsCopy(op, progress)) return drainOps(rest, holdBack(progress, op), retriedAuth);
 
@@ -346,10 +351,6 @@ export const createPush = (context: EngineContext, { fileState, resolutionFor }:
 			return { ...drained(progress), status: 'blocked', error };
 		}
 
-		// Asked again last thing before it goes, after every read above: let go
-		// of meanwhile, the run starts no further op, and asks for no token to
-		// send one.
-		if (aborted()) return retrying(progress);
 		const failure = await runOp(op)
 			.then(() => undefined)
 			.catch((error: unknown) => ({ error }));
@@ -422,7 +423,7 @@ export const createPush = (context: EngineContext, { fileState, resolutionFor }:
 		// told their note cannot be sent. So the op keeps its attempts and the
 		// wait the provider asked for goes back to the scheduler.
 		if (isRateLimitError(reason)) {
-			return { ...retrying(progress, { reason }), ...waitFor(reason) };
+			return retrying(progress, { reason });
 		}
 
 		await store.failOp(op.seq, messageOf(reason));

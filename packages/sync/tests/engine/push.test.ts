@@ -931,9 +931,10 @@ describe('push', () => {
 		expect(world.provider.contentAt('a.md')).toBeUndefined();
 	});
 
-	it('starts no op it was let go of while reading', async () => {
+	it('does nothing it was let go of while reading, not even give up on an op', async () => {
 		const abort = new AbortController();
 		world.store.put({ id: 'n1', path: 'a.md', content: 'a\n', dirty: true });
+		world.store.queue({ op: 'rmdir', path: 'Old', attempts: 5 });
 		world.store.queue({ op: 'write', noteId: 'n1', path: 'a.md' });
 		const engine = engineWith({
 			signal: abort.signal,
@@ -951,7 +952,10 @@ describe('push', () => {
 
 		expect(result.status).toBe('retry');
 		expect(world.provider.contentAt('a.md')).toBeUndefined();
-		expect(world.store.ops().map((op) => op.attempts)).toEqual([0]);
+		expect(world.store.ops().map((op) => [op.op, op.attempts])).toEqual([
+			['rmdir', 5],
+			['write', 0],
+		]);
 	});
 
 	it('records the failure against the op it belongs to', async () => {
