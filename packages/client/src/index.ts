@@ -19,10 +19,10 @@ export { answer, type Asked, useInstanceConfig } from './api/instanceConfig.js';
 export {
 	ASK_AGAIN_MS,
 	type AskAgainOptions,
+	askAboutConnectCode,
 	askHeldCodeAgain,
-	checkConnectCode,
-	type CodeCheck,
 	codeWasRefused,
+	type ConnectCodeOutcome,
 	useConnectCodeHeldUntil,
 } from './connect/gate.js';
 export {

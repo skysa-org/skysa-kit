@@ -41,17 +41,21 @@ describe('the connect code held for as long as it is good', () => {
 		expect(connectCodeHeldUntil(NOW)).toBe(NOW + 900_000);
 	});
 
-	it('is nothing once that time has come, and gone with the next write', () => {
+	it('is nothing once that time has come, and let go of just after it is read so', async () => {
 		holdConnectCode('K7QM-2XRD', 900, NOW);
 
 		expect(heldConnectCode(NOW + 899_999)).toBe('K7QM-2XRD');
+		await Promise.resolve();
+		expect(localStorage.length).toBe(1);
+
 		expect(heldConnectCode(NOW + 900_000)).toBeUndefined();
 		expect(connectCodeHeldUntil(NOW + 900_000)).toBeUndefined();
-		holdConnectCode('   ', 900, NOW + 900_000);
+		expect(localStorage.length).toBe(1);
+		await Promise.resolve();
 		expect(localStorage.length).toBe(0);
 	});
 
-	it('tells no one as it is read, past its time or not', () => {
+	it('tells no one as it is read, past its time or not, and once just after where it was past', async () => {
 		holdConnectCode('K7QM-2XRD', 900, NOW);
 		const told = vi.fn();
 		const stop = watchConnectCode(told);
@@ -63,9 +67,11 @@ describe('the connect code held for as long as it is good', () => {
 		connectCodeHeldUntil(NOW + 900_000);
 		heldConnectCodeShown(NOW + 900_000);
 		connectCodeAskedAt(NOW + 900_000);
-		stop();
-
 		expect(told).not.toHaveBeenCalled();
+
+		await Promise.resolve();
+		stop();
+		expect(told).toHaveBeenCalledOnce();
 	});
 
 	it('is let go of where its time has come, and only then, telling whoever is watching', () => {

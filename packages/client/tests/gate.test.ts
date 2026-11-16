@@ -4,8 +4,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { type ApiClient, ApiError } from '../src/api/client.js';
 import {
 	ASK_AGAIN_MS,
+	askAboutConnectCode,
 	askHeldCodeAgain,
-	checkConnectCode,
 	codeWasRefused,
 	useConnectCodeHeldUntil,
 } from '../src/connect/gate.js';
@@ -53,11 +53,11 @@ describe('a code typed into the gate', () => {
 			value: { accepted: true, expiresIn: 600, hold: 'PASS-1' },
 		});
 
-		expect(await checkConnectCode(client, 'INVITE-7')).toEqual({ kind: 'accepted' });
+		expect(await askAboutConnectCode(client, 'INVITE-7')).toEqual({ kind: 'accepted' });
 		expect(heldConnectCode()).toBe('PASS-1');
 		expect(heldConnectCodeShown()).toBe(false);
 
-		expect(await checkConnectCode(client, 'INVITE-8')).toEqual({ kind: 'accepted' });
+		expect(await askAboutConnectCode(client, 'INVITE-8')).toEqual({ kind: 'accepted' });
 		expect(heldConnectCode()).toBe('INVITE-8');
 		expect(heldConnectCodeShown()).toBe(true);
 	});
@@ -71,11 +71,11 @@ describe('a code typed into the gate', () => {
 			})
 			.mockResolvedValueOnce({ ok: true, value: { accepted: false } });
 
-		expect(await checkConnectCode(client, 'INVITE-7')).toEqual({
+		expect(await askAboutConnectCode(client, 'INVITE-7')).toEqual({
 			kind: 'refused',
 			reason: 'That code has been used.',
 		});
-		expect(await checkConnectCode(client, 'INVITE-7')).toEqual({ kind: 'refused' });
+		expect(await askAboutConnectCode(client, 'INVITE-7')).toEqual({ kind: 'refused' });
 		expect(heldConnectCode()).toBeUndefined();
 	});
 
@@ -83,7 +83,7 @@ describe('a code typed into the gate', () => {
 		const client = policy();
 		client.checkConnectCode.mockRejectedValueOnce(new ApiError('too many', 429));
 
-		expect(await checkConnectCode(client, 'INVITE-7')).toEqual({ kind: 'tooMany' });
+		expect(await askAboutConnectCode(client, 'INVITE-7')).toEqual({ kind: 'tooMany' });
 		expect(heldConnectCode()).toBeUndefined();
 	});
 
@@ -94,9 +94,9 @@ describe('a code typed into the gate', () => {
 			.mockRejectedValueOnce(new ApiError('down', 503))
 			.mockRejectedValueOnce(new TypeError('Failed to fetch'));
 
-		expect(await checkConnectCode(client, 'INVITE-7')).toEqual({ kind: 'unchecked' });
-		expect(await checkConnectCode(client, 'INVITE-7')).toEqual({ kind: 'unchecked' });
-		expect(await checkConnectCode(client, 'INVITE-7')).toEqual({ kind: 'unchecked' });
+		expect(await askAboutConnectCode(client, 'INVITE-7')).toEqual({ kind: 'unchecked' });
+		expect(await askAboutConnectCode(client, 'INVITE-7')).toEqual({ kind: 'unchecked' });
+		expect(await askAboutConnectCode(client, 'INVITE-7')).toEqual({ kind: 'unchecked' });
 		expect(heldConnectCode()).toBeUndefined();
 	});
 });
@@ -108,7 +108,9 @@ describe('a held value, asked about again as the app loads', () => {
 		const client = policy();
 		const asksForCode = asks();
 		await askHeldCodeAgain(client, { asksForCode });
-		holdConnectCode('INVITE-7', 600);
+		// Typed long enough ago that a pass would be due.
+		holdConnectCode('INVITE-7', 3 * 60 * 60, Date.now() - 2 * ASK_AGAIN_MS);
+		await askHeldCodeAgain(client, { asksForCode });
 		await askHeldCodeAgain(client, { asksForCode, refused: true });
 
 		expect(asksForCode).not.toHaveBeenCalled();
@@ -204,6 +206,57 @@ describe('a held value, asked about again as the app loads', () => {
 		expect(client.checkConnectCode).toHaveBeenCalledWith('PASS-1');
 	});
 
+	it('takes a clock set back since the policy answered as due', async () => {
+		const client = policy();
+		passFrom(-10 * 60_000);
+		await askHeldCodeAgain(client, { asksForCode: asks() });
+
+		expect(client.checkConnectCode).toHaveBeenCalledWith('PASS-1');
+	});
+
+	it('asks nothing where the pass was asked about, dropped, or a code typed, while the gate said whether it takes one', async () => {
+		const client = policy();
+		passFrom(2 * ASK_AGAIN_MS);
+		await askHeldCodeAgain(client, {
+			asksForCode: () => {
+				// Another tab, loading too, has had its answer.
+				holdAcceptedCode('PASS-1', { expiresIn: YEAR_S, hold: 'PASS-2' });
+				return true;
+			},
+		});
+		dropConnectCode();
+		passFrom(2 * ASK_AGAIN_MS);
+		await askHeldCodeAgain(client, {
+			asksForCode: () => {
+				dropConnectCode();
+				return true;
+			},
+		});
+		passFrom(2 * ASK_AGAIN_MS);
+		await askHeldCodeAgain(client, {
+			asksForCode: () => {
+				holdConnectCode('INVITE-8', 600);
+				return true;
+			},
+		});
+
+		expect(client.checkConnectCode).not.toHaveBeenCalled();
+		expect(heldConnectCode()).toBe('INVITE-8');
+	});
+
+	it('joins an asking under way, and asks again after a refused connect only once the policy has not answered for a minute', async () => {
+		const client = policy();
+		passFrom(2 * ASK_AGAIN_MS);
+		const refused = { asksForCode: asks(), refused: true };
+		await Promise.all([askHeldCodeAgain(client, refused), askHeldCodeAgain(client, refused)]);
+		expect(client.checkConnectCode).toHaveBeenCalledOnce();
+
+		await askHeldCodeAgain(client, refused);
+		expect(client.checkConnectCode).toHaveBeenCalledOnce();
+		await askHeldCodeAgain(client, { ...refused, now: Date.now() + 60_000 });
+		expect(client.checkConnectCode).toHaveBeenCalledTimes(2);
+	});
+
 	it('changes nothing with an answer about a value no longer held', async () => {
 		const client = policy();
 		client.checkConnectCode.mockImplementation(() => {
@@ -222,16 +275,19 @@ describe('a refused connect', () => {
 	it('is about the code typed into the gate where the policy said a plain no', () => {
 		holdConnectCode('INVITE-7', 600);
 
-		expect(codeWasRefused(undefined)).toBe(true);
-		expect(codeWasRefused('not_allowed')).toBe(true);
-		expect(codeWasRefused('lapsed')).toBe(false);
-		expect(codeWasRefused('limit_reached')).toBe(false);
+		expect(codeWasRefused({ refused: true })).toBe(true);
+		expect(codeWasRefused({ refused: true, code: 'not_allowed' })).toBe(true);
+		expect(codeWasRefused({ refused: true, code: 'lapsed' })).toBe(false);
+		expect(codeWasRefused({ refused: true, code: 'limit_reached' })).toBe(false);
 	});
 
-	it('is not about a pass the policy gave, or about nothing held', () => {
-		expect(codeWasRefused(undefined)).toBe(false);
+	it('is not a connect that was not refused, or about a pass the policy gave, or about nothing held', () => {
+		holdConnectCode('INVITE-7', 600);
+		expect(codeWasRefused({ refused: false })).toBe(false);
+		dropConnectCode();
+		expect(codeWasRefused({ refused: true })).toBe(false);
 		passFrom(0);
-		expect(codeWasRefused('not_allowed')).toBe(false);
+		expect(codeWasRefused({ refused: true, code: 'not_allowed' })).toBe(false);
 	});
 });
 
@@ -255,21 +311,86 @@ describe('until when a gate shows the code held', () => {
 		expect(localStorage.getItem('skysa.connectCode')).toBeNull();
 	});
 
-	it('follows a code taken or dropped in this tab or another', () => {
+	it('follows a code taken, replaced or dropped in this tab or another, none of which is a lapse', () => {
 		vi.useFakeTimers({ now: NOW });
-		const { result } = renderHook(() => useConnectCodeHeldUntil());
+		const lapsed = vi.fn();
+		const { result } = renderHook(() => useConnectCodeHeldUntil(lapsed));
 		expect(result.current).toBeUndefined();
 
 		act(() => {
 			holdConnectCode('INVITE-7', 600, NOW);
 		});
 		expect(result.current).toBe(NOW + 600_000);
+		act(() => {
+			holdConnectCode('INVITE-8', 900, NOW);
+		});
+		expect(result.current).toBe(NOW + 900_000);
 
 		act(() => {
 			localStorage.removeItem('skysa.connectCode');
 			window.dispatchEvent(new StorageEvent('storage', { key: 'skysa.connectCode' }));
 		});
 		expect(result.current).toBeUndefined();
+		expect(lapsed).not.toHaveBeenCalled();
+	});
+
+	it('knows which code a render showed where the end comes before its effects run', () => {
+		vi.useFakeTimers({ now: NOW + 599_999 });
+		holdConnectCode('INVITE-7', 600, NOW);
+		const lapsed = vi.fn();
+		renderHook(() => {
+			const until = useConnectCodeHeldUntil(lapsed);
+			vi.setSystemTime(Math.max(Date.now(), NOW + 600_000));
+			return until;
+		});
+
+		act(() => {
+			vi.advanceTimersByTime(50);
+		});
+
+		expect(lapsed).toHaveBeenCalledExactlyOnceWith('INVITE-7');
+	});
+
+	it('is not told of a lapse where the same code is taken again before it is seen', () => {
+		vi.useFakeTimers({ now: NOW });
+		holdConnectCode('INVITE-7', 600, NOW);
+		const lapsed = vi.fn();
+		const { result } = renderHook(() => useConnectCodeHeldUntil(lapsed));
+
+		vi.setSystemTime(NOW + 600_010);
+		act(() => {
+			holdConnectCode('INVITE-7', 600, NOW + 600_010);
+		});
+
+		expect(result.current).toBe(NOW + 1_200_010);
+		expect(lapsed).not.toHaveBeenCalled();
+	});
+
+	it('tells the lapse however its end is seen: a render after it, or another tab letting it go', async () => {
+		vi.useFakeTimers({ now: NOW });
+		holdConnectCode('INVITE-7', 600, NOW);
+		const lapsed = vi.fn();
+		const { result, rerender, unmount } = renderHook(() => useConnectCodeHeldUntil(lapsed));
+
+		// Past the end before the timer has fired: a tab woken from sleep.
+		vi.setSystemTime(NOW + 600_000);
+		rerender();
+		expect(result.current).toBeUndefined();
+		expect(lapsed).toHaveBeenCalledExactlyOnceWith('INVITE-7');
+		await act(() => Promise.resolve());
+		expect(localStorage.getItem('skysa.connectCode')).toBeNull();
+		unmount();
+
+		holdConnectCode('INVITE-8', 600, NOW + 600_000);
+		const other = renderHook(() => useConnectCodeHeldUntil(lapsed));
+		vi.setSystemTime(NOW + 1_200_000);
+		act(() => {
+			localStorage.removeItem('skysa.connectCode');
+			window.dispatchEvent(new StorageEvent('storage', { key: 'skysa.connectCode' }));
+		});
+		expect(other.result.current).toBeUndefined();
+		expect(lapsed).toHaveBeenCalledTimes(2);
+		expect(lapsed).toHaveBeenLastCalledWith('INVITE-8');
 	});
 
 	it('wakes no later than a browser can count to, for a hold of a year, and holds on', () => {

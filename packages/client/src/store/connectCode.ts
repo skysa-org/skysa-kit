@@ -14,11 +14,10 @@ import { createEmitter } from './emitter.js';
  * accounts that had to be typed again for each would be one the gate forgot.
  * So it is kept in `localStorage` beside the time it stops being good: closing
  * the tab or the installed app and coming back inside that time finds it, and
- * a read after it finds nothing. A read writes nothing, though, and tells no
- * one: a gate reads it as it renders, and a watcher told then would set
- * another component's state in the middle of that render. What has run out is
- * let go of by the next write, or by a gate's timer as the hold ends
- * (`forgetLapsedConnectCode`, `useConnectCodeHeldUntil`). It was `sessionStorage` while
+ * a read after it finds nothing and lets it go: just after, in a microtask,
+ * and never during the read, since a gate reads it as it renders, and a
+ * watcher told then would set another component's state in the middle of that
+ * render. It was `sessionStorage` while
  * the app could not know how long a code was good for, because a code kept for
  * later visits would have outlived what it meant; the end the policy gives is
  * what keeps that from happening now.
@@ -106,20 +105,28 @@ const write = (held: Held | undefined): void => {
 	watchers.emit();
 };
 
-/** The code while it is good, and its end. Writes nothing, and tells no one. */
-const current = (now: number): Held | undefined => {
-	const held = read();
-	return held !== undefined && held.until > now ? held : undefined;
-};
-
 /**
  * Let go of what is held where its time has come, telling whoever is
- * watching, and of nothing else: what a gate's timer does as a hold ends,
- * rather than any read.
+ * watching, and of nothing else.
  */
 export const forgetLapsedConnectCode = (now = Date.now()): void => {
 	const held = read();
 	if (held !== undefined && held.until <= now) write(undefined);
+};
+
+/**
+ * The code while it is good, and its end. One past its end is let go of just
+ * after it is read, never during: the read itself writes nothing and tells
+ * no one.
+ */
+const current = (now: number): Held | undefined => {
+	const held = read();
+	if (held === undefined) return undefined;
+	if (held.until > now) return held;
+	queueMicrotask(() => {
+		forgetLapsedConnectCode(now);
+	});
+	return undefined;
 };
 
 export const heldConnectCode = (now = Date.now()): string | undefined => current(now)?.code;

@@ -10,7 +10,7 @@ If a task requires deviating from it, say so and propose the edit to it, or to t
 - pnpm workspace, one package per layer under `packages/`: `protocol`, `storage`, `sync`, `server`, `client`, `pwa` and `eslint-config` (`docs/ARCHITECTURE.md` §11).
 - TypeScript throughout, ESM.
   Server: Hono on Cloudflare Workers, D1 via Drizzle.
-  Client: a React peer for the one hook it has.
+  Client: a React peer for its hooks.
   PWA build: Vite and vite-plugin-pwa.
   Validation: zod.
   Tests: Vitest.
