@@ -1155,8 +1155,14 @@ The two-device suite (`overProviders.test.ts`) does the same at rest, and checks
      An op given up on for a reason of its own stays so through the pause, though the paused status names no op, as before: a run after the pause names it again where it is still out of attempts.
      The network coming back still gives every op its attempts back, paused or not.
      Until 2026-11-16 the pause gave every op its attempts back once the run let go, which wiped one given up on for a reason of its own, and could wipe what a run resumed meanwhile had counted (skysa-kit#20, item 3).
-     The pause is the device's, as the apps say it is: every tab of the app that shows the source pauses with it, a tab opened meanwhile asks and is paused too, and asking again in any tab ends it in all (`SchedulerEnvironment.tabs`, over a `BroadcastChannel`, in `packages/client/src/sync/tabs.ts`).
-     A tab told of a pause before it has read what the app shows makes its session for that source paused.
+     The pause is the device's, as the apps say it is: every tab of the app that shows the source pauses with it, a tab opened meanwhile finds it paused, and asking again in any tab ends it in all (`SchedulerEnvironment.sharedPause`, in `packages/client/src/sync/sharedPause.ts`).
+     It is a Web Lock, named after the sync's (`lockName`), which each paused tab holds a part in, shared.
+     A session asks whether any tab holds one before it starts, and so does each run, so a tab opened meanwhile, or one that was frozen as the pause was made, finds it; a tab found paused that way holds its part too, so the pause lasts while any tab of it is open and paused.
+     A tab that pauses tells the others over a `BroadcastChannel` (`skysa-pause`), so one at a run stops it now; what it tells is only to look, and a tab looks at the lock, so a word that comes after the pause is over changes nothing.
+     Asking again steals the lock, once the attempts are given back (or, for a re-scan, the cursor is gone), which ends every tab's part at once: each tab hears it from its own part ending, and syncs again, at once if it is in sight, or else as it comes into sight, since the tab that asked ran the round its user asked for.
+     Each tab's companions are told the session stopped as it pauses, and started as it syncs again; until 2026-11-16 they were not told it started again after Sync now, and stayed stopped until the source changed or the app was opened again.
+     Making way for an update pauses each tab alone (`pause`'s `thisTab`), so a tab left frozen holds no other paused after it.
+     A tab that stops, or shows another source, lets go of its part; a browser without Web Locks pauses each tab alone.
      Until 2026-11-16 each tab paused alone, and another tab went on sending the changes the paused one said it kept (skysa-kit#20, item 2).
      It lasts until the user asks again — a sync now, or a re-scan, in any tab — or the source is shown again after another, or the app is opened again with no tab of it still paused: in memory only, so a reload never leaves a device unsyncing without its user there to see it.
    - **What stands against syncing is said until something answers it (2026-11-15).**
@@ -1711,7 +1717,7 @@ What follows is the kit's part of skysa-notes' §8; the rest — its fill window
   So Reload pauses this tab's sync, as the user's pause does, and asks every other tab to pause too over a `BroadcastChannel` (`skysa-update`).
   It gives them 250 ms, then asks (`packages/client/src/sync/beforeUpdate.ts`).
   With a second tab making requests until told, the take-over and both reloads came in about 1.5 s.
-  A pause lasts only until the app is opened again, so syncing starts again after the reload by itself.
+  Each tab pauses itself alone for it, not the device as the user's pause does, and a tab's pause lasts only until the app is opened again, so syncing starts again after the reload by itself.
   The prompt says it is updating meanwhile, and after ten seconds, what else will do it.
   A request nothing here makes, such as a picture opened at that moment or a tab still on a build from before this, still holds the take-over to the five minutes.
   The update *to* this build is one of those: the old page handles the click.

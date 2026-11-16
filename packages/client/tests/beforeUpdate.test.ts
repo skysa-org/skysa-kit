@@ -33,7 +33,7 @@ const recordingChannel = (calls: string[]) => {
 };
 
 describe('making way for a new build', () => {
-	it('tells the other tabs, pauses this one, and gives them a moment before it resolves', async () => {
+	it('tells the other tabs, pauses this one alone, and gives them a moment before it resolves', async () => {
 		const calls: string[] = [];
 		const { channel } = recordingChannel(calls);
 		const waited = Promise.withResolvers<undefined>();
@@ -41,8 +41,8 @@ describe('making way for a new build', () => {
 
 		const making = makeWay(
 			{
-				pause: () => {
-					calls.push('pause');
+				pause: (options) => {
+					calls.push(options?.thisTab === true ? 'pause this tab' : 'pause');
 				},
 			},
 			channel,
@@ -52,7 +52,7 @@ describe('making way for a new build', () => {
 			}
 		).then(settled);
 
-		expect(calls).toEqual(['announce', 'pause', `wait ${String(MAKE_WAY_MS)}`]);
+		expect(calls).toEqual(['announce', 'pause this tab', `wait ${String(MAKE_WAY_MS)}`]);
 		await Promise.resolve();
 		expect(settled).not.toHaveBeenCalled();
 
@@ -61,13 +61,14 @@ describe('making way for a new build', () => {
 		expect(settled).toHaveBeenCalledTimes(1);
 	});
 
-	it('pauses this tab when another announces, until it stops listening', () => {
+	it('pauses this tab alone when another announces, until it stops listening', () => {
 		const { channel, hear } = recordingChannel([]);
 		const pause = vi.fn();
 
 		const stop = makeWayWhenAsked({ pause }, channel);
 		hear();
 		expect(pause).toHaveBeenCalledTimes(1);
+		expect(pause).toHaveBeenCalledWith({ thisTab: true });
 
 		stop();
 		hear();
