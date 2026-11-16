@@ -26,6 +26,7 @@ const NOW = Date.parse('2026-09-29T15:00:00Z');
 
 afterEach(() => {
 	vi.unstubAllGlobals();
+	vi.restoreAllMocks();
 	localStorage.clear();
 	dropConnectCode();
 });
@@ -241,6 +242,35 @@ describe('what the policy gives to hold in place of a code', () => {
 		expect(storedConnectCode()?.until).toBe(NOW + 901_000);
 		dropConnectCode();
 		expect(storedConnectCode()).toBeUndefined();
+	});
+
+	it("takes the policy's word as no later than an asking about it, where a clock set back dated it ahead", () => {
+		holdAcceptedCode('K7QM-2XRD', { expiresIn: 600, hold: PASS }, NOW + 60_000);
+		connectCodeTried(PASS, NOW);
+
+		expect(connectCodeAskedAt(NOW)).toBe(NOW);
+		expect(heldConnectCodeRecord(NOW)?.tried).toBe(NOW);
+	});
+
+	it('is read back as storage holds it after an asking, without the stamp where storage will not take it', () => {
+		holdAcceptedCode('K7QM-2XRD', { expiresIn: 600, hold: PASS }, NOW);
+		vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+			throw new DOMException('The quota has been exceeded.', 'QuotaExceededError');
+		});
+
+		expect(connectCodeTried(PASS, NOW + 10_000)?.tried).toBe(0);
+	});
+
+	it('asks once to be let go of, however many reads past the end come before it is', async () => {
+		holdConnectCode('K7QM-2XRD', 900, NOW);
+		heldConnectCode(NOW + 900_000);
+		heldConnectCodeShown(NOW + 900_000);
+		connectCodeHeldUntil(NOW + 900_000);
+		const reads = vi.spyOn(Storage.prototype, 'getItem');
+		await Promise.resolve();
+
+		expect(reads).toHaveBeenCalledOnce();
+		expect(localStorage.length).toBe(0);
 	});
 
 	it('tells whoever is watching when another tab changes it', () => {

@@ -1,6 +1,6 @@
 import type { ConnectCodeCheck, EntitlementCode } from '@skysa/protocol';
 import { cell } from '@skysa/storage';
-import { useEffect, useRef, useSyncExternalStore } from 'react';
+import { useLayoutEffect, useRef, useSyncExternalStore } from 'react';
 
 import { type ApiClient, ApiError } from '../api/client.js';
 import {
@@ -96,21 +96,28 @@ export interface AskAgainOptions {
 	 * is asked.
 	 */
 	readonly asksForCode: () => boolean | Promise<boolean>;
-	/** The app is loading after a refused connect: asked at once, whatever the hour, once in this load. */
+	/**
+	 * The app is loading after a refused connect: asked at once, whatever the
+	 * hour, about a value nothing has happened to in this load.
+	 */
 	readonly refused?: boolean;
+	/** The clock the asking is judged and stamped by: this device's, where not given. */
 	readonly now?: number;
 }
 
 /**
  * Whether the policy's word on what is held is old enough to ask for again:
- * after a refused connect, where this load has not asked yet; and otherwise
- * an hour after that word or this device's last asking. A clock set back
- * since says nothing of how long it has been, and counts as an hour.
+ * after a refused connect, where nothing has happened to it in this load —
+ * no word from the policy and no asking — since the refusal came before the
+ * load; and otherwise an hour after that word or this device's last asking.
+ * A time ahead of `now` says nothing of how long it has been, from a clock
+ * set back since, and counts as due; the asking stamps it back to `now`
+ * (`connectCodeTried`), so it is due once, not on every call.
  */
 const due = (held: HeldConnectCode, refused: boolean, now: number): boolean => {
 	if (held.shown) return false;
-	if (refused && held.tried < LOADED) return true;
 	const since = Math.max(held.asked, held.tried);
+	if (refused && since < LOADED && LOADED <= now) return true;
 	return now < since || now - since >= ASK_AGAIN_MS;
 };
 
@@ -133,14 +140,23 @@ const takesCode = async (asksForCode: AskAgainOptions['asksForCode']): Promise<b
  * `work`, where no other tab of this app is asking already, and nothing where
  * one is: a store in `localStorage` is read and written apart, so two tabs
  * opening together would each find the value due. In a browser without Web
- * Locks, `work` alone.
+ * Locks, or one that refuses them here (a sandboxed frame, whose storage is
+ * this tab's alone anyway), `work` alone. A fault in `work` is its own.
  */
-const alone = (work: () => Promise<void>): Promise<void> =>
-	'locks' in navigator
-		? navigator.locks.request(LOCK, { ifAvailable: true }, (lock) =>
-				lock === null ? undefined : work()
-			)
-		: work();
+const alone = async (work: () => Promise<void>): Promise<void> => {
+	if (!('locks' in navigator)) return work();
+	const began = cell(false);
+	try {
+		await navigator.locks.request(LOCK, { ifAvailable: true }, (lock) => {
+			if (lock === null) return undefined;
+			began.current = true;
+			return work();
+		});
+	} catch (error) {
+		if (began.current) throw error;
+		await work();
+	}
+};
 
 /**
  * What the policy gave to hold in place of a code (`ConnectCodeCheck.hold`),
@@ -173,11 +189,11 @@ export const askHeldCodeAgain = (
 	alone(async () => {
 		const held = heldConnectCodeRecord(now);
 		if (held === undefined || !due(held, refused, now)) return;
-		const tried = connectCodeTried(held.code);
+		const tried = connectCodeTried(held.code, now);
 		if (tried === undefined || !(await takesCode(asksForCode)) || !unchanged(tried)) return;
 		const said = await policySays(client, held.code);
 		if (said === undefined || said === 'tooMany' || heldConnectCode() !== held.code) return;
-		if (said.accepted) holdAcceptedCode(held.code, said);
+		if (said.accepted) holdAcceptedCode(held.code, said, now);
 		else dropConnectCode();
 	});
 
@@ -206,18 +222,19 @@ const LONGEST_TIMER_MS = 2 ** 31 - 1;
  * It follows the record as stored (`useSyncExternalStore`): another tab can
  * take or drop one, and this one ask about it again, each telling the store's
  * watchers. The hold also ends by the clock, which tells no one, so a timer
- * lets it go as it ends; a browser runs a timer that came due while the tab
- * slept as it wakes, and any other read past the end lets it go too. Until
- * then, for that moment, this is the end that has passed: a render reads no
- * clock.
+ * lets it go as it ends, and a render reads no clock. The timer is a layout
+ * effect: a hold found already ended as the hook mounts is let go of before
+ * anything is painted. A browser runs a timer that came due while the tab
+ * slept as it wakes, and any other read past the end lets it go too; until
+ * then, for as long as a timer is late, this is the end that has passed.
  *
  * `onLapse` is told which code it was, where a code the person typed, and
- * this hook showed, is let go of once its end has passed, however that is
- * seen: this tab or another. It is not told where one is dropped before its
- * end, or replaced by another typed code at any time: the field holds that
- * one now. A drop that a tab asleep meanwhile sees only after the end is, as
- * far as it can tell, a lapse. It is never told a value the policy gave to
- * hold, which is never shown.
+ * this hook showed while it was good, is let go of after its end, in this
+ * tab or another. It is not told where one is dropped before its end, or
+ * where anything else is held in its place: the field holds that now. A drop
+ * that a tab asleep meanwhile sees only after the end is, as far as it can
+ * tell, a lapse. It is never told a value the policy gave to hold, which is
+ * never shown, or a code that had run out before the hook could show it.
  *
  * A hold may run a year, longer than a browser's timer can count (2³¹ ms,
  * about 25 days, past which it fires at once), so the timer wakes at its
@@ -227,19 +244,21 @@ export const useConnectCodeHeldUntil = (onLapse?: (code: string) => void): numbe
 	const stored = useSyncExternalStore(watchConnectCode, storedConnectCode);
 	const until = stored?.until;
 	const showing = useRef<HeldConnectCode | undefined>(undefined);
-	useEffect(() => {
+	useLayoutEffect(() => {
 		const before = showing.current;
-		showing.current = stored?.shown === true ? stored : undefined;
-		if (before === undefined || showing.current !== undefined) return;
-		if (before.until <= Date.now()) onLapse?.(before.code);
+		const now = Date.now();
+		showing.current = stored?.shown === true && stored.until > now ? stored : undefined;
+		if (before === undefined || stored !== undefined) return;
+		if (before.until <= now) onLapse?.(before.code);
 	}, [stored, onLapse]);
-	useEffect(() => {
+	useLayoutEffect(() => {
 		if (until === undefined) return;
 		const timer = cell<ReturnType<typeof setTimeout> | undefined>(undefined);
 		const wake = () => {
 			const left = until - Date.now();
+			// A timer that fires early, or a clock that counts coarsely, is set again.
 			if (left <= 0) forgetLapsedConnectCode();
-			else timer.current = setTimeout(wake, Math.min(left + 50, LONGEST_TIMER_MS));
+			else timer.current = setTimeout(wake, Math.min(left, LONGEST_TIMER_MS));
 		};
 		wake();
 		return () => {

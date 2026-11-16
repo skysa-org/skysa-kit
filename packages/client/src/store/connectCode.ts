@@ -59,16 +59,14 @@ export interface HeldConnectCode {
 	readonly tried: number;
 }
 
-type Held = HeldConnectCode;
-
 /** Told after every change to what is held, so a gate showing it can follow. */
 const watchers = createEmitter();
 
 /** Where the code is when storage is refused, and never read otherwise. */
-const memory = cell<Held | undefined>(undefined);
+const memory = cell<HeldConnectCode | undefined>(undefined);
 
 /** What was stored, if it is something this app stored: anything else is nothing. */
-const parse = (raw: string | null): Held | undefined => {
+const parse = (raw: string | null): HeldConnectCode | undefined => {
 	if (raw === null) return undefined;
 	try {
 		const value: unknown = JSON.parse(raw);
@@ -95,11 +93,11 @@ const parse = (raw: string | null): Held | undefined => {
 };
 
 /** What was last read, so storage that has not changed answers with the same record. */
-const lastRead = cell<Readonly<{ raw: string | null; held: Held | undefined }> | undefined>(
-	undefined
-);
+const lastRead = cell<
+	Readonly<{ raw: string | null; held: HeldConnectCode | undefined }> | undefined
+>(undefined);
 
-const read = (): Held | undefined => {
+const read = (): HeldConnectCode | undefined => {
 	try {
 		const raw = globalThis.localStorage.getItem(KEY);
 		const last = lastRead.current;
@@ -112,7 +110,7 @@ const read = (): Held | undefined => {
 	}
 };
 
-const write = (held: Held | undefined): void => {
+const write = (held: HeldConnectCode | undefined): void => {
 	memory.current = held;
 	try {
 		if (held === undefined) globalThis.localStorage.removeItem(KEY);
@@ -132,25 +130,29 @@ export const forgetLapsedConnectCode = (now = Date.now()): void => {
 	if (held !== undefined && held.until <= now) write(undefined);
 };
 
+/** Whether a read past the end has asked for it to be let go of already, so a render's reads ask once. */
+const forgetting = cell(false);
+
 /**
- * The code while it is good, and its end. One past its end is let go of just
- * after it is read, never during: the read itself writes nothing and tells
- * no one. What is let go of then is what has run out by this device's clock,
- * not by `now`, which a caller may have set ahead.
+ * What is held while it is good, read once, for a rule that needs several of
+ * its parts as they were together. One past its end is let go of just after
+ * it is read, never during: the read itself writes nothing and tells no one.
+ * What is let go of then is what has run out by this device's clock, not by
+ * `now`, which a caller may have set ahead.
  */
-const current = (now: number): Held | undefined => {
+export const heldConnectCodeRecord = (now = Date.now()): HeldConnectCode | undefined => {
 	const held = read();
 	if (held === undefined) return undefined;
 	if (held.until > now) return held;
-	queueMicrotask(() => {
-		forgetLapsedConnectCode();
-	});
+	if (!forgetting.current) {
+		forgetting.current = true;
+		queueMicrotask(() => {
+			forgetting.current = false;
+			forgetLapsedConnectCode();
+		});
+	}
 	return undefined;
 };
-
-/** What is held, read once, for a rule that needs several of its parts as they were together. */
-export const heldConnectCodeRecord = (now = Date.now()): HeldConnectCode | undefined =>
-	current(now);
 
 /**
  * What is stored, whether or not it has run out, and the same record for as
@@ -159,16 +161,20 @@ export const heldConnectCodeRecord = (now = Date.now()): HeldConnectCode | undef
  */
 export const storedConnectCode: () => HeldConnectCode | undefined = read;
 
-export const heldConnectCode = (now = Date.now()): string | undefined => current(now)?.code;
+export const heldConnectCode = (now = Date.now()): string | undefined =>
+	heldConnectCodeRecord(now)?.code;
 
 /** When the held code stops being good, so a gate showing it can go back to asking. */
-export const connectCodeHeldUntil = (now = Date.now()): number | undefined => current(now)?.until;
+export const connectCodeHeldUntil = (now = Date.now()): number | undefined =>
+	heldConnectCodeRecord(now)?.until;
 
 /** Whether what is held is what the person typed, which the gate may show; false for a `hold`. */
-export const heldConnectCodeShown = (now = Date.now()): boolean => current(now)?.shown === true;
+export const heldConnectCodeShown = (now = Date.now()): boolean =>
+	heldConnectCodeRecord(now)?.shown === true;
 
 /** When the policy last said it would take what is held: 0 where that is not known. */
-export const connectCodeAskedAt = (now = Date.now()): number | undefined => current(now)?.asked;
+export const connectCodeAskedAt = (now = Date.now()): number | undefined =>
+	heldConnectCodeRecord(now)?.asked;
 
 /**
  * Calls `watcher` after every change to what is held, in this tab or another
@@ -190,7 +196,7 @@ export const watchConnectCode = (watcher: () => void): (() => void) => {
 const hold = (
 	value: string,
 	expiresIn: number,
-	{ shown, tried }: Pick<Held, 'shown' | 'tried'>,
+	{ shown, tried }: Pick<HeldConnectCode, 'shown' | 'tried'>,
 	now: number
 ): void => {
 	const code = value.trim().slice(0, MAX_CONNECT_CODE);
@@ -222,7 +228,7 @@ export const holdAcceptedCode = (
 	answer: Readonly<{ expiresIn: number; hold?: string }>,
 	now = Date.now()
 ): void => {
-	const held = current(now);
+	const held = heldConnectCodeRecord(now);
 	const again = held?.code === sent.trim() ? held : undefined;
 	const tried = again?.tried ?? 0;
 	if (answer.hold === undefined)
@@ -233,14 +239,16 @@ export const holdAcceptedCode = (
 /**
  * That this device is asking the policy about `code` again, at `now`, where
  * it is still what is held, so it is not asked about again straight after,
- * answered or not. What is held then, or nothing where `code` is not.
+ * answered or not. The policy's last word, if it is dated ahead of `now` by a
+ * clock since set back, is taken as `now`, so the next asking counts from
+ * here. What is held then, as read back — without the stamp where storage
+ * would not take it — or nothing where `code` is not held.
  */
 export const connectCodeTried = (code: string, now = Date.now()): HeldConnectCode | undefined => {
-	const held = current(now);
+	const held = heldConnectCodeRecord(now);
 	if (held?.code !== code) return undefined;
-	const tried = { ...held, tried: now };
-	write(tried);
-	return tried;
+	write({ ...held, asked: Math.min(held.asked, now), tried: now });
+	return heldConnectCodeRecord(now);
 };
 
 export const dropConnectCode = (): void => {

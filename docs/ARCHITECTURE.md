@@ -683,12 +683,16 @@ Keep it boring.
     `askHeldCodeAgain` takes whether the gate asks for a code as a function, asked only once a value is held and due, so an app that must ask `/config` for it asks only then.
     Each asking spends a guess the address shares, so it is guarded.
     The store keeps when this device last asked about the value again (`tried`), stamped before `asksForCode`, answered or not, and the hour counts from that or the policy's last word, whichever is later: no answer, a 429 or a failing `asksForCode` waits the hour like any other.
-    After a refused connect it asks at once, once in that load, since a refused connect comes back as a fresh load; a clock set back counts as due; and where what is held changed while `asksForCode` was answering, nothing is asked.
+    After a refused connect it asks at once about a value nothing has happened to in this load, since a refused connect comes back as a fresh load and the refusal came before anything in it.
+    A clock set back since a stamp counts as due once: the asking stamps the policy's word back to the clock it is judged by, so no call that gets no answer is followed by another.
+    Every stamp is on that clock, this device's unless a caller gives one; and where what is held changed while `asksForCode` was answering, nothing is asked.
     A tab asks under a Web Lock taken only if free, so two tabs opening together ask once: `localStorage` is read and written apart.
+    Where Web Locks are missing or refused, it asks alone, as the scheduler does.
     A pass the policy gives for less than the hour runs out unasked, as the protocol's "at most once an hour" says.
     `codeWasRefused` takes the refusal and its code from the connect's answer.
     `useConnectCodeHeldUntil` follows the record as stored (`useSyncExternalStore`), so a render reads no clock: a timer lets the code go as it ends, and any other read past the end does too.
-    It tells `onLapse` which typed code it showed was let go of after its end, in this tab or another, and not one replaced by another typed code or dropped before its end; never a pass, which is never shown.
+    Its effects are layout effects, so a hold found ended as it mounts is let go of before anything is painted.
+    It tells `onLapse` which typed code it showed while good was let go of after its end, in this tab or another, and not where anything is held in its place or it is dropped before its end; never a pass, which is never shown.
 - **Rate-limit seam:** `createApp({ rateLimiter })`, defaulting to `neverLimited`, consulted by `POST /api/auth/connect/:provider/start`, the callback, and `POST /api/token` — the three endpoints that spend an outbound provider call — and by `POST /api/connect-code`, which spends none but answers a question worth guessing at.
   Also by the change relay's ticket and upgrade (`relay-ticket:<connectionId>`, `relay:<connectionId>`), which spend none either but would otherwise let one device open sockets without limit.
   A seam and not a Cloudflare binding, for the same reason as the entitlement one: a binding would be deployment-specific code in a repo that forbids it.
