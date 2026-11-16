@@ -429,9 +429,10 @@ export interface SyncScheduler {
 	 * Stop the run under way and start no other until the user asks — Sync now
 	 * or a re-scan — or the source is shown again after another, or the app is
 	 * opened again: the status says `paused` meanwhile. The run's requests are
-	 * aborted; a batch it was already writing is written whole, its cursor with
-	 * it, so nothing is lost and nothing is applied in part. Files beside notes
-	 * are still read when they are opened.
+	 * aborted, and count no attempt against the ops they were for; a batch it
+	 * was already writing is written whole, its cursor with it, so nothing is
+	 * lost and nothing is applied in part. Files beside notes are still read
+	 * when they are opened.
 	 */
 	readonly pause: () => void;
 	readonly status: () => SchedulerStatus;
@@ -1389,6 +1390,9 @@ export const createSyncScheduler = (options: SyncSchedulerOptions): SyncSchedule
 							watch,
 							store: store.syncStore(connectionId),
 							reauthorize: () => reauthorize(session),
+							// A send the session's end aborted counts nothing
+							// against its op.
+							signal: abort.signal,
 							maxAttempts,
 							onProgress: (progress) => {
 								reportProgress(session, progress);
@@ -1568,7 +1572,6 @@ export const createSyncScheduler = (options: SyncSchedulerOptions): SyncSchedule
 			const session = bound.current;
 			if (session === undefined) return;
 			pausedFor.current = session.connectionId;
-			const running = session.inFlight.current;
 			const { conflicts } = status();
 			// A session of its own, as `halt` makes one: ending this one aborts
 			// every request the run has out, and the next is made paused, so
@@ -1577,16 +1580,12 @@ export const createSyncScheduler = (options: SyncSchedulerOptions): SyncSchedule
 			// (`accounts`).
 			endSession();
 			follow(shown.current);
-			const paused = bound.current;
-			if (paused === undefined) return;
+			if (bound.current === undefined) return;
 			// The copies the last sync wrote are still on the device to be seen.
+			// A send the pause aborted counted nothing against its op (the
+			// engine's `signal`), and an op given up on for a reason of its own
+			// stays given up on.
 			if (conflicts.length > 0) publish({ ...status(), conflicts });
-			// An op the run was sending when its request was aborted had an
-			// attempt counted against it, which the user's pause is no evidence
-			// for: given back once the run has let go.
-			void running
-				?.catch(() => undefined)
-				.then(() => (isCurrent(paused) ? released(paused) : undefined));
 		},
 		status,
 

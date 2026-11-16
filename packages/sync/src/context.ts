@@ -40,6 +40,8 @@ export interface EngineContext {
 	readonly maxAttempts: number;
 	/** Writes the provider takes at once, at least one. */
 	readonly writesAtOnce: number;
+	/** Whether the caller has let the engine go (`SyncEngineOptions.signal`). */
+	readonly aborted: () => boolean;
 	/**
 	 * Mint a fresh access token through the caller's `reauthorize`, and say
 	 * whether there was one to call. Nothing here counts the calls: a caller

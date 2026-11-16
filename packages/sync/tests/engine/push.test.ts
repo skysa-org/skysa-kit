@@ -752,6 +752,32 @@ describe('push', () => {
 		expect(result.retryAfterMs).toBe(9000);
 	});
 
+	it('counts nothing against an op whose request failed because its run was let go of', async () => {
+		// A pause, a cancel or another source shown aborts every request the
+		// run has out (`signal`): no evidence against the op it was for.
+		const abort = new AbortController();
+		const engine = engineWith({ signal: abort.signal });
+		world.store.put({ id: 'n1', path: 'a.md', content: 'a\n', dirty: true });
+		world.store.put({ id: 'n2', path: 'b.md', content: 'b\n', dirty: true });
+		world.store.queue({ op: 'write', noteId: 'n1', path: 'a.md' });
+		world.store.queue({ op: 'write', noteId: 'n2', path: 'b.md' });
+		const asked: (string | undefined)[] = [];
+		world.provider.setFault((call) => {
+			if (call.op !== 'write') return undefined;
+			asked.push(call.path);
+			abort.abort();
+			return new DOMException('The operation was aborted.', 'AbortError');
+		});
+
+		await engine.push();
+
+		expect(world.store.ops().map((op) => [op.path, op.attempts])).toEqual([
+			['a.md', 0],
+			['b.md', 0],
+		]);
+		expect(asked).toEqual(['a.md']);
+	});
+
 	it('records the failure against the op it belongs to', async () => {
 		world.store.put({ id: 'n1', path: 'a.md', content: 'mine\n', dirty: true });
 		const op = world.store.queue({ op: 'write', noteId: 'n1', path: 'a.md' });

@@ -27,7 +27,7 @@ import { createNotePush } from './notes.js';
  */
 
 export const createPush = (context: EngineContext, { fileState, resolutionFor }: FromPull) => {
-	const { provider, store, maxAttempts, writesAtOnce, renew, meter } = context;
+	const { provider, store, maxAttempts, writesAtOnce, aborted, renew, meter } = context;
 
 	// The remote's folders, made and removed (`push/folders.ts`).
 	const { ensureRemoteFolder, startTurn, runRmdir } = createFolderPush(context);
@@ -349,6 +349,11 @@ export const createPush = (context: EngineContext, { fileState, resolutionFor }:
 		progress: PushProgress,
 		retriedAuth: boolean
 	): Promise<SyncOutcome> => {
+		// Let go of, and the request with it: what failed says nothing of the
+		// op, so it keeps its attempts, and nothing more is asked of a provider
+		// whose requests are aborted — no resolution, no next op.
+		if (aborted()) return { ...drained(progress), status: 'retry', error: messageOf(error) };
+
 		// The resolution reads the remote and writes to the store, either of
 		// which can fail in its own right — and a failure there must land in the
 		// same place as any other, or the op's `attempts` never moves and it can

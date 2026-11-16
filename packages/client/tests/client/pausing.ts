@@ -135,7 +135,35 @@ export const describePausing = (
 				await reaches(h.scheduler, 'idle');
 			});
 
-			it('gives back the attempt a send it aborted was counted', async () => {
+			it('leaves an op given up on for a reason of its own as it was', async () => {
+				const device = await bound();
+				await device.create('c1', 'Stuck', 'refused\n');
+				const documents = device.store.syncStore('c1');
+				const [op] = await documents.pendingOps();
+				if (op === undefined) throw new Error('nothing was queued');
+				await documents.failOp(op.seq, 'refused');
+				await documents.failOp(op.seq, 'refused');
+				// Paused while a run is out, as a run so often is.
+				const theRemote = remote();
+				const held = deferred();
+				theRemote.gate.set('changes', held.promise);
+				const h = started(device, { maxAttempts: 2, createProvider: theRemote.factory });
+				await vi.waitFor(() => {
+					expect(theRemote.gated()).toBe(1);
+				});
+
+				h.scheduler.pause();
+				theRemote.gate.delete('changes');
+				held.resolve();
+				await quiet();
+
+				expect((await documents.pendingOps()).map((queued) => queued.attempts)).toEqual([
+					2,
+				]);
+				expect(h.scheduler.status().phase).toBe('paused');
+			});
+
+			it('counts no attempt against a send it aborted', async () => {
 				const device = await bound();
 				const theRemote = remote();
 				const held = deferred();

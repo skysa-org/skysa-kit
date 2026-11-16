@@ -99,6 +99,13 @@ export interface SyncEngineOptions {
 	 * decides how often to — and whether a run of a few notes is worth showing.
 	 */
 	onProgress?: (progress: SyncProgress) => void;
+	/**
+	 * Aborted when the caller lets the engine go — a pause, a cancel, another
+	 * source shown — and with it every request it had out. A failure from then
+	 * on is no evidence against the op it was for: no attempt is counted, and
+	 * nothing more is asked of the provider in that push.
+	 */
+	signal?: AbortSignal;
 	/** Injected so conflict filenames are deterministic in tests. */
 	now?: () => Date;
 	/** Injected for the same reason. Must be unique; `crypto.randomUUID` is. */
@@ -126,6 +133,7 @@ export const createSyncEngine = (options: SyncEngineOptions): SyncEngine => {
 		merge,
 		syncsHidden = () => false,
 		watch = {},
+		signal,
 	} = options;
 	const writesAtOnce = Math.max(1, provider.writesAtOnce ?? 1);
 
@@ -151,6 +159,7 @@ export const createSyncEngine = (options: SyncEngineOptions): SyncEngine => {
 		newId,
 		maxAttempts,
 		writesAtOnce,
+		aborted: () => signal?.aborted === true,
 		renew: async () => {
 			if (reauthorize === undefined) return false;
 			await reauthorize();
